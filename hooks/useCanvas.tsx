@@ -1,14 +1,15 @@
-import { Skia, Path as SkPath } from "@shopify/react-native-skia";
+import { PaintStyle, Skia, Path as SkPath } from "@shopify/react-native-skia";
 import { useState, useCallback, useRef, useEffect } from "react";
 
 export enum Tools {
   PEN = "pen",
   LINE = "line",
+  HIGHLIGHTER = "highlighter",
   /// Add more tools here
 }
 
 export const useCanvas = () => {
-  const [paths, setPaths] = useState<SkPath[]>([]);
+  const [paths, setPaths] = useState<{ path: SkiaPath; tool: Tools }[]>([]);
   const [undonePaths, setUndonePaths] = useState<SkPath[]>([]);
   const [currentPath, setCurrentPath] = useState<SkPath | null>(null);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
@@ -38,7 +39,11 @@ export const useCanvas = () => {
       const path = Skia.Path.Make();
       path.moveTo(canvasX, canvasY);
       setCurrentPath(path);
-    } else {
+    } else if(tool == Tools.PEN) {
+      const path = Skia.Path.Make();
+      path.moveTo(canvasX, canvasY);
+      setCurrentPath(path);
+    } else if(tool == Tools.HIGHLIGHTER) {
       const path = Skia.Path.Make();
       path.moveTo(canvasX, canvasY);
       setCurrentPath(path);
@@ -56,7 +61,11 @@ export const useCanvas = () => {
       newPath.moveTo(startPoint.x, startPoint.y);
       newPath.lineTo(canvasX, canvasY);
       setCurrentPath(newPath);
-    } else {
+    } else if (tool == Tools.PEN){
+      const newPath = currentPath.copy();
+      newPath.lineTo(canvasX, canvasY);
+      setCurrentPath(newPath);
+    } else if(tool == Tools.HIGHLIGHTER) {
       const newPath = currentPath.copy();
       newPath.lineTo(canvasX, canvasY);
       setCurrentPath(newPath);
@@ -65,12 +74,13 @@ export const useCanvas = () => {
 
   const endDrawing = useCallback(() => {
     if (currentPath) {
-      setPaths(prev => [...prev, currentPath]);
+      setPaths(prev => [...prev, { path: currentPath, tool }]); // Store tool with path
       setUndonePaths([]); // Clear redo stack when new drawing is made
       setCurrentPath(null);
       setStartPoint(null);
     }
-  }, [currentPath]);
+  }, [currentPath, tool]);
+  
 
   const undo = () => {
     setPaths(prev => {

@@ -29,6 +29,8 @@ export default function CanvasScreen() {
           title: `Canvas ${id}`,
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Button title="Highlighter" onPress={() => setTool(Tools.HIGHLIGHTER)} 
+                color={tool === Tools.HIGHLIGHTER ? 'green' : 'gray'} />
               <Button title="Pen" onPress={() => setTool(Tools.PEN)} 
                 color={tool === Tools.PEN ? 'green' : 'gray'} />
               <Button title="Line" onPress={() => setTool(Tools.LINE)} 
@@ -55,29 +57,54 @@ export default function CanvasScreen() {
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
+        
         <Canvas style={{ flex: 1 }}>
-          {paths.map((path, index) => (
-            <Path
+          {paths.map(({path, tool},index) => {
+            let color = colorScheme === "dark" ? "white" : "black";
+            let strokeWidth = 4;
+            let cap : "butt" | "round" | "square" = "round";
+            if (tool === Tools.HIGHLIGHTER) {
+              color = "rgba(255, 255, 0, 0.4)"; // Transparent yellow
+              cap = "square";
+              strokeWidth = 20;
+            } else {
+              strokeWidth = 4;
+            }
+
+            return (
+              <Path
               key={index}
               path={path}
-              color={colorScheme === "dark" ? "white" : "black"}
+              color={color}
               style="stroke"
-              strokeWidth={4}
+              strokeWidth={strokeWidth}
               strokeJoin="round"
-              strokeCap="round"
+              strokeCap={cap}
             />
-          ))}
-          {currentPath && (
-            <Path
-              path={currentPath}
-              color={colorScheme === "dark" ? "white" : "black"}
-              style="stroke"
-              strokeWidth={4}
-              strokeJoin="round"
-              strokeCap="round"
-            />
-          )}
-        </Canvas>
+            );
+            })}
+
+            {currentPath && (() => {
+              let color = colorScheme === "dark" ? "white" : "black";
+              let strokeWidth = 4;
+
+              if (tool === Tools.HIGHLIGHTER) {
+                color = "rgba(255, 255, 0, 0.4)";
+                strokeWidth = 10;
+              } 
+
+              return (
+                <Path
+                path={currentPath}
+                color={color}
+                style="stroke"
+                strokeWidth={strokeWidth}
+                strokeJoin="round"
+                strokeCap="round"
+                />
+              );
+            })()}
+          </Canvas>
       </div>
     </ThemedView>
   );
