@@ -1,5 +1,5 @@
-import { PaintStyle, Skia, Path as SkPath } from "@shopify/react-native-skia";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { Skia, SkPath } from "@shopify/react-native-skia";
+import { useState, useCallback } from "react";
 
 export enum Tools {
   PEN = "pen",
@@ -8,115 +8,100 @@ export enum Tools {
   /// Add more tools here
 }
 
+type PathData = {
+  path: SkPath;
+  tool: Tools;
+};
+
 export const useCanvas = () => {
-  const [paths, setPaths] = useState<{ path: SkiaPath; tool: Tools }[]>([]);
-  const [undonePaths, setUndonePaths] = useState<SkPath[]>([]);
+  const [undoStack, setUndoStack] = useState<PathData[]>([]);
+  const [redoStack, setRedoStack] = useState<PathData[]>([]);
+
   const [currentPath, setCurrentPath] = useState<SkPath | null>(null);
-  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const [tool, setTool] = useState<Tools>(Tools.PEN);
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
-    const updatePosition = () => {
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        setOffset({ x: rect.left, y: rect.top });
+  const startDrawing = useCallback(
+    (x: number, y: number) => {
+      const path = Skia.Path.Make();
+      path.moveTo(x, y);
+      setCurrentPath(path);
+
+      if (tool === Tools.LINE) {
+        setStartPoint({ x, y });
       }
-    };
-    
-    updatePosition();
-    window.addEventListener("resize", updatePosition);
-    return () => window.removeEventListener("resize", updatePosition);
-  }, []);
+    },
+    [tool]
+  );
 
-  const startDrawing = useCallback((x: number, y: number) => {
-    const canvasX = x - offset.x;
-    const canvasY = y - offset.y;
-    
-    if (tool === Tools.LINE) {
-      setStartPoint({ x: canvasX, y: canvasY });
-      const path = Skia.Path.Make();
-      path.moveTo(canvasX, canvasY);
-      setCurrentPath(path);
-    } else if(tool == Tools.PEN) {
-      const path = Skia.Path.Make();
-      path.moveTo(canvasX, canvasY);
-      setCurrentPath(path);
-    } else if(tool == Tools.HIGHLIGHTER) {
-      const path = Skia.Path.Make();
-      path.moveTo(canvasX, canvasY);
-      setCurrentPath(path);
-    }
-  }, [offset, tool]);
+  const moveDrawing = useCallback(
+    (x: number, y: number) => {
+      if (!currentPath) return;
 
-  const moveDrawing = useCallback((x: number, y: number) => {
-    if (!currentPath) return;
-    
-    const canvasX = x - offset.x;
-    const canvasY = y - offset.y;
+      let path: SkPath = currentPath.copy();
 
-    if (tool === Tools.LINE && startPoint) {
-      const newPath = Skia.Path.Make();
-      newPath.moveTo(startPoint.x, startPoint.y);
-      newPath.lineTo(canvasX, canvasY);
-      setCurrentPath(newPath);
-    } else if (tool == Tools.PEN){
-      const newPath = currentPath.copy();
-      newPath.lineTo(canvasX, canvasY);
-      setCurrentPath(newPath);
-    } else if(tool == Tools.HIGHLIGHTER) {
-      const newPath = currentPath.copy();
-      newPath.lineTo(canvasX, canvasY);
-      setCurrentPath(newPath);
-    }
-  }, [currentPath, offset, startPoint, tool]);
+      //TODO: Add more tools here
+
+      switch (tool) {
+        case Tools.LINE:
+          if (startPoint) {
+            path = Skia.Path.Make();
+            path.moveTo(startPoint.x, startPoint.y); // Start point
+            path.lineTo(x, y); // End point
+          }
+          break;
+        case Tools.PEN:
+        case Tools.HIGHLIGHTER:
+        default:
+          // For PEN and HIGHLIGHTER, behavior is the same
+          path.lineTo(x, y);
+          break;
+      }
+
+      setCurrentPath(path);
+    },
+    [currentPath, startPoint, tool]
+  );
 
   const endDrawing = useCallback(() => {
     if (currentPath) {
-      setPaths(prev => [...prev, { path: currentPath, tool }]); // Store tool with path
-      setUndonePaths([]); // Clear redo stack when new drawing is made
+      setUndoStack((prev) => [...prev, { path: currentPath, tool }]); // Add current path to undo stack
+      setRedoStack([]); // Clear redo stack because we started a new path
       setCurrentPath(null);
       setStartPoint(null);
     }
   }, [currentPath, tool]);
-  
 
-  const undo = () => {
-    setPaths(prev => {
-      if (prev.length === 0) return prev;
-      const lastPath = prev[prev.length - 1];
-      setUndonePaths(prevUndone => [...prevUndone, lastPath]);
-      return prev.slice(0, -1);
-    });
-  };
+  const undo = useCallback(() => {
+    if (undoStack.length !== 0) {
+      const lastPath = undoStack[undoStack.length - 1]; // Get last path
+      setUndoStack((prev) => prev.slice(0, -1)); // Remove last path from undo stack
+      setRedoStack((prev) => [...prev, lastPath!]); // Add last path to redo stack
+    }
+  }, [undoStack]);
 
-  const redo = () => {
-    setUndonePaths(prev => {
-      if (prev.length === 0) return prev;
-      const lastUndone = prev[prev.length - 1];
-      setPaths(prevPaths => [...prevPaths, lastUndone]);
-      return prev.slice(0, -1);
-    });
-  };
+  const redo = useCallback(() => {
+    if (redoStack.length !== 0) {
+      const lastPath = redoStack[redoStack.length - 1]; // Get last path
+      setRedoStack((prev) => prev.slice(0, -1)); // Remove last path from redo stack
+      setUndoStack((prev) => [...prev, lastPath!]); // Add last path to undo stack
+    }
+  }, [redoStack]);
 
-  const clear = () => {
-    setPaths([]);
-    setUndonePaths([]);
-  };
+  const clear = useCallback(() => {
+    setUndoStack([]);
+    setRedoStack([]);
+  }, []);
 
   return {
-    paths,
+    paths: undoStack,
     currentPath,
-    canvasRef,
     tool,
     setTool,
-    handlePointerDown: (e: React.PointerEvent) => {
-      startDrawing(e.clientX, e.clientY);
-    },
-    handlePointerMove: (e: React.PointerEvent) => {
-      if (e.buttons === 1) moveDrawing(e.clientX, e.clientY);
-    },
+    handlePointerDown: startDrawing,
+    handlePointerMove: moveDrawing,
     handlePointerUp: endDrawing,
     undo,
     redo,
