@@ -5,23 +5,22 @@ export enum Tools {
   PEN = "pen",
   LINE = "line",
   HIGHLIGHTER = "highlighter",
-  /// Add more tools here
+  ERASER = "eraser",
 }
 
 type PathData = {
   path: SkPath;
   tool: Tools;
+  strokeWidth: number;
 };
 
 export const useCanvas = () => {
   const [undoStack, setUndoStack] = useState<PathData[]>([]);
   const [redoStack, setRedoStack] = useState<PathData[]>([]);
-
   const [currentPath, setCurrentPath] = useState<SkPath | null>(null);
-  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(
-    null
-  );
+  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [tool, setTool] = useState<Tools>(Tools.PEN);
+  const [strokeWidth, setStrokeWidth] = useState(2);
 
   const startDrawing = useCallback(
     (x: number, y: number) => {
@@ -31,6 +30,8 @@ export const useCanvas = () => {
 
       if (tool === Tools.LINE) {
         setStartPoint({ x, y });
+      } else {
+        setStartPoint(null);
       }
     },
     [tool]
@@ -39,23 +40,19 @@ export const useCanvas = () => {
   const moveDrawing = useCallback(
     (x: number, y: number) => {
       if (!currentPath) return;
-
-      let path: SkPath = currentPath.copy();
-
-      //TODO: Add more tools here
+      let path = currentPath.copy();
 
       switch (tool) {
         case Tools.LINE:
           if (startPoint) {
             path = Skia.Path.Make();
-            path.moveTo(startPoint.x, startPoint.y); // Start point
-            path.lineTo(x, y); // End point
+            path.moveTo(startPoint.x, startPoint.y);
+            path.lineTo(x, y);
           }
           break;
         case Tools.PEN:
         case Tools.HIGHLIGHTER:
-        default:
-          // For PEN and HIGHLIGHTER, behavior is the same
+        case Tools.ERASER:
           path.lineTo(x, y);
           break;
       }
@@ -67,28 +64,28 @@ export const useCanvas = () => {
 
   const endDrawing = useCallback(() => {
     if (currentPath) {
-      setUndoStack((prev) => [...prev, { path: currentPath, tool }]); // Add current path to undo stack
-      setRedoStack([]); // Clear redo stack because we started a new path
+      setUndoStack((prev) => [...prev, { path: currentPath, tool, strokeWidth }]);
+      setRedoStack([]);
       setCurrentPath(null);
       setStartPoint(null);
     }
-  }, [currentPath, tool]);
+  }, [currentPath, tool, strokeWidth]);
 
   const undo = useCallback(() => {
     if (undoStack.length !== 0) {
-      const lastPath = undoStack[undoStack.length - 1]; // Get last path
-      setUndoStack((prev) => prev.slice(0, -1)); // Remove last path from undo stack
-      setRedoStack((prev) => [...prev, lastPath!]); // Add last path to redo stack
+      const lastPath = undoStack.pop();
+      setUndoStack([...undoStack]);
+      setRedoStack([...redoStack, lastPath!]);
     }
-  }, [undoStack]);
+  }, [undoStack, redoStack]);
 
   const redo = useCallback(() => {
     if (redoStack.length !== 0) {
-      const lastPath = redoStack[redoStack.length - 1]; // Get last path
-      setRedoStack((prev) => prev.slice(0, -1)); // Remove last path from redo stack
-      setUndoStack((prev) => [...prev, lastPath!]); // Add last path to undo stack
+      const lastPath = redoStack.pop();
+      setRedoStack([...redoStack]);
+      setUndoStack([...undoStack, lastPath!]);
     }
-  }, [redoStack]);
+  }, [undoStack, redoStack]);
 
   const clear = useCallback(() => {
     setUndoStack([]);
@@ -106,5 +103,7 @@ export const useCanvas = () => {
     undo,
     redo,
     clear,
+    strokeWidth,
+    setStrokeWidth,
   };
 };

@@ -1,30 +1,35 @@
+import React, { useState } from "react";
 import { Canvas, Path } from "@shopify/react-native-skia";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useColorScheme, Button, View } from "react-native";
+import { useColorScheme, View, TouchableOpacity, StyleSheet } from "react-native";
 import { useCanvas, Tools } from "../../hooks/useCanvas";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Toolbar from "../../components/Toolbar";
+import UndoIcon from "../../assets/icons/undo.svg";
+import RedoIcon from "../../assets/icons/redo.svg";
+import TrashIcon from "../../assets/icons/trash.svg";
+import { Colors } from "../../constants/Colors";
 
-type StrokeStyle = {
-  color: string;
-  strokeWidth: number;
-  cap: "round" | "square" | "butt";
-};
-
-const toolData: Record<Tools, StrokeStyle> = {
-  [Tools.PEN]: {
-    color: "black",
-    strokeWidth: 2,
-    cap: "round",
+const toolData = {
+  [Tools.PEN]: { 
+    color: "black", 
+    cap: "round" as const, 
+    blendMode: "srcOver" as const 
   },
-  [Tools.LINE]: {
-    color: "black",
-    strokeWidth: 2,
-    cap: "round",
+  [Tools.LINE]: { 
+    color: "black", 
+    cap: "round" as const, 
+    blendMode: "srcOver" as const 
   },
-  [Tools.HIGHLIGHTER]: {
-    color: "rgba(255, 255, 0, 0.4)",
-    strokeWidth: 10,
-    cap: "square",
+  [Tools.HIGHLIGHTER]: { 
+    color: "rgba(255, 255, 0, 0.4)", 
+    cap: "round" as const, 
+    blendMode: "srcOver" as const 
+  },
+  [Tools.ERASER]: { 
+    color: "transparent", 
+    cap: "round" as const, 
+    blendMode: "clear" as const 
   },
 };
 
@@ -42,6 +47,8 @@ export default function CanvasScreen() {
     undo,
     redo,
     clear,
+    strokeWidth,
+    setStrokeWidth,
   } = useCanvas();
 
   const pan = Gesture.Pan()
@@ -52,75 +59,59 @@ export default function CanvasScreen() {
     .onEnd(handlePointerUp);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen
-        options={{
-          title: `Canvas ${id}`,
-          headerStyle: {
-            backgroundColor: colorScheme === "dark" ? "black" : "white",
-          },
-          headerTintColor: colorScheme === "dark" ? "white" : "black",
-          headerTitleStyle: {
-            fontWeight: "bold",
-          },
-          headerRight: () => (
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Button
-                title="Highlighter"
-                onPress={() => setTool(Tools.HIGHLIGHTER)}
-                color={tool === Tools.HIGHLIGHTER ? "green" : "gray"}
-              />
-              <Button
-                title="Pen"
-                onPress={() => setTool(Tools.PEN)}
-                color={tool === Tools.PEN ? "green" : "gray"}
-              />
-              <Button
-                title="Line"
-                onPress={() => setTool(Tools.LINE)}
-                color={tool === Tools.LINE ? "green" : "gray"}
-              />
-              <Button title="Undo" onPress={undo} />
-              <Button title="Redo" onPress={redo} />
-              <Button title="Clear" onPress={clear} />
-            </View>
-          ),
-        }}
-      />
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <Stack.Screen options={{ title: `Canvas ${id}` }} />
 
       <GestureDetector gesture={pan}>
         <Canvas style={{ flex: 1 }}>
-          {paths.map(({ path, tool }, index) => {
-            const { color, strokeWidth, cap } = toolData[tool];
-            return (
-              <Path
-                key={index}
-                path={path}
-                color={color}
-                style="stroke"
-                strokeWidth={strokeWidth}
-                strokeJoin="round"
-                strokeCap={cap}
-              />
-            );
-          })}
+          {paths.map(({ path, tool, strokeWidth }, index) => (
+            <Path
+              key={index}
+              path={path}
+              color={toolData[tool].color}
+              style="stroke"
+              strokeWidth={strokeWidth}
+              strokeJoin="round"
+              strokeCap={toolData[tool].cap}
+              blendMode={toolData[tool].blendMode}
+            />
+          ))}
 
-          {currentPath &&
-            (() => {
-              const { color, strokeWidth, cap } = toolData[tool];
-              return (
-                <Path
-                  path={currentPath}
-                  color={color}
-                  style="stroke"
-                  strokeWidth={strokeWidth}
-                  strokeJoin="round"
-                  strokeCap={cap}
-                />
-              );
-            })()}
+          {currentPath && (
+            <Path
+              path={currentPath}
+              color={toolData[tool].color}
+              style="stroke"
+              strokeWidth={strokeWidth}
+              strokeJoin="round"
+              strokeCap={toolData[tool].cap}
+              blendMode={toolData[tool].blendMode}
+            />
+          )}
         </Canvas>
       </GestureDetector>
+
+      <View style={styles.controlsContainer}>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity onPress={undo} style={styles.controlButton}>
+            <UndoIcon width={24} height={24} fill="black" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={redo} style={styles.controlButton}>
+            <RedoIcon width={24} height={24} fill="black" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={clear} style={[styles.controlButton, styles.clearButton]}>
+            <TrashIcon width={24} height={24} fill="white" />
+          </TouchableOpacity>
+        </View>
+        <Toolbar tool={tool} setTool={setTool} strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth} />
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  controlsContainer: { position: "absolute", top: 10, right: 10, alignItems: "center" },
+  buttonRow: { flexDirection: "row", marginBottom: 10 },
+  controlButton: { backgroundColor: "white", padding: 12, borderRadius: 50, marginHorizontal: 5 },
+  clearButton: { backgroundColor: "#FF3B30" },
+});
