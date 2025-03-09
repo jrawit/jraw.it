@@ -1,11 +1,11 @@
-import { Skia, SkPath } from "@shopify/react-native-skia";
-import { useState, useCallback } from "react";
+import { Skia, SkPath } from '@shopify/react-native-skia';
+import { useState, useCallback } from 'react';
 
 export enum Tools {
-  PEN = "pen",
-  LINE = "line",
-  HIGHLIGHTER = "highlighter",
-  ERASER = "eraser",
+  PEN = 'pen',
+  LINE = 'line',
+  HIGHLIGHTER = 'highlighter',
+  ERASER = 'eraser',
 }
 
 type PathData = {
@@ -18,7 +18,9 @@ export const useCanvas = () => {
   const [undoStack, setUndoStack] = useState<PathData[]>([]);
   const [redoStack, setRedoStack] = useState<PathData[]>([]);
   const [currentPath, setCurrentPath] = useState<SkPath | null>(null);
-  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const [tool, setTool] = useState<Tools>(Tools.PEN);
   const [strokeWidth, setStrokeWidth] = useState(2);
 
@@ -64,7 +66,7 @@ export const useCanvas = () => {
 
   const endDrawing = useCallback(() => {
     if (currentPath) {
-      setUndoStack((prev) => [...prev, { path: currentPath, tool, strokeWidth }]);
+      setUndoStack(prev => [...prev, { path: currentPath, tool, strokeWidth }]);
       setRedoStack([]);
       setCurrentPath(null);
       setStartPoint(null);

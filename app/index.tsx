@@ -1,7 +1,7 @@
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import { Link, Stack } from "expo-router";
-import { useColorScheme } from "react-native";
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { Link, Stack } from 'expo-router';
+import { useColorScheme } from 'react-native';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -10,19 +10,19 @@ export default function HomeScreen() {
     <ThemedView>
       <Stack.Screen
         options={{
-          title: "Home",
+          title: 'Home',
           headerStyle: {
-            backgroundColor: colorScheme === "dark" ? "black" : "white",
+            backgroundColor: colorScheme === 'dark' ? 'black' : 'white',
           },
-          headerTintColor: colorScheme === "dark" ? "white" : "black",
+          headerTintColor: colorScheme === 'dark' ? 'white' : 'black',
           headerTitleStyle: {
-            fontWeight: "bold",
+            fontWeight: 'bold',
           },
         }}
       />
       <Link
         href="/canvas/1"
-        style={{ color: colorScheme === "dark" ? "white" : "black" }}
+        style={{ color: colorScheme === 'dark' ? 'white' : 'black' }}
       >
         Go to Canvas
       </Link>
