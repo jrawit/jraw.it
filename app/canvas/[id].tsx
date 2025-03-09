@@ -6,34 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { useCanvas, Tools } from '../../hooks/useCanvas';
+import { useCanvas } from '../../hooks/useCanvas';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Toolbar from '../../components/Toolbar';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-const toolData = {
-  [Tools.PEN]: {
-    color: 'black',
-    cap: 'round' as const,
-    blendMode: 'srcOver' as const,
-  },
-  [Tools.LINE]: {
-    color: 'black',
-    cap: 'round' as const,
-    blendMode: 'srcOver' as const,
-  },
-  [Tools.HIGHLIGHTER]: {
-    color: 'rgba(255, 255, 0, 0.4)',
-    cap: 'square' as const,
-    blendMode: 'srcOver' as const,
-  },
-  [Tools.ERASER]: {
-    color: 'transparent',
-    cap: 'round' as const,
-    blendMode: 'clear' as const,
-  },
-};
+import { ToolData } from '../../constants/Tools';
 
 export default function CanvasScreen() {
   const colorScheme = useColorScheme();
@@ -81,24 +59,24 @@ export default function CanvasScreen() {
             <Path
               key={index}
               path={path}
-              color={toolData[tool].color}
+              color={ToolData[tool].color}
               style="stroke"
               strokeWidth={strokeWidth}
               strokeJoin="round"
-              strokeCap={toolData[tool].cap}
-              blendMode={toolData[tool].blendMode}
+              strokeCap={ToolData[tool].cap}
+              blendMode={ToolData[tool].blendMode}
             />
           ))}
 
           {currentPath && (
             <Path
               path={currentPath}
-              color={toolData[tool].color}
+              color={ToolData[tool].color}
               style="stroke"
               strokeWidth={strokeWidth}
               strokeJoin="round"
-              strokeCap={toolData[tool].cap}
-              blendMode={toolData[tool].blendMode}
+              strokeCap={ToolData[tool].cap}
+              blendMode={ToolData[tool].blendMode}
             />
           )}
         </Canvas>

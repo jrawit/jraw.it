@@ -1,11 +1,8 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet } from 'react-native';
-import { Tools } from '../hooks/useCanvas';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Entypo from '@expo/vector-icons/build/Entypo';
-import Slider from '@react-native-community/slider';
+import { ToolData, Tools } from '../constants/Tools';
 import { ThemedView } from './ThemedView';
+import Slider from '@react-native-community/slider';
 
 type ToolbarProps = {
   tool: Tools;
@@ -23,52 +20,26 @@ const Toolbar: React.FC<ToolbarProps> = ({
   return (
     <ThemedView style={styles.container}>
       <ThemedView style={styles.toolsContainer}>
-        <TouchableOpacity
-          onPress={() => setTool(Tools.PEN)}
-          style={[styles.button, tool === Tools.PEN && styles.activeButton]}
-        >
-          <FontAwesome5
-            name="pen"
-            size={24}
-            color={tool == Tools.PEN ? 'white' : 'black'}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setTool(Tools.LINE)}
-          style={[styles.button, tool === Tools.LINE && styles.activeButton]}
-        >
-          <MaterialCommunityIcons
-            name="vector-line"
-            size={24}
-            color={tool === Tools.LINE ? 'white' : 'black'}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setTool(Tools.HIGHLIGHTER)}
-          style={[
-            styles.button,
-            tool === Tools.HIGHLIGHTER && styles.activeButton,
-          ]}
-        >
-          <FontAwesome5
-            name="highlighter"
-            size={24}
-            color={tool === Tools.HIGHLIGHTER ? 'white' : 'black'}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setTool(Tools.ERASER)}
-          style={[styles.button, tool === Tools.ERASER && styles.activeButton]}
-        >
-          <Entypo
-            name="eraser"
-            size={24}
-            color={tool === Tools.ERASER ? 'white' : 'black'}
-          />
-        </TouchableOpacity>
+        {Object.entries(ToolData).map(
+          ([toolType, { iconComponent: IconComponent, iconName }]) => {
+            return (
+              <TouchableOpacity
+                key={toolType}
+                onPress={() => setTool(toolType as Tools)}
+                style={[
+                  styles.button,
+                  tool === toolType && styles.activeButton,
+                ]}
+              >
+                <IconComponent
+                  name={iconName}
+                  size={24}
+                  color={tool === toolType ? 'white' : 'black'}
+                />
+              </TouchableOpacity>
+            );
+          }
+        )}
       </ThemedView>
 
       <ThemedView style={styles.sliderContainer}>

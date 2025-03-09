@@ -1,12 +1,6 @@
 import { Skia, SkPath } from '@shopify/react-native-skia';
 import { useState, useCallback } from 'react';
-
-export enum Tools {
-  PEN = 'pen',
-  LINE = 'line',
-  HIGHLIGHTER = 'highlighter',
-  ERASER = 'eraser',
-}
+import { Tools } from '../constants/Tools';
 
 type PathData = {
   path: SkPath;
