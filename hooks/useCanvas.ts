@@ -6,6 +6,7 @@ type PathData = {
   path: SkPath;
   tool: Tools;
   strokeWidth: number;
+  fill: boolean;
 };
 
 export const useCanvas = () => {
@@ -20,14 +21,20 @@ export const useCanvas = () => {
 
   const startDrawing = useCallback(
     (x: number, y: number) => {
-      const path = Skia.Path.Make();
-      path.moveTo(x, y);
-      setCurrentPath(path);
 
-      if (tool === Tools.LINE) {
-        setStartPoint({ x, y });
-      } else {
-        setStartPoint(null);
+      if (Tools.BUCKETFILL !== tool) {
+        const path = Skia.Path.Make();
+        path.moveTo(x, y);
+        setCurrentPath(path);
+      }
+
+      switch (tool) {
+        case Tools.LINE:
+          setStartPoint({ x, y });
+          break;
+        default:
+          setStartPoint(null);
+          break;
       }
     },
     [tool]
@@ -58,12 +65,36 @@ export const useCanvas = () => {
     [currentPath, startPoint, tool]
   );
 
-  const endDrawing = useCallback(() => {
+  const endDrawing = useCallback((x: number, y: number) => {
     if (currentPath) {
-      setUndoStack(prev => [...prev, { path: currentPath, tool, strokeWidth }]);
+      setUndoStack(prev => [...prev, { path: currentPath, tool, strokeWidth, fill: false }]);
       setRedoStack([]);
-      setCurrentPath(null);
-      setStartPoint(null);
+    }
+
+    setCurrentPath(null);
+    setStartPoint(null);
+
+    if (tool === Tools.BUCKETFILL) {
+      for (let i = 0; i < undoStack.length; i++) {
+        const pathObject = undoStack[i];
+        if (pathObject.fill) continue;
+        if (pathObject.tool == Tools.BUCKETFILL) continue;
+        if (pathObject.tool == Tools.ERASER) continue;
+        if (pathObject.tool == Tools.HIGHLIGHTER) continue;
+
+        if (pathObject.path.contains(x, y)) {
+          const filledPath = {
+            path: pathObject.path.copy(),
+            tool: pathObject.tool,
+            strokeWidth: pathObject.strokeWidth,
+            fill: true
+          };
+          
+          setUndoStack(prev => [...prev, filledPath]);
+          setRedoStack([]);
+          return;
+        }
+      }
     }
   }, [currentPath, tool, strokeWidth]);
 

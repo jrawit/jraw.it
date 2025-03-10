@@ -31,12 +31,18 @@ export default function CanvasScreen() {
     setStrokeWidth,
   } = useCanvas();
 
+  const tap = Gesture.Tap()
+    .runOnJS(true)
+    .onStart((e) => handlePointerDown(e.x, e.y))
+    .onEnd((e) => handlePointerUp(e.x, e.y));
+
   const pan = Gesture.Pan()
     .runOnJS(true)
     .minDistance(5)
     .onStart(e => handlePointerDown(e.x, e.y))
     .onChange(e => handlePointerMove(e.x, e.y))
-    .onEnd(handlePointerUp);
+    .onEnd(e => handlePointerUp(e.x, e.y));
+
 
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
@@ -53,14 +59,14 @@ export default function CanvasScreen() {
         }}
       />
 
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
         <Canvas style={{ flex: 1 }}>
-          {paths.map(({ path, tool, strokeWidth }, index) => (
+          {paths.map(({ path, tool, strokeWidth, fill }, index) => (
             <Path
               key={index}
               path={path}
               color={ToolData[tool].color}
-              style="stroke"
+              style={fill ? 'fill' : 'stroke'}
               strokeWidth={strokeWidth}
               strokeJoin="round"
               strokeCap={ToolData[tool].cap}
@@ -72,13 +78,26 @@ export default function CanvasScreen() {
             <Path
               path={currentPath}
               color={ToolData[tool].color}
-              style="stroke"
               strokeWidth={strokeWidth}
+              style={"stroke"}
               strokeJoin="round"
               strokeCap={ToolData[tool].cap}
               blendMode={ToolData[tool].blendMode}
             />
           )}
+
+          {/* {squares.map((square, index) => (
+            <Rect
+              key={index}
+              x={square.x} 
+              y={square.y}
+              width={square.width}
+              height={square.height}
+              color="black"
+              style="stroke"
+              strokeWidth={1}
+            />
+          ))} */}
         </Canvas>
       </GestureDetector>
 

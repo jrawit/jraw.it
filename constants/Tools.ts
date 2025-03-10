@@ -7,6 +7,7 @@ export enum Tools {
   LINE = 'line',
   HIGHLIGHTER = 'highlighter',
   ERASER = 'eraser',
+  BUCKETFILL = 'bucketfill',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -39,5 +40,12 @@ export const ToolData = {
     iconComponent: Entypo,
     iconName: 'eraser',
     blendMode: 'clear' as const,
+  },
+  [Tools.BUCKETFILL]: {
+    color: 'lightblue',
+    cap: 'round' as const,
+    iconComponent: FontAwesome5,
+    iconName: 'fill',
+    blendMode: 'srcOver' as const,
   },
 };
