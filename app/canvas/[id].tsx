@@ -4,14 +4,18 @@ import { Canvas, Path } from '@shopify/react-native-skia';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import {
   StyleSheet,
+  Text,
   TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Toolbar from '../../components/Toolbar';
-import { ToolData } from '../../constants/Tools';
+import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
+import { useSharedValue } from 'react-native-reanimated';
+import ColorPicker, { ColorFormatsObject, colorKit, HSLSaturationSlider, HueSlider, LuminanceSlider, OpacitySlider, PreviewText, Swatches } from 'reanimated-color-picker';
+import { useState } from 'react';
 
 export default function CanvasScreen() {
   const colorScheme = useColorScheme();
@@ -31,17 +35,19 @@ export default function CanvasScreen() {
     setStrokeWidth,
   } = useCanvas();
 
+  const [selectedColor, setSelectedColor] = useState<string>('black');
+
   const tap = Gesture.Tap()
     .runOnJS(true)
     .onStart(e => handlePointerDown(e.x, e.y))
-    .onEnd(e => handlePointerUp(e.x, e.y));
+    .onEnd(e => handlePointerUp(e.x, e.y, selectedColor));
 
   const pan = Gesture.Pan()
     .runOnJS(true)
     .minDistance(5)
-    .onStart(e => handlePointerDown(e.x, e.y))
+    .onStart(e => handlePointerDown(e.x, e.y,))
     .onChange(e => handlePointerMove(e.x, e.y))
-    .onEnd(e => handlePointerUp(e.x, e.y));
+    .onEnd(e => handlePointerUp(e.x, e.y, selectedColor));
 
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
@@ -57,14 +63,13 @@ export default function CanvasScreen() {
           },
         }}
       />
-
       <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
         <Canvas style={{ flex: 1 }}>
-          {paths.map(({ path, tool, strokeWidth, fill }, index) => (
+          {paths.map(({ path, tool, strokeWidth, fill, color}, index) => (
             <Path
               key={index}
               path={path}
-              color={ToolData[tool].color}
+              color={color}
               style={fill ? 'fill' : 'stroke'}
               strokeWidth={strokeWidth}
               strokeJoin="round"
@@ -76,7 +81,7 @@ export default function CanvasScreen() {
           {currentPath && (
             <Path
               path={currentPath}
-              color={ToolData[tool].color}
+              color={selectedColor}
               strokeWidth={strokeWidth}
               style={'stroke'}
               strokeJoin="round"
@@ -107,6 +112,7 @@ export default function CanvasScreen() {
           setTool={setTool}
           strokeWidth={strokeWidth}
           setStrokeWidth={setStrokeWidth}
+          setColor={setSelectedColor}
         />
       </View>
     </View>
@@ -132,4 +138,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   clearButton: { backgroundColor: '#FF3B30' },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignContent: 'center',
+    backgroundColor: 'orange',
+  },
+
 });

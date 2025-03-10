@@ -13,6 +13,7 @@ export enum Tools {
   RECTANGLE = 'rectangle',
   TRIANGLE = 'triangle',
   STAR = 'star',
+  PICKER = 'color-lens',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -79,6 +80,14 @@ export const ToolData = {
     cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'star',
+    blendMode: 'srcOver' as const,
+  },
+
+  [Tools.PICKER]: {
+    color: 'black',
+    cap: 'round' as const,
+    iconComponent: MaterialCommunityIcons,
+    iconName: 'eyedropper',
     blendMode: 'srcOver' as const,
   },
 };

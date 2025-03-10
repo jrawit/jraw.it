@@ -7,6 +7,7 @@ type PathData = {
   tool: Tools;
   strokeWidth: number;
   fill: boolean;
+  color: string;
 };
 
 export const useCanvas = () => {
@@ -150,11 +151,11 @@ export const useCanvas = () => {
   );
 
   const endDrawing = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, color: string) => {
       if (currentPath) {
         setUndoStack(prev => [
           ...prev,
-          { path: currentPath, tool, strokeWidth, fill: false },
+          { path: currentPath, tool, strokeWidth, fill: false, color: color },
         ]);
         setRedoStack([]);
       }
@@ -176,6 +177,7 @@ export const useCanvas = () => {
               tool: pathObject.tool,
               strokeWidth: pathObject.strokeWidth,
               fill: true,
+              color: color,
             };
 
             setUndoStack(prev => [...prev, filledPath]);
