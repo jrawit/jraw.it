@@ -1,6 +1,7 @@
+import Entypo from '@expo/vector-icons/build/Entypo';
+import Feather from '@expo/vector-icons/Feather';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Entypo from '@expo/vector-icons/build/Entypo';
 
 export enum Tools {
   PEN = 'pen',
@@ -8,6 +9,10 @@ export enum Tools {
   HIGHLIGHTER = 'highlighter',
   ERASER = 'eraser',
   BUCKETFILL = 'bucketfill',
+  CIRCLE = 'circle',
+  RECTANGLE = 'rectangle',
+  TRIANGLE = 'triangle',
+  STAR = 'star',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -46,6 +51,34 @@ export const ToolData = {
     cap: 'round' as const,
     iconComponent: FontAwesome5,
     iconName: 'fill',
+    blendMode: 'srcOver' as const,
+  },
+  [Tools.CIRCLE]: {
+    color: 'black',
+    cap: 'round' as const,
+    iconComponent: Feather,
+    iconName: 'circle',
+    blendMode: 'srcOver' as const,
+  },
+  [Tools.RECTANGLE]: {
+    color: 'black',
+    cap: 'round' as const,
+    iconComponent: Feather,
+    iconName: 'square',
+    blendMode: 'srcOver' as const,
+  },
+  [Tools.TRIANGLE]: {
+    color: 'black',
+    cap: 'round' as const,
+    iconComponent: Feather,
+    iconName: 'triangle',
+    blendMode: 'srcOver' as const,
+  },
+  [Tools.STAR]: {
+    color: 'black',
+    cap: 'round' as const,
+    iconComponent: Feather,
+    iconName: 'star',
     blendMode: 'srcOver' as const,
   },
 };

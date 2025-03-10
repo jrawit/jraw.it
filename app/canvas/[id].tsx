@@ -1,17 +1,17 @@
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Canvas, Path } from '@shopify/react-native-skia';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import {
+  StyleSheet,
+  TouchableOpacity,
   useColorScheme,
   View,
-  TouchableOpacity,
-  StyleSheet,
 } from 'react-native';
-import { useCanvas } from '../../hooks/useCanvas';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Toolbar from '../../components/Toolbar';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ToolData } from '../../constants/Tools';
+import { useCanvas } from '../../hooks/useCanvas';
 
 export default function CanvasScreen() {
   const colorScheme = useColorScheme();
@@ -33,8 +33,8 @@ export default function CanvasScreen() {
 
   const tap = Gesture.Tap()
     .runOnJS(true)
-    .onStart((e) => handlePointerDown(e.x, e.y))
-    .onEnd((e) => handlePointerUp(e.x, e.y));
+    .onStart(e => handlePointerDown(e.x, e.y))
+    .onEnd(e => handlePointerUp(e.x, e.y));
 
   const pan = Gesture.Pan()
     .runOnJS(true)
@@ -42,7 +42,6 @@ export default function CanvasScreen() {
     .onStart(e => handlePointerDown(e.x, e.y))
     .onChange(e => handlePointerMove(e.x, e.y))
     .onEnd(e => handlePointerUp(e.x, e.y));
-
 
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
@@ -79,25 +78,12 @@ export default function CanvasScreen() {
               path={currentPath}
               color={ToolData[tool].color}
               strokeWidth={strokeWidth}
-              style={"stroke"}
+              style={'stroke'}
               strokeJoin="round"
               strokeCap={ToolData[tool].cap}
               blendMode={ToolData[tool].blendMode}
             />
           )}
-
-          {/* {squares.map((square, index) => (
-            <Rect
-              key={index}
-              x={square.x} 
-              y={square.y}
-              width={square.width}
-              height={square.height}
-              color="black"
-              style="stroke"
-              strokeWidth={1}
-            />
-          ))} */}
         </Canvas>
       </GestureDetector>
 
