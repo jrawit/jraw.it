@@ -2,20 +2,17 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Canvas, Path } from '@shopify/react-native-skia';
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import {
   StyleSheet,
-  Text,
   TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Toolbar from '../../components/Toolbar';
-import { ToolData, Tools } from '../../constants/Tools';
+import { ToolData } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
-import { useSharedValue } from 'react-native-reanimated';
-import ColorPicker, { ColorFormatsObject, colorKit, HSLSaturationSlider, HueSlider, LuminanceSlider, OpacitySlider, PreviewText, Swatches } from 'reanimated-color-picker';
-import { useState } from 'react';
 
 export default function CanvasScreen() {
   const colorScheme = useColorScheme();
@@ -45,7 +42,7 @@ export default function CanvasScreen() {
   const pan = Gesture.Pan()
     .runOnJS(true)
     .minDistance(5)
-    .onStart(e => handlePointerDown(e.x, e.y,))
+    .onStart(e => handlePointerDown(e.x, e.y))
     .onChange(e => handlePointerMove(e.x, e.y))
     .onEnd(e => handlePointerUp(e.x, e.y, selectedColor));
 
@@ -65,13 +62,13 @@ export default function CanvasScreen() {
       />
       <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
         <Canvas style={{ flex: 1 }}>
-          {paths.map(({ path, tool, strokeWidth, fill, color}, index) => (
+          {paths.map(({ path, tool, strokeWidth, fill, color }, index) => (
             <Path
               key={index}
               path={path}
-              color={color}
+              color={ToolData[tool].colorTransform(color)}
               style={fill ? 'fill' : 'stroke'}
-              strokeWidth={strokeWidth}
+              strokeWidth={ToolData[tool].sizeTransform(strokeWidth)}
               strokeJoin="round"
               strokeCap={ToolData[tool].cap}
               blendMode={ToolData[tool].blendMode}
@@ -81,8 +78,8 @@ export default function CanvasScreen() {
           {currentPath && (
             <Path
               path={currentPath}
-              color={selectedColor}
-              strokeWidth={strokeWidth}
+              color={ToolData[tool].colorTransform(selectedColor)}
+              strokeWidth={ToolData[tool].sizeTransform(strokeWidth)}
               style={'stroke'}
               strokeJoin="round"
               strokeCap={ToolData[tool].cap}
@@ -144,5 +141,4 @@ const styles = StyleSheet.create({
     alignContent: 'center',
     backgroundColor: 'orange',
   },
-
 });

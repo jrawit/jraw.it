@@ -13,81 +13,87 @@ export enum Tools {
   RECTANGLE = 'rectangle',
   TRIANGLE = 'triangle',
   STAR = 'star',
-  PICKER = 'color-lens',
 }
 
 // Get icons from https://icons.expo.fyi/
 
 export const ToolData = {
   [Tools.PEN]: {
-    color: 'black',
     cap: 'round' as const,
     iconComponent: FontAwesome5,
     iconName: 'pen',
     blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.LINE]: {
-    color: 'black',
     cap: 'round' as const,
     iconComponent: MaterialCommunityIcons,
     iconName: 'vector-line',
     blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.HIGHLIGHTER]: {
-    color: 'rgba(255, 255, 0, 0.4)',
     cap: 'square' as const,
     iconComponent: FontAwesome5,
     iconName: 'highlighter',
     blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => {
+      const alpha = 0.4;
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    },
+    sizeTransform: (size: number) => size + 10,
   },
   [Tools.ERASER]: {
-    color: 'transparent',
     cap: 'round' as const,
     iconComponent: Entypo,
     iconName: 'eraser',
     blendMode: 'clear' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.BUCKETFILL]: {
-    color: 'lightblue',
     cap: 'round' as const,
     iconComponent: FontAwesome5,
     iconName: 'fill',
     blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.CIRCLE]: {
-    color: 'black',
     cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'circle',
     blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.RECTANGLE]: {
-    color: 'black',
     cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'square',
     blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.TRIANGLE]: {
-    color: 'black',
     cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'triangle',
     blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.STAR]: {
-    color: 'black',
     cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'star',
     blendMode: 'srcOver' as const,
-  },
-
-  [Tools.PICKER]: {
-    color: 'black',
-    cap: 'round' as const,
-    iconComponent: MaterialCommunityIcons,
-    iconName: 'eyedropper',
-    blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
 };
