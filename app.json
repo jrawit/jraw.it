@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "jraw.it",
-    "slug": "jraw.it",
+    "slug": "jrawit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,6 +15,9 @@
         "dark": "./assets/images/ios-dark.png",
         "light": "./assets/images/ios-light.png",
         "tinted": "./assets/images/ios-tinted.png"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -49,6 +52,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "877531f5-c267-42b1-a1fb-359d02c56002"
+      }
     }
   }
 }
