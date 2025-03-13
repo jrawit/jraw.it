@@ -13,6 +13,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Toolbar from '../../components/Toolbar';
 import { ToolData } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
+import { useKeyboard } from '@/hooks/useKeyboard';
 
 export default function CanvasScreen() {
   const colorScheme = useColorScheme();
@@ -33,6 +34,8 @@ export default function CanvasScreen() {
   } = useCanvas();
 
   const [selectedColor, setSelectedColor] = useState<string>('black');
+
+  useKeyboard({ undo, redo, setTool });
 
   const tap = Gesture.Tap()
     .runOnJS(true)
