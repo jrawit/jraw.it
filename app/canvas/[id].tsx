@@ -1,8 +1,9 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Canvas, Path } from '@shopify/react-native-skia';
+import { useKeyEvent } from 'expo-key-event';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   StyleSheet,
   TouchableOpacity,
@@ -11,9 +12,8 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Toolbar from '../../components/Toolbar';
-import { ToolData } from '../../constants/Tools';
+import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
-import { useKeyboard } from '@/hooks/useKeyboard';
 
 export default function CanvasScreen() {
   const colorScheme = useColorScheme();
@@ -35,7 +35,50 @@ export default function CanvasScreen() {
 
   const [selectedColor, setSelectedColor] = useState<string>('black');
 
-  useKeyboard({ undo, redo, setTool });
+  const { keyEvent, startListening, stopListening } = useKeyEvent(false);
+
+  useEffect(() => {
+    startListening();
+    return () => stopListening();
+  }, []);
+
+  useEffect(() => {
+    switch (keyEvent?.key) {
+      case 'KeyZ':
+        undo();
+        break;
+      case 'KeyY':
+        redo();
+        break;
+      case 'Digit1':
+        setTool(Tools.PEN);
+        break;
+      case 'Digit2':
+        setTool(Tools.LINE);
+        break;
+      case 'Digit3':
+        setTool(Tools.HIGHLIGHTER);
+        break;
+      case 'Digit4':
+        setTool(Tools.ERASER);
+        break;
+      case 'Digit5':
+        setTool(Tools.BUCKETFILL);
+        break;
+      case 'Digit6':
+        setTool(Tools.CIRCLE);
+        break;
+      case 'Digit7':
+        setTool(Tools.RECTANGLE);
+        break;
+      case 'Digit8':
+        setTool(Tools.TRIANGLE);
+        break;
+      case 'Digit9':
+        setTool(Tools.STAR);
+        break;
+    }
+  }, [keyEvent]);
 
   const tap = Gesture.Tap()
     .runOnJS(true)

@@ -7,7 +7,10 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import ColorPicker, {
   BrightnessSlider,
   ColorFormatsObject,
@@ -34,15 +37,23 @@ const Toolbar: React.FC<ToolbarProps> = ({
   setColor,
 }) => {
   const colorScheme = useColorScheme();
-
   const [colorPickerVisible, setColorPickerVisible] = useState(false);
 
-  const selectedColor = useSharedValue('#000000');
-  const onColorSelect = (color: ColorFormatsObject) => {
-    'worklet';
-    selectedColor.value = color.hex;
-    setColor(selectedColor.value);
-  };
+  // React state for initial color
+  const [initialColor, setInitialColor] = useState('#000000');
+
+  // Shared value for animations
+  const selectedColor = useSharedValue(initialColor);
+
+  const colorButtonStyle = useAnimatedStyle(() => {
+    return {
+      backgroundColor: selectedColor.value,
+      width: 50,
+      height: 50,
+      borderRadius: 50,
+    };
+  });
+
   return (
     <ThemedView style={styles.container}>
       <ThemedView style={styles.toolsContainer}>
@@ -73,11 +84,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
             ...styles.pickerContainer,
             backgroundColor: colorScheme === 'dark' ? '#333' : 'white',
           }}
-          value={selectedColor.value}
+          value={initialColor}
           sliderThickness={25}
           thumbSize={24}
           thumbShape="circle"
-          onChange={onColorSelect}
+          onComplete={(color: ColorFormatsObject) => {
+            'worklet';
+            selectedColor.value = color.hex;
+          }}
+          onCompleteJS={(color: ColorFormatsObject) => {
+            setInitialColor(color.hex);
+            setColor(color.hex);
+          }}
           adaptSpectrum
           boundedThumb
         >
@@ -107,14 +125,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       ) : null}
 
       <Pressable onPress={() => setColorPickerVisible(!colorPickerVisible)}>
-        <View
-          style={{
-            backgroundColor: selectedColor.value,
-            width: 50,
-            height: 50,
-            borderRadius: 50,
-          }}
-        ></View>
+        <Animated.View style={colorButtonStyle} />
       </Pressable>
 
       <ThemedView style={styles.sliderContainer}>
@@ -161,7 +172,13 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     marginVertical: 5,
     elevation: 3,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   activeButton: {
     backgroundColor: '#007AFF',
