@@ -1,6 +1,6 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Canvas, Path } from '@shopify/react-native-skia';
+import { Canvas, DashPathEffect, Path, Rect } from '@shopify/react-native-skia';
 import { useKeyEvent } from 'expo-key-event';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -31,6 +31,8 @@ export default function CanvasScreen() {
     clear,
     strokeWidth,
     setStrokeWidth,
+    selectedItems,
+    selectionBounds,
   } = useCanvas();
 
   const [selectedColor, setSelectedColor] = useState<string>('black');
@@ -130,7 +132,100 @@ export default function CanvasScreen() {
               strokeJoin="round"
               strokeCap={ToolData[tool].cap}
               blendMode={ToolData[tool].blendMode}
-            />
+            >
+              {tool == Tools.SELECT && <DashPathEffect intervals={[5, 5]} />}
+            </Path>
+          )}
+
+          {selectionBounds.isValid && tool === Tools.SELECT && (
+            <>
+              <Rect
+                x={selectionBounds.minX - 5} // Add padding
+                y={selectionBounds.minY - 5}
+                width={selectionBounds.width + 10}
+                height={selectionBounds.height + 10}
+                color="rgb(0, 102, 255)"
+                style="stroke"
+                strokeWidth={2}
+              >
+                <DashPathEffect intervals={[5, 5]} />
+              </Rect>
+
+              {/* Corner handles */}
+              <Rect
+                x={selectionBounds.minX - 8}
+                y={selectionBounds.minY - 8}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              />
+              <Rect
+                x={selectionBounds.maxX}
+                y={selectionBounds.minY - 8}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              />
+              <Rect
+                x={selectionBounds.minX - 8}
+                y={selectionBounds.maxY}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              />
+              <Rect
+                x={selectionBounds.maxX}
+                y={selectionBounds.maxY}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              />
+
+              {/* Mid-point handles for sides Will be implemented in future*/}
+              {/* <Rect
+                x={selectionBounds.minX + selectionBounds.width / 2 - 4}
+                y={selectionBounds.minY - 8}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              />
+              <Rect
+                x={selectionBounds.minX + selectionBounds.width / 2 - 4}
+                y={selectionBounds.maxY}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              />
+              <Rect
+                x={selectionBounds.minX - 8}
+                y={selectionBounds.minY + selectionBounds.height / 2 - 4}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              />
+              <Rect
+                x={selectionBounds.maxX}
+                y={selectionBounds.minY + selectionBounds.height / 2 - 4}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              /> */}
+
+              {/* Rotation handle Will be implemented in the future */}
+              {/* <Rect
+                x={selectionBounds.minX + selectionBounds.width / 2 - 4}
+                y={selectionBounds.minY - 25}
+                width={8}
+                height={8}
+                color="rgb(0, 102, 255)"
+              />
+              <Path
+                path={`M ${selectionBounds.minX + selectionBounds.width / 2} ${selectionBounds.minY - 8} L ${selectionBounds.minX + selectionBounds.width / 2} ${selectionBounds.minY - 17}`}
+                color="rgb(0, 102, 255)"
+                style="stroke"
+                strokeWidth={2}
+              /> */}
+            </>
           )}
         </Canvas>
       </GestureDetector>

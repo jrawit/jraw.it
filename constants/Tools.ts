@@ -13,6 +13,7 @@ export enum Tools {
   RECTANGLE = 'rectangle',
   TRIANGLE = 'triangle',
   STAR = 'star',
+  SELECT = 'select',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -95,5 +96,14 @@ export const ToolData = {
     blendMode: 'srcOver' as const,
     colorTransform: (hex: string) => hex, // No transformation
     sizeTransform: (size: number) => size, // No transformation
+  },
+  [Tools.SELECT]: {
+    // None of these actually do something, just for the icon
+    cap: 'round' as const,
+    iconComponent: MaterialCommunityIcons,
+    iconName: 'select',
+    blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => 'rgb(0, 102, 255)', // Always blue
+    sizeTransform: (size: number) => 2, // Always 2
   },
 };

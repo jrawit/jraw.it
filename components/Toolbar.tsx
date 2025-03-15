@@ -172,13 +172,7 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     marginVertical: 5,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)',
   },
   activeButton: {
     backgroundColor: '#007AFF',
@@ -196,14 +190,7 @@ const styles = StyleSheet.create({
     width: 300,
     padding: 20,
     borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    shadowOpacity: 0.34,
-    shadowRadius: 6.27,
-
+    boxShadow: '0px 5px 6.27px rgba(0, 0, 0, 0.34)',
     elevation: 10,
     position: 'absolute',
     bottom: 70,
@@ -212,29 +199,13 @@ const styles = StyleSheet.create({
   },
   panelStyle: {
     borderRadius: 16,
-
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-
+    boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
     elevation: 5,
   },
   sliderStyle: {
     borderRadius: 20,
     marginTop: 20,
-
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-
+    boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
     elevation: 5,
   },
   previewTxtContainer: {
