@@ -18,6 +18,7 @@ import { useCanvas } from '../../hooks/useCanvas';
 export default function CanvasScreen() {
   const colorScheme = useColorScheme();
   const { id } = useLocalSearchParams();
+
   const {
     paths,
     currentPath,
