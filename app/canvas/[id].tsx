@@ -34,6 +34,8 @@ export default function CanvasScreen() {
     setStrokeWidth,
     selectedItems,
     selectionBounds,
+    panOffset,
+    isPanning,
   } = useCanvas();
 
   const [selectedColor, setSelectedColor] = useState<string>('black');
@@ -80,6 +82,9 @@ export default function CanvasScreen() {
       case 'Digit9':
         setTool(Tools.STAR);
         break;
+      case 'Escape':
+        setTool(Tools.PAN);
+        break;
     }
   }, [keyEvent]);
 
@@ -121,6 +126,12 @@ export default function CanvasScreen() {
               strokeJoin="round"
               strokeCap={ToolData[tool].cap}
               blendMode={ToolData[tool].blendMode}
+              origin={{ x: 0, y: 0 }}
+              transform={
+                panOffset
+                  ? [{ translateX: panOffset.x }, { translateY: panOffset.y }]
+                  : []
+              }
             />
           ))}
 
@@ -133,6 +144,12 @@ export default function CanvasScreen() {
               strokeJoin="round"
               strokeCap={ToolData[tool].cap}
               blendMode={ToolData[tool].blendMode}
+              origin={{ x: 0, y: 0 }}
+              transform={
+                panOffset
+                  ? [{ translateX: panOffset.x }, { translateY: panOffset.y }]
+                  : []
+              }
             >
               {tool == Tools.SELECT && <DashPathEffect intervals={[5, 5]} />}
             </Path>
@@ -152,35 +169,51 @@ export default function CanvasScreen() {
                 <DashPathEffect intervals={[5, 5]} />
               </Rect>
 
-              {/* Corner handles */}
-              <Rect
-                x={selectionBounds.minX - 8}
-                y={selectionBounds.minY - 8}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              />
-              <Rect
-                x={selectionBounds.maxX}
-                y={selectionBounds.minY - 8}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              />
-              <Rect
-                x={selectionBounds.minX - 8}
-                y={selectionBounds.maxY}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              />
-              <Rect
-                x={selectionBounds.maxX}
-                y={selectionBounds.maxY}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              />
+              <>
+                <Rect
+                  x={selectionBounds.minX + panOffset.x}
+                  y={selectionBounds.minY + panOffset.y}
+                  width={selectionBounds.width}
+                  height={selectionBounds.height}
+                  color="rgb(0, 102, 255)"
+                  style="stroke"
+                  strokeWidth={2}
+                >
+                  <DashPathEffect intervals={[5, 5]} />
+                </Rect>
+
+                {/* Update all selection handles to apply pan offset */}
+                <Rect
+                  x={selectionBounds.minX - 8 + panOffset.x}
+                  y={selectionBounds.minY - 8 + panOffset.y}
+                  width={8}
+                  height={8}
+                  color="rgb(0, 102, 255)"
+                />
+                <Rect
+                  x={selectionBounds.maxX + panOffset.x}
+                  y={selectionBounds.minY - 8 + panOffset.y}
+                  width={8}
+                  height={8}
+                  color="rgb(0, 102, 255)"
+                />
+                <Rect
+                  x={selectionBounds.minX - 8 + panOffset.x}
+                  y={selectionBounds.maxY + panOffset.y}
+                  width={8}
+                  height={8}
+                  color="rgb(0, 102, 255)"
+                />
+                <Rect
+                  x={selectionBounds.maxX + panOffset.x}
+                  y={selectionBounds.maxY + panOffset.y}
+                  width={8}
+                  height={8}
+                  color="rgb(0, 102, 255)"
+                />
+
+                {/* Update any other selection handles similarly */}
+              </>
 
               {/* Mid-point handles for sides Will be implemented in future*/}
               {/* <Rect

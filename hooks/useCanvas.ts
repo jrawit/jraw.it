@@ -130,6 +130,10 @@ const createStarPath = (x1: number, y1: number, x2: number, y2: number) => {
 
 export const useCanvas = () => {
   const [paths, setPaths] = useState<PathData[]>([]);
+  //Panning state
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
 
   const [undoStack, setUndoStack] = useState<HistoryAction[]>([]);
   const [redoStack, setRedoStack] = useState<HistoryAction[]>([]);
@@ -216,14 +220,19 @@ export const useCanvas = () => {
           setStartPoint({ x, y });
           setDragPoint({ x, y });
           break;
+        case Tools.PAN:
+          setIsPanning(true);
+          setLastPanPoint({ x, y });
+          break;
         default:
           setStartPoint(null);
           break;
       }
+      
     },
     [tool]
   );
-
+  
   const moveDrawing = useCallback(
     (x: number, y: number) => {
       if (!currentPath) return;
@@ -288,6 +297,7 @@ export const useCanvas = () => {
         case Tools.ERASER:
           path.lineTo(x, y);
           break;
+        
       }
 
       setCurrentPath(path);
@@ -332,7 +342,7 @@ export const useCanvas = () => {
       ) {
         setSelectedItems([]);
       }
-
+      
       if (tool === Tools.SELECT) {
         if (selectionBounds.isValid) {
           // If selection exists, add move action to undo stack
@@ -394,7 +404,7 @@ export const useCanvas = () => {
           if (pathObject.tool == Tools.BUCKETFILL) continue;
           if (pathObject.tool == Tools.ERASER) continue;
           if (pathObject.tool == Tools.HIGHLIGHTER) continue;
-
+          
           if (pathObject.path.contains(x, y)) {
             // Create new path data that's filled
             const filledPath: PathData = {
@@ -427,16 +437,72 @@ export const useCanvas = () => {
     },
     [currentPath, tool, strokeWidth, generatePathId, paths]
   );
+  // Nerekomenduoju bandyt sudet situs metodus atgal i startDrawing, moveDrawing, endDrawing
+  // Po to susiknis kordinates
+  const handlePointerDown = useCallback(
+    (x: number, y: number) => {
+      if (tool === Tools.PAN) {
+        setIsPanning(true);
+        setLastPanPoint({ x, y });
+        return;
+      }
+      
+      // Adjust coordinates by pan offset for all other tools
+      const adjustedX = x - panOffset.x;
+      const adjustedY = y - panOffset.y;
+      
+      startDrawing(adjustedX, adjustedY);
+    },
+    [tool, panOffset, startDrawing]
+  );
+
+  const handlePointerMove = useCallback(
+    (x: number, y: number) => {
+      if (tool === Tools.PAN && isPanning) {
+
+        const dx = x - lastPanPoint.x;
+        const dy = y - lastPanPoint.y;
+        
+        setPanOffset(prev => ({
+          x: prev.x + dx,
+          y: prev.y + dy
+        }));
+        
+        setLastPanPoint({ x, y });
+        return;
+      }
+      
+      const adjustedX = x - panOffset.x;
+      const adjustedY = y - panOffset.y;
+      
+      moveDrawing(adjustedX, adjustedY);
+    },
+    [tool, isPanning, lastPanPoint, panOffset, moveDrawing]
+  );
+
+  const handlePointerUp = useCallback(
+    (x: number, y: number, color: string) => {
+      if (tool === Tools.PAN) {
+        setIsPanning(false);
+        return;
+      }
+      
+      const adjustedX = x - panOffset.x;
+      const adjustedY = y - panOffset.y;
+      
+      endDrawing(adjustedX, adjustedY, color);
+    },
+    [tool, panOffset, endDrawing]
+  );
 
   const undo = useCallback(() => {
     setSelectedItems([]);
 
     if (undoStack.length === 0) return;
 
-    // Get the last action
-    const action = undoStack[undoStack.length - 1];
 
-    // Process the action based on its type
+    const action = undoStack[undoStack.length - 1];
+    
     switch (action.type) {
       case 'ADD_PATH':
         if (action.pathData) {
@@ -550,9 +616,9 @@ export const useCanvas = () => {
     currentPath,
     tool,
     setTool,
-    handlePointerDown: startDrawing,
-    handlePointerMove: moveDrawing,
-    handlePointerUp: endDrawing,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
     undo,
     redo,
     clear,
@@ -560,5 +626,7 @@ export const useCanvas = () => {
     setStrokeWidth,
     selectedItems,
     selectionBounds,
+    panOffset,
+    isPanning,
   };
 };

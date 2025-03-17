@@ -14,6 +14,7 @@ export enum Tools {
   TRIANGLE = 'triangle',
   STAR = 'star',
   SELECT = 'select',
+  PAN = 'pan',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -105,5 +106,13 @@ export const ToolData = {
     blendMode: 'srcOver' as const,
     colorTransform: (hex: string) => 'rgb(0, 102, 255)', // Always blue
     sizeTransform: (size: number) => 2, // Always 2
+  },
+  [Tools.PAN]: {
+    cap: 'round' as const,
+    iconComponent: MaterialCommunityIcons,
+    iconName: 'pan-horizontal',
+    blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
   },
 };
