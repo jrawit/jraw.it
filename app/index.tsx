@@ -15,6 +15,7 @@ export default function HomeScreen() {
 
   const [roomId, setRoomId] = useState('');
 
+
   const handleCreateRoom = () => {
     const socket = io('http://localhost:3000/room');
 
@@ -27,7 +28,6 @@ export default function HomeScreen() {
 
         if (roomExists) {
           console.log('Room already exists');
-          // Navigate to the room
           router.push(`/canvas/${roomId}`);
         } else {
           console.log('Creating room:', roomId);
@@ -49,7 +49,6 @@ export default function HomeScreen() {
       }
     });
   };
-
   return (
     <ThemedView>
       <Stack.Screen

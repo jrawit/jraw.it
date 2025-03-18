@@ -14,8 +14,12 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
+import { io } from 'socket.io-client';
 
 export default function CanvasScreen() {
+
+  const [socket, setSocket] = useState<any>(null);
+
   const colorScheme = useColorScheme();
   const { id } = useLocalSearchParams();
 
@@ -42,9 +46,31 @@ export default function CanvasScreen() {
 
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
 
+
   useEffect(() => {
+    if (socket) {
+      socket.emit(
+        'joinRoom',
+        { name: id },
+        (response: { success: any; roomId: any; }) => {
+          console.log('Room:', response);
+          if (response.success) {
+            console.log(`Room joined with ID: ${response.roomId}`);
+          }
+        }
+      )
+    }
+  }
+  , [socket]);
+
+  useEffect(() => {
+    setSocket(io('http://localhost:3000/room'));
+
     startListening();
-    return () => stopListening();
+    return () => {
+      // Implement leave room here
+      stopListening();
+    };
   }, []);
 
   useEffect(() => {
