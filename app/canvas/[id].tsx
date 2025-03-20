@@ -1,6 +1,13 @@
+import { PathData } from '@/hooks/useCanvas';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Canvas, DashPathEffect, Path, Rect } from '@shopify/react-native-skia';
+import {
+  Canvas,
+  DashPathEffect,
+  Path,
+  Rect,
+  Skia,
+} from '@shopify/react-native-skia';
 import { useKeyEvent } from 'expo-key-event';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -11,13 +18,12 @@ import {
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
-import { io } from 'socket.io-client';
 
 export default function CanvasScreen() {
-
   const [socket, setSocket] = useState<any>(null);
 
   const colorScheme = useColorScheme();
@@ -40,28 +46,77 @@ export default function CanvasScreen() {
     selectionBounds,
     panOffset,
     isPanning,
+    setPaths,
   } = useCanvas();
 
   const [selectedColor, setSelectedColor] = useState<string>('black');
 
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
 
+  const [clientId] = useState(
+    () => `client_${Math.random().toString(36).substring(2, 9)}`
+  );
+
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (socket) {
       socket.emit(
         'joinRoom',
         { name: id },
-        (response: { success: any; roomId: any; }) => {
+        (response: { success: any; roomId: any; paths: any }) => {
           console.log('Room:', response);
           if (response.success) {
-            console.log(`Room joined with ID: ${response.roomId}`);
+            let paths = response.paths;
+            if (paths) {
+              const newPaths = paths.map((path: any) => ({
+                id: path.id,
+                path: Skia.Path.MakeFromSVGString(path.path),
+                tool: path.tool,
+                strokeWidth: path.strokeWidth,
+                fill: path.fill,
+                color: path.color,
+              }));
+              // Update paths in the canvas
+              setPaths(newPaths);
+            } else {
+              console.log('No paths received');
+            }
           }
         }
-      )
+      );
+
+      socket.on('canvasData', (data: any) => {
+        // Skip if this is our own update
+        if (data.senderId === clientId) return;
+
+        console.log('Received canvas data from:', data.senderId);
+
+        try {
+          // Set syncing flag to prevent emitting back
+          setIsSyncing(true);
+
+          const newPaths = data.paths.map((path: any) => ({
+            id: path.id,
+            path: Skia.Path.MakeFromSVGString(path.path),
+            tool: path.tool,
+            strokeWidth: path.strokeWidth,
+            fill: path.fill,
+            color: path.color,
+          }));
+
+          // Directly update the source of truth in useCanvas
+          setPaths(newPaths);
+
+          // Reset syncing flag after a short delay to ensure state updates complete
+          setTimeout(() => setIsSyncing(false), 100);
+        } catch (error) {
+          console.error('Error processing canvas data:', error);
+          setIsSyncing(false);
+        }
+      });
     }
-  }
-  , [socket]);
+  }, [socket]);
 
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
@@ -69,6 +124,7 @@ export default function CanvasScreen() {
     startListening();
     return () => {
       // Implement leave room here
+      socket?.emit('leaveRoom', { roomId: id });
       stopListening();
     };
   }, []);
@@ -113,6 +169,26 @@ export default function CanvasScreen() {
         break;
     }
   }, [keyEvent]);
+
+  useEffect(() => {
+    // Don't emit if we're currently syncing from a received update
+    if (isSyncing || !socket) return;
+
+    let svgPaths = paths.map((path: PathData) => ({
+      id: path.id,
+      path: path.path.toSVGString(),
+      tool: path.tool,
+      strokeWidth: path.strokeWidth,
+      fill: path.fill,
+      color: path.color,
+    }));
+
+    socket.emit('canvasData', {
+      roomId: id,
+      paths: svgPaths,
+      senderId: clientId,
+    });
+  }, [paths, isSyncing, socket]);
 
   const tap = Gesture.Tap()
     .runOnJS(true)

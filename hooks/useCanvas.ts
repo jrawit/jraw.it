@@ -2,7 +2,7 @@ import { Skia, SkPath } from '@shopify/react-native-skia';
 import { useCallback, useMemo, useState } from 'react';
 import { Tools } from '../constants/Tools';
 
-type PathData = {
+export type PathData = {
   id: string;
   path: SkPath;
   tool: Tools;
@@ -228,11 +228,10 @@ export const useCanvas = () => {
           setStartPoint(null);
           break;
       }
-      
     },
     [tool]
   );
-  
+
   const moveDrawing = useCallback(
     (x: number, y: number) => {
       if (!currentPath) return;
@@ -297,7 +296,6 @@ export const useCanvas = () => {
         case Tools.ERASER:
           path.lineTo(x, y);
           break;
-        
       }
 
       setCurrentPath(path);
@@ -342,7 +340,7 @@ export const useCanvas = () => {
       ) {
         setSelectedItems([]);
       }
-      
+
       if (tool === Tools.SELECT) {
         if (selectionBounds.isValid) {
           // If selection exists, add move action to undo stack
@@ -404,7 +402,7 @@ export const useCanvas = () => {
           if (pathObject.tool == Tools.BUCKETFILL) continue;
           if (pathObject.tool == Tools.ERASER) continue;
           if (pathObject.tool == Tools.HIGHLIGHTER) continue;
-          
+
           if (pathObject.path.contains(x, y)) {
             // Create new path data that's filled
             const filledPath: PathData = {
@@ -446,11 +444,11 @@ export const useCanvas = () => {
         setLastPanPoint({ x, y });
         return;
       }
-      
+
       // Adjust coordinates by pan offset for all other tools
       const adjustedX = x - panOffset.x;
       const adjustedY = y - panOffset.y;
-      
+
       startDrawing(adjustedX, adjustedY);
     },
     [tool, panOffset, startDrawing]
@@ -459,22 +457,21 @@ export const useCanvas = () => {
   const handlePointerMove = useCallback(
     (x: number, y: number) => {
       if (tool === Tools.PAN && isPanning) {
-
         const dx = x - lastPanPoint.x;
         const dy = y - lastPanPoint.y;
-        
+
         setPanOffset(prev => ({
           x: prev.x + dx,
-          y: prev.y + dy
+          y: prev.y + dy,
         }));
-        
+
         setLastPanPoint({ x, y });
         return;
       }
-      
+
       const adjustedX = x - panOffset.x;
       const adjustedY = y - panOffset.y;
-      
+
       moveDrawing(adjustedX, adjustedY);
     },
     [tool, isPanning, lastPanPoint, panOffset, moveDrawing]
@@ -486,10 +483,10 @@ export const useCanvas = () => {
         setIsPanning(false);
         return;
       }
-      
+
       const adjustedX = x - panOffset.x;
       const adjustedY = y - panOffset.y;
-      
+
       endDrawing(adjustedX, adjustedY, color);
     },
     [tool, panOffset, endDrawing]
@@ -500,9 +497,8 @@ export const useCanvas = () => {
 
     if (undoStack.length === 0) return;
 
-
     const action = undoStack[undoStack.length - 1];
-    
+
     switch (action.type) {
       case 'ADD_PATH':
         if (action.pathData) {
@@ -613,6 +609,7 @@ export const useCanvas = () => {
 
   return {
     paths,
+    setPaths,
     currentPath,
     tool,
     setTool,
