@@ -22,6 +22,7 @@ import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
+import { useImagePicker, CanvasImageComponent } from '../../hooks/useImagePicker';
 
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
@@ -50,7 +51,7 @@ export default function CanvasScreen() {
   } = useCanvas();
 
   const [selectedColor, setSelectedColor] = useState<string>('black');
-
+  
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
 
   const [clientId] = useState(
@@ -117,6 +118,15 @@ export default function CanvasScreen() {
       });
     }
   }, [socket]);
+
+  const {
+    images,
+    selectedImage,
+    pickImage,
+    handleImageSelection,
+    moveSelectedImage,
+    resetImageSelection
+  } = useImagePicker(socket, clientId, id, isSyncing, setIsSyncing, tool, panOffset);
 
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
@@ -198,10 +208,32 @@ export default function CanvasScreen() {
   const pan = Gesture.Pan()
     .runOnJS(true)
     .minDistance(5)
-    .onStart(e => handlePointerDown(e.x, e.y))
-    .onChange(e => handlePointerMove(e.x, e.y))
-    .onEnd(e => handlePointerUp(e.x, e.y, selectedColor));
+    .onStart(e => {
+      // Check if we're touching an image when using SELECT tool
+      const imageSelected = handleImageSelection(e.x, e.y);
+      
 
+      if (!imageSelected) {
+        handlePointerDown(e.x, e.y);
+      }
+    })
+    .onChange(e => {
+
+      const imageMoved = moveSelectedImage(e.changeX, e.changeY);
+      
+      if (!imageMoved) {
+        handlePointerMove(e.x, e.y);
+      }
+    })
+    .onEnd(e => {
+      // Reset image selection (only affects SELECT mode)
+      resetImageSelection();
+      
+      handlePointerUp(e.x, e.y, selectedColor);
+    });
+
+    
+    
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -218,6 +250,14 @@ export default function CanvasScreen() {
       />
       <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
         <Canvas style={{ flex: 1 }}>
+        {images.map((img) => (
+            <CanvasImageComponent 
+              key={img.id} 
+              image={img} 
+              panOffset={panOffset} 
+              isSelected={selectedImage?.id === img.id}
+            />
+          ))}
           {paths.map(({ path, tool, strokeWidth, fill, color }, index) => (
             <Path
               key={index}
@@ -259,32 +299,20 @@ export default function CanvasScreen() {
 
           {selectionBounds.isValid && tool === Tools.SELECT && (
             <>
+              
               <Rect
-                x={selectionBounds.minX - 5} // Add padding
-                y={selectionBounds.minY - 5}
-                width={selectionBounds.width + 10}
-                height={selectionBounds.height + 10}
-                color="rgb(0, 102, 255)"
-                style="stroke"
-                strokeWidth={2}
-              >
-                <DashPathEffect intervals={[5, 5]} />
-              </Rect>
-
-              <>
-                <Rect
-                  x={selectionBounds.minX + panOffset.x}
-                  y={selectionBounds.minY + panOffset.y}
-                  width={selectionBounds.width}
-                  height={selectionBounds.height}
+                  x={selectionBounds.minX + panOffset.x - 5}
+                  y={selectionBounds.minY + panOffset.y - 5}
+                  width={selectionBounds.width + 10}
+                  height={selectionBounds.height + 10}
                   color="rgb(0, 102, 255)"
                   style="stroke"
                   strokeWidth={2}
                 >
                   <DashPathEffect intervals={[5, 5]} />
                 </Rect>
-
-                {/* Update all selection handles to apply pan offset */}
+              <>
+              
                 <Rect
                   x={selectionBounds.minX - 8 + panOffset.x}
                   y={selectionBounds.minY - 8 + panOffset.y}
@@ -367,28 +395,33 @@ export default function CanvasScreen() {
       </GestureDetector>
 
       <View style={styles.controlsContainer}>
-        <View style={styles.buttonRow}>
-          <TouchableOpacity onPress={undo} style={styles.controlButton}>
-            <MaterialIcons name="undo" size={24} color="black" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={redo} style={styles.controlButton}>
-            <MaterialIcons name="redo" size={24} color="black" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={clear}
-            style={[styles.controlButton, styles.clearButton]}
-          >
-            <FontAwesome name="trash" size={24} color="black" />
-          </TouchableOpacity>
-        </View>
-        <Toolbar
-          tool={tool}
-          setTool={setTool}
-          strokeWidth={strokeWidth}
-          setStrokeWidth={setStrokeWidth}
-          setColor={setSelectedColor}
-        />
-      </View>
+  <View style={styles.buttonRow}>
+    <TouchableOpacity onPress={undo} style={styles.controlButton}>
+      <MaterialIcons name="undo" size={24} color="black" />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={redo} style={styles.controlButton}>
+      <MaterialIcons name="redo" size={24} color="black" />
+    </TouchableOpacity>
+    <TouchableOpacity
+      onPress={clear}
+      style={[styles.controlButton, styles.clearButton]}
+    >
+      <FontAwesome name="trash" size={24} color="black" />
+    </TouchableOpacity>
+    
+    {/* Add image upload button */}
+    <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
+      <MaterialIcons name="image" size={24} color="black" />
+    </TouchableOpacity>
+  </View>
+  <Toolbar
+    tool={tool}
+    setTool={setTool}
+    strokeWidth={strokeWidth}
+    setStrokeWidth={setStrokeWidth}
+    setColor={setSelectedColor}
+  />
+</View>
     </View>
   );
 }
