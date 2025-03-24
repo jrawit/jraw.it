@@ -12,7 +12,11 @@ import { useKeyEvent } from 'expo-key-event';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  Modal,
+  Pressable,
+  Text as RNText,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -22,7 +26,11 @@ import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
-import { useImagePicker, CanvasImageComponent } from '../../hooks/useImagePicker';
+import {
+  CanvasImageComponent,
+  useImagePicker,
+} from '../../hooks/useImagePicker';
+import { TextElement, useTextEditor } from '../../hooks/useTextEditor';
 
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
@@ -51,7 +59,7 @@ export default function CanvasScreen() {
   } = useCanvas();
 
   const [selectedColor, setSelectedColor] = useState<string>('black');
-  
+
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
 
   const [clientId] = useState(
@@ -125,8 +133,38 @@ export default function CanvasScreen() {
     pickImage,
     handleImageSelection,
     moveSelectedImage,
-    resetImageSelection
-  } = useImagePicker(socket, clientId, id, isSyncing, setIsSyncing, tool, panOffset);
+    resetImageSelection,
+  } = useImagePicker(
+    socket,
+    clientId,
+    id,
+    isSyncing,
+    setIsSyncing,
+    tool,
+    panOffset
+  );
+
+  const {
+    textElements,
+    selectedText,
+    isAddingText,
+    newTextValue,
+    setNewTextValue,
+    startAddingText,
+    confirmAddText,
+    cancelAddText,
+    handleTextSelection,
+    moveSelectedText,
+    resetTextSelection,
+  } = useTextEditor(
+    socket,
+    clientId,
+    id,
+    isSyncing,
+    setIsSyncing,
+    tool,
+    panOffset
+  );
 
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
@@ -174,6 +212,9 @@ export default function CanvasScreen() {
       case 'Digit9':
         setTool(Tools.STAR);
         break;
+      case 'KeyT':
+        setTool(Tools.TEXT);
+        break;
       case 'Escape':
         setTool(Tools.PAN);
         break;
@@ -209,31 +250,45 @@ export default function CanvasScreen() {
     .runOnJS(true)
     .minDistance(5)
     .onStart(e => {
-      // Check if we're touching an image when using SELECT tool
-      const imageSelected = handleImageSelection(e.x, e.y);
-      
+      // Check if we're touching a text element in SELECT mode
+      const textSelected = handleTextSelection(e.x, e.y);
 
-      if (!imageSelected) {
+      // Check if we're touching an image in SELECT mode
+      const imageSelected = handleImageSelection(e.x, e.y);
+
+      // If using TEXT tool, initiate text addition
+      if (tool === Tools.TEXT) {
+        startAddingText(e.x, e.y);
+        return;
+      }
+
+      // If nothing selected, proceed with regular drawing
+      if (!textSelected && !imageSelected) {
         handlePointerDown(e.x, e.y);
       }
     })
     .onChange(e => {
+      // Try to move text first if selected
+      const textMoved = moveSelectedText(e.changeX, e.changeY);
 
-      const imageMoved = moveSelectedImage(e.changeX, e.changeY);
-      
-      if (!imageMoved) {
-        handlePointerMove(e.x, e.y);
+      // If no text moved, try to move an image
+      if (!textMoved) {
+        const imageMoved = moveSelectedImage(e.changeX, e.changeY);
+
+        // If nothing moved, handle drawing
+        if (!imageMoved) {
+          handlePointerMove(e.x, e.y);
+        }
       }
     })
     .onEnd(e => {
-      // Reset image selection (only affects SELECT mode)
+      // Reset selections
+      resetTextSelection();
       resetImageSelection();
-      
+
       handlePointerUp(e.x, e.y, selectedColor);
     });
 
-    
-    
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -250,14 +305,28 @@ export default function CanvasScreen() {
       />
       <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
         <Canvas style={{ flex: 1 }}>
-        {images.map((img) => (
-            <CanvasImageComponent 
-              key={img.id} 
-              image={img} 
-              panOffset={panOffset} 
+          {images.map(img => (
+            <CanvasImageComponent
+              key={img.id}
+              image={img}
+              panOffset={panOffset}
               isSelected={selectedImage?.id === img.id}
             />
           ))}
+          {textElements.map(textEl => (
+            <TextElement
+              key={textEl.id}
+              text={textEl.text}
+              x={textEl.x}
+              y={textEl.y}
+              fontSize={textEl.fontSize}
+              color={textEl.color}
+              panOffset={panOffset}
+              isSelected={selectedText?.id === textEl.id}
+            />
+          ))}
+          {textElements.length > 0 &&
+            console.log('Rendering text elements:', textElements)}
           {paths.map(({ path, tool, strokeWidth, fill, color }, index) => (
             <Path
               key={index}
@@ -299,20 +368,18 @@ export default function CanvasScreen() {
 
           {selectionBounds.isValid && tool === Tools.SELECT && (
             <>
-              
               <Rect
-                  x={selectionBounds.minX + panOffset.x - 5}
-                  y={selectionBounds.minY + panOffset.y - 5}
-                  width={selectionBounds.width + 10}
-                  height={selectionBounds.height + 10}
-                  color="rgb(0, 102, 255)"
-                  style="stroke"
-                  strokeWidth={2}
-                >
-                  <DashPathEffect intervals={[5, 5]} />
-                </Rect>
+                x={selectionBounds.minX + panOffset.x - 5}
+                y={selectionBounds.minY + panOffset.y - 5}
+                width={selectionBounds.width + 10}
+                height={selectionBounds.height + 10}
+                color="rgb(0, 102, 255)"
+                style="stroke"
+                strokeWidth={2}
+              >
+                <DashPathEffect intervals={[5, 5]} />
+              </Rect>
               <>
-              
                 <Rect
                   x={selectionBounds.minX - 8 + panOffset.x}
                   y={selectionBounds.minY - 8 + panOffset.y}
@@ -395,33 +462,79 @@ export default function CanvasScreen() {
       </GestureDetector>
 
       <View style={styles.controlsContainer}>
-  <View style={styles.buttonRow}>
-    <TouchableOpacity onPress={undo} style={styles.controlButton}>
-      <MaterialIcons name="undo" size={24} color="black" />
-    </TouchableOpacity>
-    <TouchableOpacity onPress={redo} style={styles.controlButton}>
-      <MaterialIcons name="redo" size={24} color="black" />
-    </TouchableOpacity>
-    <TouchableOpacity
-      onPress={clear}
-      style={[styles.controlButton, styles.clearButton]}
-    >
-      <FontAwesome name="trash" size={24} color="black" />
-    </TouchableOpacity>
-    
-    {/* Add image upload button */}
-    <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
-      <MaterialIcons name="image" size={24} color="black" />
-    </TouchableOpacity>
-  </View>
-  <Toolbar
-    tool={tool}
-    setTool={setTool}
-    strokeWidth={strokeWidth}
-    setStrokeWidth={setStrokeWidth}
-    setColor={setSelectedColor}
-  />
-</View>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity onPress={undo} style={styles.controlButton}>
+            <MaterialIcons name="undo" size={24} color="black" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={redo} style={styles.controlButton}>
+            <MaterialIcons name="redo" size={24} color="black" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={clear}
+            style={[styles.controlButton, styles.clearButton]}
+          >
+            <FontAwesome name="trash" size={24} color="black" />
+          </TouchableOpacity>
+
+          {/* Add image upload button */}
+          <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
+            <MaterialIcons name="image" size={24} color="black" />
+          </TouchableOpacity>
+          {/* Add text button */}
+          <TouchableOpacity
+            onPress={() => setTool(Tools.TEXT)}
+            style={[
+              styles.controlButton,
+              tool === Tools.TEXT && { backgroundColor: '#3498db' },
+            ]}
+          >
+            <MaterialIcons
+              name="text-fields"
+              size={24}
+              color={tool === Tools.TEXT ? 'white' : 'black'}
+            />
+          </TouchableOpacity>
+        </View>
+        <Toolbar
+          tool={tool}
+          setTool={setTool}
+          strokeWidth={strokeWidth}
+          setStrokeWidth={setStrokeWidth}
+          setColor={setSelectedColor}
+        />
+      </View>
+      {/* Text input modal */}
+      <Modal
+        visible={isAddingText}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelAddText}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <RNText style={styles.modalTitle}>Add Text</RNText>
+            <TextInput
+              style={styles.textInput}
+              value={newTextValue}
+              onChangeText={setNewTextValue}
+              placeholder="Enter your text here"
+              autoFocus
+              multiline
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalButton} onPress={cancelAddText}>
+                <RNText>Cancel</RNText>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={() => confirmAddText(selectedColor)}
+              >
+                <RNText style={styles.confirmButtonText}>Add</RNText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -450,5 +563,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignContent: 'center',
     backgroundColor: 'orange',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    padding: 10,
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 15,
+  },
+  modalButton: {
+    marginLeft: 10,
+    padding: 10,
+  },
+  confirmButton: {
+    backgroundColor: '#3498db',
+    borderRadius: 5,
+  },
+  confirmButtonText: {
+    color: 'white',
   },
 });

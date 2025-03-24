@@ -2,6 +2,7 @@ import Entypo from '@expo/vector-icons/build/Entypo';
 import Feather from '@expo/vector-icons/Feather';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 export enum Tools {
   PEN = 'pen',
@@ -15,6 +16,7 @@ export enum Tools {
   STAR = 'star',
   SELECT = 'select',
   PAN = 'pan',
+  TEXT = 'text',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -111,6 +113,14 @@ export const ToolData = {
     cap: 'round' as const,
     iconComponent: MaterialCommunityIcons,
     iconName: 'pan-horizontal',
+    blendMode: 'srcOver' as const,
+    colorTransform: (hex: string) => hex, // No transformation
+    sizeTransform: (size: number) => size, // No transformation
+  },
+  [Tools.TEXT]: {
+    cap: 'round' as const,
+    iconComponent: MaterialIcons,
+    iconName: 'text-fields',
     blendMode: 'srcOver' as const,
     colorTransform: (hex: string) => hex, // No transformation
     sizeTransform: (size: number) => size, // No transformation
