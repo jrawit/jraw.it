@@ -1,4 +1,5 @@
 import { PathData } from '@/hooks/useCanvas';
+import Feather from '@expo/vector-icons/Feather';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
@@ -7,6 +8,7 @@ import {
   Path,
   Rect,
   Skia,
+  useCanvasRef,
 } from '@shopify/react-native-skia';
 import { useKeyEvent } from 'expo-key-event';
 import { Stack, useLocalSearchParams } from 'expo-router';
@@ -37,6 +39,7 @@ export default function CanvasScreen() {
 
   const colorScheme = useColorScheme();
   const { id } = useLocalSearchParams();
+  const ref = useCanvasRef();
 
   const {
     paths,
@@ -288,6 +291,43 @@ export default function CanvasScreen() {
 
       handlePointerUp(e.x, e.y, selectedColor);
     });
+  const downloadImage = async () => {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = 1920;
+    canvas.height = 1080;
+
+    const svgPaths = paths.map(path => ({
+      path: path.path.toSVGString(),
+      color: ToolData[path.tool].colorTransform(path.color),
+      fill: path.fill,
+      strokeWidth: path.strokeWidth,
+    }));
+
+    const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" style="background-color: white" xml:space="preserve">
+          ${svgPaths
+            .map(
+              path =>
+                `<path stroke-width="${path.strokeWidth}" stroke="${path.color}" fill="${path.fill ? path.color : 'none'}" d="${path.path}" />`
+            )
+            .join('')}
+        </svg>
+      `;
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+
+    const img = new Image();
+    img.onload = () => {
+      context?.drawImage(img, 0, 0);
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = 'canvas.png';
+      link.href = dataUrl;
+      link.click();
+    };
+    img.src = url;
+  };
 
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
@@ -304,7 +344,7 @@ export default function CanvasScreen() {
         }}
       />
       <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
-        <Canvas style={{ flex: 1 }}>
+        <Canvas style={{ flex: 1 }} ref={ref}>
           {images.map(img => (
             <CanvasImageComponent
               key={img.id}
@@ -479,6 +519,13 @@ export default function CanvasScreen() {
           {/* Add image upload button */}
           <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
             <MaterialIcons name="image" size={24} color="black" />
+          </TouchableOpacity>
+          {/* Image download button */}
+          <TouchableOpacity
+            onPress={downloadImage}
+            style={styles.controlButton}
+          >
+            <Feather name="download" size={24} color="black" />
           </TouchableOpacity>
           {/* Add text button */}
           <TouchableOpacity
