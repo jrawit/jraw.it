@@ -5,6 +5,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  Button,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -100,6 +101,11 @@ export default function HomeScreen() {
             fontWeight: 'bold',
           },
         }}
+      />
+
+      <Button
+        title="Go to test canvas"
+        onPress={() => router.push('/canvas/test')}
       />
 
       <ScrollView

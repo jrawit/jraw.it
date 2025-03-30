@@ -56,7 +56,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <ThemedView style={styles.container}>
-      <ThemedView style={styles.toolsContainer}>
+      <View style={styles.toolsContainer}>
         {Object.entries(ToolData).map(
           ([toolType, { iconComponent: IconComponent, iconName }]) => {
             return (
@@ -77,7 +77,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
             );
           }
         )}
-      </ThemedView>
+      </View>
       {colorPickerVisible ? (
         <ColorPicker
           style={{
@@ -128,7 +128,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         <Animated.View style={colorButtonStyle} />
       </Pressable>
 
-      <ThemedView style={styles.sliderContainer}>
+      <View style={styles.sliderContainer}>
         <Slider
           style={styles.slider}
           minimumValue={1}
@@ -142,7 +142,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           thumbTintColor="#007AFF"
           maximumTrackTintColor="#D3D3D3"
         />
-      </ThemedView>
+      </View>
     </ThemedView>
   );
 };
@@ -156,6 +156,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 10,
     top: 100,
+    backgroundColor: '#323336',
   },
   toolsContainer: {
     flexDirection: 'column',

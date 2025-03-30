@@ -1,0 +1,51 @@
+import { CanvasElements } from '@/constants/CanvasElement';
+import {
+  Skia,
+  Paint as SkPaint,
+  Path as SkPath,
+} from '@shopify/react-native-skia';
+import React, { useMemo } from 'react';
+
+interface StarProps {
+  starData: CanvasElements.Star;
+}
+
+export const Star: React.FC<StarProps> = React.memo(
+  ({ starData: starData }) => {
+    const { point, radius, spikes, strokeColor, strokeWidth, fillColor } =
+      starData;
+
+    const path = useMemo(() => {
+      const path = Skia.Path.Make();
+
+      const angle = (Math.PI * 2) / spikes;
+      const halfAngle = angle / 2;
+      const innerRadius = radius / 2;
+      path.moveTo(point.x, point.y - radius);
+      for (let i = 0; i < spikes; i++) {
+        const x = point.x + radius * Math.sin(i * angle);
+        const y = point.y - radius * Math.cos(i * angle);
+        path.lineTo(x, y);
+        const innerX = point.x + innerRadius * Math.sin(i * angle + halfAngle);
+        const innerY = point.y - innerRadius * Math.cos(i * angle + halfAngle);
+        path.lineTo(innerX, innerY);
+      }
+      path.lineTo(point.x, point.y - radius);
+
+      path.close();
+      return path;
+    }, [point, radius, spikes]);
+
+    return (
+      <SkPath path={path} style="stroke">
+        <SkPaint
+          color={strokeColor}
+          style="stroke"
+          strokeWidth={strokeWidth}
+          strokeJoin="miter"
+        />
+        {fillColor && <SkPaint color={fillColor} />}
+      </SkPath>
+    );
+  }
+);

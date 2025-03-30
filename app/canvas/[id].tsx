@@ -1,22 +1,33 @@
-import { PathData } from '@/hooks/useCanvas';
-import Feather from '@expo/vector-icons/Feather';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { Circle } from '@/components/tools/Circle';
+import { Image } from '@/components/tools/Image';
+import { Line } from '@/components/tools/Line';
+import { Path } from '@/components/tools/Path';
+import { Rect } from '@/components/tools/Rectangle';
+import { Star } from '@/components/tools/Star';
+import { Text } from '@/components/tools/Text';
+import { Triangle } from '@/components/tools/Triangle';
+import { CanvasElements } from '@/constants/CanvasElement';
+import { processImageForCanvas } from '@/hooks/tool-handlers';
+import { CanvasElement } from '@/hooks/useCanvas';
+import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   Canvas,
-  DashPathEffect,
-  Path,
-  Rect,
-  Skia,
+  Group,
+  Paint,
+  RoundedRect,
+  Rect as SkRect,
   useCanvasRef,
 } from '@shopify/react-native-skia';
+import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
-  Pressable,
-  Text as RNText,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -28,153 +39,67 @@ import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
-import {
-  CanvasImageComponent,
-  useImagePicker,
-} from '../../hooks/useImagePicker';
-import { TextElement, useTextEditor } from '../../hooks/useTextEditor';
 
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
+  const [tool, setTool] = useState<Tools>(Tools.PEN);
+  const [strokeWidth, setStrokeWidth] = useState<number>(3);
+  const [selectedColor, setSelectedColor] = useState<string>('black');
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  const [textModalVisible, setTextModalVisible] = useState<boolean>(false);
+  const [textInputValue, setTextInputValue] = useState<string>('');
+  const [textPosition, setTextPosition] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+
+  const [elementsOffset, setElementsOffset] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
+  const [currentElementOffset, setCurrentElementOffset] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
 
   const colorScheme = useColorScheme();
   const { id } = useLocalSearchParams();
   const ref = useCanvasRef();
 
   const {
-    paths,
-    currentPath,
-    tool,
-    setTool,
-    handlePointerDown,
-    handlePointerMove,
-    handlePointerUp,
+    elements,
+    currentElement,
+    onStartInput,
+    onMoveInput,
+    onEndInput,
     undo,
     redo,
     clear,
+    addExternalElement,
+    modifyElements,
+    selection,
+  } = useCanvas({
+    tool,
     strokeWidth,
-    setStrokeWidth,
-    selectedItems,
-    selectionBounds,
-    panOffset,
-    isPanning,
-    setPaths,
-  } = useCanvas();
-
-  const [selectedColor, setSelectedColor] = useState<string>('black');
+    color: selectedColor,
+  });
 
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
 
-  const [clientId] = useState(
-    () => `client_${Math.random().toString(36).substring(2, 9)}`
-  );
-
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  useEffect(() => {
-    if (socket) {
-      socket.emit(
-        'joinRoom',
-        { name: id },
-        (response: { success: any; roomId: any; paths: any }) => {
-          console.log('Room:', response);
-          if (response.success) {
-            let paths = response.paths;
-            if (paths) {
-              const newPaths = paths.map((path: any) => ({
-                id: path.id,
-                path: Skia.Path.MakeFromSVGString(path.path),
-                tool: path.tool,
-                strokeWidth: path.strokeWidth,
-                fill: path.fill,
-                color: path.color,
-              }));
-              // Update paths in the canvas
-              setPaths(newPaths);
-            } else {
-              console.log('No paths received');
-            }
-          }
-        }
-      );
-
-      socket.on('canvasData', (data: any) => {
-        // Skip if this is our own update
-        if (data.senderId === clientId) return;
-
-        console.log('Received canvas data from:', data.senderId);
-
-        try {
-          // Set syncing flag to prevent emitting back
-          setIsSyncing(true);
-
-          const newPaths = data.paths.map((path: any) => ({
-            id: path.id,
-            path: Skia.Path.MakeFromSVGString(path.path),
-            tool: path.tool,
-            strokeWidth: path.strokeWidth,
-            fill: path.fill,
-            color: path.color,
-          }));
-
-          // Directly update the source of truth in useCanvas
-          setPaths(newPaths);
-
-          // Reset syncing flag after a short delay to ensure state updates complete
-          setTimeout(() => setIsSyncing(false), 100);
-        } catch (error) {
-          console.error('Error processing canvas data:', error);
-          setIsSyncing(false);
-        }
-      });
-    }
-  }, [socket]);
-
   const {
-    images,
-    selectedImage,
-    pickImage,
-    handleImageSelection,
-    moveSelectedImage,
-    resetImageSelection,
-  } = useImagePicker(
-    socket,
-    clientId,
-    id,
-    isSyncing,
-    setIsSyncing,
-    tool,
-    panOffset
-  );
-
-  const {
-    textElements,
-    selectedText,
-    isAddingText,
-    newTextValue,
-    setNewTextValue,
-    startAddingText,
-    confirmAddText,
-    cancelAddText,
-    handleTextSelection,
-    moveSelectedText,
-    resetTextSelection,
-  } = useTextEditor(
-    socket,
-    clientId,
-    id,
-    isSyncing,
-    setIsSyncing,
-    tool,
-    panOffset
-  );
+    isPermissionModalVisible,
+    isPermanentlyDenied,
+    requestPermission,
+    openSettings,
+    hidePermissionModal,
+  } = useMediaLibraryPermissions();
 
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
 
     startListening();
     return () => {
-      // Implement leave room here
       socket?.emit('leaveRoom', { roomId: id });
       stopListening();
     };
@@ -200,9 +125,6 @@ export default function CanvasScreen() {
       case 'Digit4':
         setTool(Tools.ERASER);
         break;
-      case 'Digit5':
-        setTool(Tools.BUCKETFILL);
-        break;
       case 'Digit6':
         setTool(Tools.CIRCLE);
         break;
@@ -224,110 +146,217 @@ export default function CanvasScreen() {
     }
   }, [keyEvent]);
 
-  useEffect(() => {
-    // Don't emit if we're currently syncing from a received update
-    if (isSyncing || !socket) return;
-
-    let svgPaths = paths.map((path: PathData) => ({
-      id: path.id,
-      path: path.path.toSVGString(),
-      tool: path.tool,
-      strokeWidth: path.strokeWidth,
-      fill: path.fill,
-      color: path.color,
-    }));
-
-    socket.emit('canvasData', {
-      roomId: id,
-      paths: svgPaths,
-      senderId: clientId,
-    });
-  }, [paths, isSyncing, socket]);
-
   const tap = Gesture.Tap()
     .runOnJS(true)
-    .onStart(e => handlePointerDown(e.x, e.y))
-    .onEnd(e => handlePointerUp(e.x, e.y, selectedColor));
+    .onStart(e => {
+      const adjustedX = e.x - elementsOffset.x;
+      const adjustedY = e.y - elementsOffset.y;
+
+      if (tool === Tools.TEXT) {
+        setTextPosition({ x: adjustedX, y: adjustedY });
+        setTextModalVisible(true);
+      } else {
+        onStartInput(adjustedX, adjustedY);
+      }
+    })
+    .onEnd(e => {
+      if (tool !== Tools.TEXT) {
+        const adjustedX = e.x - elementsOffset.x;
+        const adjustedY = e.y - elementsOffset.y;
+        onEndInput(adjustedX, adjustedY);
+      }
+    });
 
   const pan = Gesture.Pan()
     .runOnJS(true)
     .minDistance(5)
     .onStart(e => {
-      // Check if we're touching a text element in SELECT mode
-      const textSelected = handleTextSelection(e.x, e.y);
-
-      // Check if we're touching an image in SELECT mode
-      const imageSelected = handleImageSelection(e.x, e.y);
-
-      // If using TEXT tool, initiate text addition
-      if (tool === Tools.TEXT) {
-        startAddingText(e.x, e.y);
-        return;
-      }
-
-      // If nothing selected, proceed with regular drawing
-      if (!textSelected && !imageSelected) {
-        handlePointerDown(e.x, e.y);
+      if (tool !== Tools.PAN) {
+        const adjustedX = e.x - elementsOffset.x;
+        const adjustedY = e.y - elementsOffset.y;
+        onStartInput(adjustedX, adjustedY);
       }
     })
     .onChange(e => {
-      // Try to move text first if selected
-      const textMoved = moveSelectedText(e.changeX, e.changeY);
-
-      // If no text moved, try to move an image
-      if (!textMoved) {
-        const imageMoved = moveSelectedImage(e.changeX, e.changeY);
-
-        // If nothing moved, handle drawing
-        if (!imageMoved) {
-          handlePointerMove(e.x, e.y);
-        }
+      if (tool === Tools.PAN) {
+        setCurrentElementOffset({
+          x: e.translationX,
+          y: e.translationY,
+        });
+      } else {
+        const adjustedX = e.x - elementsOffset.x;
+        const adjustedY = e.y - elementsOffset.y;
+        onMoveInput(adjustedX, adjustedY);
       }
     })
     .onEnd(e => {
-      // Reset selections
-      resetTextSelection();
-      resetImageSelection();
-
-      handlePointerUp(e.x, e.y, selectedColor);
+      if (tool !== Tools.PAN) {
+        const adjustedX = e.x - elementsOffset.x;
+        const adjustedY = e.y - elementsOffset.y;
+        onEndInput(adjustedX, adjustedY);
+      } else {
+        setElementsOffset(prev => ({
+          x: prev.x + e.translationX,
+          y: prev.y + e.translationY,
+        }));
+        setCurrentElementOffset({ x: 0, y: 0 });
+      }
     });
-  const downloadImage = async () => {
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    canvas.width = 1920;
-    canvas.height = 1080;
 
-    const svgPaths = paths.map(path => ({
-      path: path.path.toSVGString(),
-      color: ToolData[path.tool].colorTransform(path.color),
-      fill: path.fill,
-      strokeWidth: path.strokeWidth,
-    }));
+  // For mobile devices, two-finger pan gesture
+  const twoFingerPan = Gesture.Pan()
+    .runOnJS(true)
+    .minPointers(2) // Requires at least 2 fingers
+    .onChange(e => {
+      // Always pan when using two fingers, regardless of selected tool
+      setCurrentElementOffset({
+        x: e.translationX,
+        y: e.translationY,
+      });
+    })
+    .onEnd(e => {
+      setElementsOffset(prev => ({
+        x: prev.x + e.translationX,
+        y: prev.y + e.translationY,
+      }));
+      setCurrentElementOffset({ x: 0, y: 0 });
+    });
 
-    const svgString = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" style="background-color: white" xml:space="preserve">
-          ${svgPaths
-            .map(
-              path =>
-                `<path stroke-width="${path.strokeWidth}" stroke="${path.color}" fill="${path.fill ? path.color : 'none'}" d="${path.path}" />`
-            )
-            .join('')}
-        </svg>
-      `;
-    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
+  useEffect(() => {
+    if (socket) {
+      socket.emit(
+        'joinRoom',
+        { name: id },
+        (response: { success: any; roomId: any; paths: any }) => {
+          console.log('Room:', response);
+          if (response.success) {
+            let paths = response.paths;
+            if (paths) {
+              // Update paths in the canvas
+              // setPaths(newPaths);
+            } else {
+              console.log('No paths received');
+            }
+          }
+        }
+      );
+    }
+  }, [socket]);
 
-    const img = new Image();
-    img.onload = () => {
-      context?.drawImage(img, 0, 0);
-      const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = 'canvas.png';
-      link.href = dataUrl;
-      link.click();
-    };
-    img.src = url;
-  };
+  const pickImage = useCallback(async () => {
+    const status = await requestPermission();
+    if (status !== 'granted') return;
+
+    // Initial image selection with low quality
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      allowsEditing: false,
+      quality: 0.7,
+      exif: false,
+      base64: false,
+    });
+
+    if (!result.canceled) {
+      try {
+        // Get original dimensions
+        const imageAsset = result.assets[0];
+        const imageWidth = imageAsset.width || 100;
+        const imageHeight = imageAsset.height || 100;
+
+        const { width: finalWidth, height: finalHeight } =
+          processImageForCanvas(
+            imageWidth,
+            imageHeight,
+            canvasSize.width || 300,
+            canvasSize.height || 300
+          );
+
+        // Center the image on the visible portion of the canvas
+        const centerX = (canvasSize.width - finalWidth) / 2 - elementsOffset.x;
+        const centerY =
+          (canvasSize.height - finalHeight) / 2 - elementsOffset.y;
+
+        const imageElement = {
+          uri: imageAsset.uri,
+          point: { x: centerX, y: centerY },
+          width: finalWidth,
+          height: finalHeight,
+        };
+
+        addExternalElement(imageElement, Tools.IMAGE);
+      } catch (error) {
+        console.error('Error processing image:', error);
+      }
+    }
+  }, [canvasSize, elementsOffset, addExternalElement, requestPermission]);
+
+  const onTextSubmit = useCallback(() => {
+    if (textInputValue.trim()) {
+      const textElement = {
+        text: textInputValue,
+        point: textPosition,
+        fontFamily: 'Roboto',
+        fontSize: strokeWidth,
+        color: selectedColor,
+      };
+
+      addExternalElement(textElement, Tools.TEXT);
+    }
+
+    setTextModalVisible(false);
+    setTextInputValue('');
+  }, [
+    textInputValue,
+    textPosition,
+    strokeWidth,
+    selectedColor,
+    addExternalElement,
+  ]);
+
+  const getElement = useCallback(
+    (canvasElement: CanvasElement) => {
+      const { id, element, tool } = canvasElement;
+      switch (tool) {
+        case Tools.PEN:
+        case Tools.HIGHLIGHTER:
+        case Tools.ERASER:
+          (element as CanvasElements.Path).capStyle = ToolData[tool].cap;
+          (element as CanvasElements.Path).blendMode = ToolData[tool].blendMode;
+          (element as CanvasElements.Path).strokeWidth =
+            ToolData[tool].sizeTransform(strokeWidth);
+          (element as CanvasElements.Path).strokeColor =
+            ToolData[tool].colorTransform(selectedColor);
+          return <Path key={id} pathData={element as CanvasElements.Path} />;
+        case Tools.LINE:
+          return <Line key={id} lineData={element as CanvasElements.Line} />;
+        case Tools.RECTANGLE:
+          return (
+            <Rect key={id} rectData={element as CanvasElements.Rectangle} />
+          );
+        case Tools.CIRCLE:
+          return (
+            <Circle key={id} circleData={element as CanvasElements.Circle} />
+          );
+        case Tools.TRIANGLE:
+          return (
+            <Triangle
+              key={id}
+              triangleData={element as CanvasElements.Triangle}
+            />
+          );
+        case Tools.STAR:
+          return <Star key={id} starData={element as CanvasElements.Star} />;
+        case Tools.TEXT:
+          return <Text key={id} textData={element as CanvasElements.Text} />;
+        case Tools.IMAGE:
+          return <Image key={id} imageData={element as CanvasElements.Image} />;
+        default:
+          console.warn(`Unhandled tool type: ${tool}`);
+          return null;
+      }
+    },
+    [strokeWidth, selectedColor]
+  );
 
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
@@ -343,161 +372,87 @@ export default function CanvasScreen() {
           },
         }}
       />
-      <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
-        <Canvas style={{ flex: 1 }} ref={ref}>
-          {images.map(img => (
-            <CanvasImageComponent
-              key={img.id}
-              image={img}
-              panOffset={panOffset}
-              isSelected={selectedImage?.id === img.id}
-            />
-          ))}
-          {textElements.map(textEl => (
-            <TextElement
-              key={textEl.id}
-              text={textEl.text}
-              x={textEl.x}
-              y={textEl.y}
-              fontSize={textEl.fontSize}
-              color={textEl.color}
-              panOffset={panOffset}
-              isSelected={selectedText?.id === textEl.id}
-            />
-          ))}
-          {textElements.length > 0 &&
-            console.log('Rendering text elements:', textElements)}
-          {paths.map(({ path, tool, strokeWidth, fill, color }, index) => (
-            <Path
-              key={index}
-              path={path}
-              color={ToolData[tool].colorTransform(color)}
-              style={fill ? 'fill' : 'stroke'}
-              strokeWidth={ToolData[tool].sizeTransform(strokeWidth)}
-              strokeJoin="round"
-              strokeCap={ToolData[tool].cap}
-              blendMode={ToolData[tool].blendMode}
-              origin={{ x: 0, y: 0 }}
-              transform={
-                panOffset
-                  ? [{ translateX: panOffset.x }, { translateY: panOffset.y }]
-                  : []
-              }
-            />
-          ))}
+      <GestureDetector gesture={Gesture.Exclusive(pan, tap, twoFingerPan)}>
+        <Canvas
+          style={{ flex: 1 }}
+          ref={ref}
+          onLayout={event => {
+            const { width, height } = event.nativeEvent.layout;
+            setCanvasSize({ width, height });
+          }}
+        >
+          <Group
+            transform={[
+              {
+                translate: [
+                  elementsOffset.x +
+                    (tool === Tools.PAN ? currentElementOffset.x : 0),
+                  elementsOffset.y +
+                    (tool === Tools.PAN ? currentElementOffset.y : 0),
+                ],
+              },
+            ]}
+          >
+            {useMemo(
+              () =>
+                elements.map((canvasElement: CanvasElement) =>
+                  getElement(canvasElement)
+                ),
+              [elements]
+            )}
 
-          {currentPath && (
-            <Path
-              path={currentPath}
-              color={ToolData[tool].colorTransform(selectedColor)}
-              strokeWidth={ToolData[tool].sizeTransform(strokeWidth)}
-              style={'stroke'}
-              strokeJoin="round"
-              strokeCap={ToolData[tool].cap}
-              blendMode={ToolData[tool].blendMode}
-              origin={{ x: 0, y: 0 }}
-              transform={
-                panOffset
-                  ? [{ translateX: panOffset.x }, { translateY: panOffset.y }]
-                  : []
-              }
-            >
-              {tool == Tools.SELECT && <DashPathEffect intervals={[5, 5]} />}
-            </Path>
-          )}
+            {currentElement && getElement(currentElement)}
 
-          {selectionBounds.isValid && tool === Tools.SELECT && (
-            <>
-              <Rect
-                x={selectionBounds.minX + panOffset.x - 5}
-                y={selectionBounds.minY + panOffset.y - 5}
-                width={selectionBounds.width + 10}
-                height={selectionBounds.height + 10}
-                color="rgb(0, 102, 255)"
-                style="stroke"
-                strokeWidth={2}
-              >
-                <DashPathEffect intervals={[5, 5]} />
-              </Rect>
+            {selection && selection.width !== 0 && selection.height !== 0 && (
               <>
-                <Rect
-                  x={selectionBounds.minX - 8 + panOffset.x}
-                  y={selectionBounds.minY - 8 + panOffset.y}
-                  width={8}
-                  height={8}
-                  color="rgb(0, 102, 255)"
-                />
-                <Rect
-                  x={selectionBounds.maxX + panOffset.x}
-                  y={selectionBounds.minY - 8 + panOffset.y}
-                  width={8}
-                  height={8}
-                  color="rgb(0, 102, 255)"
-                />
-                <Rect
-                  x={selectionBounds.minX - 8 + panOffset.x}
-                  y={selectionBounds.maxY + panOffset.y}
-                  width={8}
-                  height={8}
-                  color="rgb(0, 102, 255)"
-                />
-                <Rect
-                  x={selectionBounds.maxX + panOffset.x}
-                  y={selectionBounds.maxY + panOffset.y}
-                  width={8}
-                  height={8}
-                  color="rgb(0, 102, 255)"
-                />
+                {/* Selection area with multiple Paint layers */}
+                <SkRect
+                  x={selection.x}
+                  y={selection.y}
+                  width={selection.width}
+                  height={selection.height}
+                  style="stroke"
+                >
+                  {/* Background fill */}
+                  <Paint color="rgba(0, 134, 223, 0.1)" />
 
-                {/* Update any other selection handles similarly */}
+                  {/* Dashed border */}
+                  <Paint
+                    color="rgba(0, 134, 223, 0.8)"
+                    style="stroke"
+                    strokeWidth={1.5}
+                  />
+                </SkRect>
+
+                {/* Corner handles */}
+                {[
+                  { x: selection.x, y: selection.y }, // top-left
+                  { x: selection.x + selection.width, y: selection.y }, // top-right
+                  { x: selection.x, y: selection.y + selection.height }, // bottom-left
+                  {
+                    x: selection.x + selection.width,
+                    y: selection.y + selection.height,
+                  }, // bottom-right
+                ].map((point, i) => (
+                  <RoundedRect
+                    key={`handle-${i}`}
+                    x={point.x - 4}
+                    y={point.y - 4}
+                    width={8}
+                    height={8}
+                    r={2}
+                  >
+                    <Paint color="white" />
+                    <Paint
+                      color="rgba(0, 134, 223, 1)"
+                      style="stroke"
+                      strokeWidth={1}
+                    />
+                  </RoundedRect>
+                ))}
               </>
-
-              {/* Mid-point handles for sides Will be implemented in future*/}
-              {/* <Rect
-                x={selectionBounds.minX + selectionBounds.width / 2 - 4}
-                y={selectionBounds.minY - 8}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              />
-              <Rect
-                x={selectionBounds.minX + selectionBounds.width / 2 - 4}
-                y={selectionBounds.maxY}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              />
-              <Rect
-                x={selectionBounds.minX - 8}
-                y={selectionBounds.minY + selectionBounds.height / 2 - 4}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              />
-              <Rect
-                x={selectionBounds.maxX}
-                y={selectionBounds.minY + selectionBounds.height / 2 - 4}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              /> */}
-
-              {/* Rotation handle Will be implemented in the future */}
-              {/* <Rect
-                x={selectionBounds.minX + selectionBounds.width / 2 - 4}
-                y={selectionBounds.minY - 25}
-                width={8}
-                height={8}
-                color="rgb(0, 102, 255)"
-              />
-              <Path
-                path={`M ${selectionBounds.minX + selectionBounds.width / 2} ${selectionBounds.minY - 8} L ${selectionBounds.minX + selectionBounds.width / 2} ${selectionBounds.minY - 17}`}
-                color="rgb(0, 102, 255)"
-                style="stroke"
-                strokeWidth={2}
-              /> */}
-            </>
-          )}
+            )}
+          </Group>
         </Canvas>
       </GestureDetector>
 
@@ -509,37 +464,14 @@ export default function CanvasScreen() {
           <TouchableOpacity onPress={redo} style={styles.controlButton}>
             <MaterialIcons name="redo" size={24} color="black" />
           </TouchableOpacity>
+          <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
+            <MaterialIcons name="image" size={24} color="black" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={clear}
             style={[styles.controlButton, styles.clearButton]}
           >
             <FontAwesome name="trash" size={24} color="black" />
-          </TouchableOpacity>
-
-          {/* Add image upload button */}
-          <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
-            <MaterialIcons name="image" size={24} color="black" />
-          </TouchableOpacity>
-          {/* Image download button */}
-          <TouchableOpacity
-            onPress={downloadImage}
-            style={styles.controlButton}
-          >
-            <Feather name="download" size={24} color="black" />
-          </TouchableOpacity>
-          {/* Add text button */}
-          <TouchableOpacity
-            onPress={() => setTool(Tools.TEXT)}
-            style={[
-              styles.controlButton,
-              tool === Tools.TEXT && { backgroundColor: '#3498db' },
-            ]}
-          >
-            <MaterialIcons
-              name="text-fields"
-              size={24}
-              color={tool === Tools.TEXT ? 'white' : 'black'}
-            />
           </TouchableOpacity>
         </View>
         <Toolbar
@@ -550,37 +482,105 @@ export default function CanvasScreen() {
           setColor={setSelectedColor}
         />
       </View>
+
       {/* Text input modal */}
       <Modal
-        visible={isAddingText}
         transparent={true}
+        visible={textModalVisible}
         animationType="fade"
-        onRequestClose={cancelAddText}
+        onRequestClose={() => {
+          setTextModalVisible(false);
+          setTextInputValue('');
+        }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <RNText style={styles.modalTitle}>Add Text</RNText>
+        <ThemedView style={styles.modalOverlay}>
+          <ThemedView style={styles.modalContent}>
+            <ThemedText style={styles.modalTitle}>Add Text</ThemedText>
             <TextInput
-              style={styles.textInput}
-              value={newTextValue}
-              onChangeText={setNewTextValue}
-              placeholder="Enter your text here"
-              autoFocus
-              multiline
+              style={[
+                styles.textInput,
+                {
+                  color: colorScheme === 'dark' ? '#fff' : '#000',
+                  backgroundColor: colorScheme === 'dark' ? '#333' : '#fff',
+                  borderColor: colorScheme === 'dark' ? '#555' : '#ccc',
+                },
+              ]}
+              value={textInputValue}
+              onChangeText={setTextInputValue}
+              placeholder="Enter text here"
+              placeholderTextColor={colorScheme === 'dark' ? '#aaa' : '#666'}
+              autoFocus={true}
+              multiline={true}
+              maxLength={500}
             />
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalButton} onPress={cancelAddText}>
-                <RNText>Cancel</RNText>
-              </Pressable>
-              <Pressable
-                style={[styles.modalButton, styles.confirmButton]}
-                onPress={() => confirmAddText(selectedColor)}
+            <ThemedView style={styles.modalButtons}>
+              <TouchableOpacity
+                onPress={() => {
+                  setTextModalVisible(false);
+                  setTextInputValue('');
+                }}
+                style={[
+                  styles.modalButton,
+                  styles.cancelButton,
+                  {
+                    backgroundColor: colorScheme === 'dark' ? '#444' : '#ccc',
+                  },
+                ]}
               >
-                <RNText style={styles.confirmButtonText}>Add</RNText>
-              </Pressable>
-            </View>
-          </View>
-        </View>
+                <ThemedText style={styles.buttonText}>Cancel</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onTextSubmit}
+                style={[styles.modalButton, styles.addButton]}
+              >
+                <ThemedText style={styles.buttonText}>Add Text</ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+          </ThemedView>
+        </ThemedView>
+      </Modal>
+
+      {/* Updated Permissions modal */}
+      <Modal
+        transparent={true}
+        visible={isPermissionModalVisible}
+        animationType="fade"
+        onRequestClose={hidePermissionModal}
+      >
+        <ThemedView style={styles.modalOverlay}>
+          <ThemedView style={styles.modalContent}>
+            <ThemedText style={styles.modalTitle}>
+              Permission Required
+            </ThemedText>
+            <ThemedText style={styles.modalText}>
+              {isPermanentlyDenied
+                ? "You've denied image library access. Please enable it in your device settings to upload images."
+                : 'We need access to your photo library to upload images.'}
+            </ThemedText>
+            <ThemedView style={styles.modalButtons}>
+              <TouchableOpacity
+                onPress={hidePermissionModal}
+                style={[
+                  styles.modalButton,
+                  styles.cancelButton,
+                  {
+                    backgroundColor: colorScheme === 'dark' ? '#444' : '#ccc',
+                  },
+                ]}
+              >
+                <ThemedText style={styles.buttonText}>Cancel</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={isPermanentlyDenied ? openSettings : requestPermission}
+                style={[styles.modalButton, styles.addButton]}
+              >
+                <ThemedText style={styles.buttonText}>
+                  {isPermanentlyDenied ? 'Open Settings' : 'Allow Access'}
+                </ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+          </ThemedView>
+        </ThemedView>
       </Modal>
     </View>
   );
@@ -613,48 +613,55 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    width: '80%',
-    backgroundColor: 'white',
     borderRadius: 10,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    width: '80%',
+    maxWidth: 400,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 15,
+    textAlign: 'center',
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#ccc',
     borderRadius: 5,
     padding: 10,
     minHeight: 100,
-    textAlignVertical: 'top',
+    fontSize: 16,
+    marginBottom: 15,
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 15,
+    justifyContent: 'space-between',
   },
   modalButton: {
-    marginLeft: 10,
-    padding: 10,
-  },
-  confirmButton: {
-    backgroundColor: '#3498db',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     borderRadius: 5,
+    flex: 1,
+    marginHorizontal: 5,
+    alignItems: 'center',
   },
-  confirmButtonText: {
+  cancelButton: {
+    backgroundColor: '#ccc',
+  },
+  addButton: {
+    backgroundColor: '#007AFF',
+  },
+  buttonText: {
+    fontWeight: 'bold',
     color: 'white',
+  },
+  modalText: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
   },
 });

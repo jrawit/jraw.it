@@ -48,6 +48,12 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you upload images to canvas."
+        }
       ]
     ],
     "experiments": {

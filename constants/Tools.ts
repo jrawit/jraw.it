@@ -9,7 +9,6 @@ export enum Tools {
   LINE = 'line',
   HIGHLIGHTER = 'highlighter',
   ERASER = 'eraser',
-  BUCKETFILL = 'bucketfill',
   CIRCLE = 'circle',
   RECTANGLE = 'rectangle',
   TRIANGLE = 'triangle',
@@ -17,6 +16,7 @@ export enum Tools {
   SELECT = 'select',
   PAN = 'pan',
   TEXT = 'text',
+  IMAGE = 'image',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -26,14 +26,6 @@ export const ToolData = {
     cap: 'round' as const,
     iconComponent: FontAwesome5,
     iconName: 'pen',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => hex, // No transformation
-    sizeTransform: (size: number) => size, // No transformation
-  },
-  [Tools.LINE]: {
-    cap: 'round' as const,
-    iconComponent: MaterialCommunityIcons,
-    iconName: 'vector-line',
     blendMode: 'srcOver' as const,
     colorTransform: (hex: string) => hex, // No transformation
     sizeTransform: (size: number) => size, // No transformation
@@ -60,69 +52,32 @@ export const ToolData = {
     colorTransform: (hex: string) => hex, // No transformation
     sizeTransform: (size: number) => size, // No transformation
   },
-  [Tools.BUCKETFILL]: {
-    cap: 'round' as const,
-    iconComponent: FontAwesome5,
-    iconName: 'fill',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => hex, // No transformation
-    sizeTransform: (size: number) => size, // No transformation
+  [Tools.LINE]: {
+    iconComponent: MaterialCommunityIcons,
+    iconName: 'vector-line',
   },
   [Tools.CIRCLE]: {
-    cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'circle',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => hex, // No transformation
-    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.RECTANGLE]: {
-    cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'square',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => hex, // No transformation
-    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.TRIANGLE]: {
-    cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'triangle',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => hex, // No transformation
-    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.STAR]: {
-    cap: 'round' as const,
     iconComponent: Feather,
     iconName: 'star',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => hex, // No transformation
-    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.SELECT]: {
-    // None of these actually do something, just for the icon
-    cap: 'round' as const,
     iconComponent: MaterialCommunityIcons,
     iconName: 'select',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => 'rgb(0, 102, 255)', // Always blue
-    sizeTransform: (size: number) => 2, // Always 2
-  },
-  [Tools.PAN]: {
-    cap: 'round' as const,
-    iconComponent: MaterialCommunityIcons,
-    iconName: 'pan-horizontal',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => hex, // No transformation
-    sizeTransform: (size: number) => size, // No transformation
   },
   [Tools.TEXT]: {
-    cap: 'round' as const,
     iconComponent: MaterialIcons,
     iconName: 'text-fields',
-    blendMode: 'srcOver' as const,
-    colorTransform: (hex: string) => hex, // No transformation
-    sizeTransform: (size: number) => size, // No transformation
   },
 };
