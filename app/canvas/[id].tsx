@@ -1,3 +1,4 @@
+import { TextModal } from '@/components/TextModal';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Circle } from '@/components/tools/Circle';
@@ -11,6 +12,7 @@ import { Triangle } from '@/components/tools/Triangle';
 import { CanvasElements } from '@/constants/CanvasElement';
 import { processImageForCanvas } from '@/hooks/tool-handlers';
 import { CanvasElement } from '@/hooks/useCanvas';
+import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -29,7 +31,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -44,7 +45,7 @@ export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
   const [tool, setTool] = useState<Tools>(Tools.PEN);
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
-  const [selectedColor, setSelectedColor] = useState<string>('black');
+  const [color, setSelectedColor] = useState<string>('black');
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   const [textModalVisible, setTextModalVisible] = useState<boolean>(false);
@@ -66,6 +67,7 @@ export default function CanvasScreen() {
   const colorScheme = useColorScheme();
   const { id } = useLocalSearchParams();
   const ref = useCanvasRef();
+  const fontManager = useFontManager();
 
   const {
     elements,
@@ -82,7 +84,8 @@ export default function CanvasScreen() {
   } = useCanvas({
     tool,
     strokeWidth,
-    color: selectedColor,
+    color,
+    fontManager,
   });
 
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
@@ -297,7 +300,7 @@ export default function CanvasScreen() {
         point: textPosition,
         fontFamily: 'Roboto',
         fontSize: strokeWidth,
-        color: selectedColor,
+        color: color,
       };
 
       addExternalElement(textElement, Tools.TEXT);
@@ -305,13 +308,7 @@ export default function CanvasScreen() {
 
     setTextModalVisible(false);
     setTextInputValue('');
-  }, [
-    textInputValue,
-    textPosition,
-    strokeWidth,
-    selectedColor,
-    addExternalElement,
-  ]);
+  }, [textInputValue, textPosition, strokeWidth, color, addExternalElement]);
 
   const getElement = useCallback(
     (canvasElement: CanvasElement) => {
@@ -325,7 +322,7 @@ export default function CanvasScreen() {
           (element as CanvasElements.Path).strokeWidth =
             ToolData[tool].sizeTransform(strokeWidth);
           (element as CanvasElements.Path).strokeColor =
-            ToolData[tool].colorTransform(selectedColor);
+            ToolData[tool].colorTransform(color);
           return <Path key={id} pathData={element as CanvasElements.Path} />;
         case Tools.LINE:
           return <Line key={id} lineData={element as CanvasElements.Line} />;
@@ -355,7 +352,7 @@ export default function CanvasScreen() {
           return null;
       }
     },
-    [strokeWidth, selectedColor]
+    [strokeWidth, color]
   );
 
   return (
@@ -484,63 +481,23 @@ export default function CanvasScreen() {
       </View>
 
       {/* Text input modal */}
-      <Modal
-        transparent={true}
+      <TextModal
         visible={textModalVisible}
-        animationType="fade"
-        onRequestClose={() => {
+        position={textPosition}
+        onCancel={() => {
           setTextModalVisible(false);
-          setTextInputValue('');
         }}
-      >
-        <ThemedView style={styles.modalOverlay}>
-          <ThemedView style={styles.modalContent}>
-            <ThemedText style={styles.modalTitle}>Add Text</ThemedText>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  color: colorScheme === 'dark' ? '#fff' : '#000',
-                  backgroundColor: colorScheme === 'dark' ? '#333' : '#fff',
-                  borderColor: colorScheme === 'dark' ? '#555' : '#ccc',
-                },
-              ]}
-              value={textInputValue}
-              onChangeText={setTextInputValue}
-              placeholder="Enter text here"
-              placeholderTextColor={colorScheme === 'dark' ? '#aaa' : '#666'}
-              autoFocus={true}
-              multiline={true}
-              maxLength={500}
-            />
-            <ThemedView style={styles.modalButtons}>
-              <TouchableOpacity
-                onPress={() => {
-                  setTextModalVisible(false);
-                  setTextInputValue('');
-                }}
-                style={[
-                  styles.modalButton,
-                  styles.cancelButton,
-                  {
-                    backgroundColor: colorScheme === 'dark' ? '#444' : '#ccc',
-                  },
-                ]}
-              >
-                <ThemedText style={styles.buttonText}>Cancel</ThemedText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={onTextSubmit}
-                style={[styles.modalButton, styles.addButton]}
-              >
-                <ThemedText style={styles.buttonText}>Add Text</ThemedText>
-              </TouchableOpacity>
-            </ThemedView>
-          </ThemedView>
-        </ThemedView>
-      </Modal>
+        onSubmit={textElement => {
+          addExternalElement(textElement, Tools.TEXT);
+          setTextModalVisible(false);
+        }}
+        initialText={{
+          color: color,
+          fontSize: 20,
+        }}
+      />
 
-      {/* Updated Permissions modal */}
+      {/* Permissions modal */}
       <Modal
         transparent={true}
         visible={isPermissionModalVisible}

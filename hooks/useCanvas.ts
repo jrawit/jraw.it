@@ -3,9 +3,9 @@ import {
   Selection as SelectionType,
   calculateCombinedBoundingBox,
   findElementsInSelection,
-  normalizeSelectionBox,
 } from '@/utils/selectionUtils';
 import { useCallback, useState } from 'react';
+import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { Tools } from '../constants/Tools';
 import toolHandlers from './tool-handlers';
@@ -21,11 +21,17 @@ export type CanvasProps = {
   tool: Tools;
   strokeWidth: number;
   color: string;
+  fontManager?: any;
 };
 
 export type Selection = SelectionType;
 
-export const useCanvas = ({ tool, strokeWidth, color }: CanvasProps) => {
+export const useCanvas = ({
+  tool,
+  strokeWidth,
+  color,
+  fontManager,
+}: CanvasProps) => {
   // States
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(
@@ -207,7 +213,14 @@ export const useCanvas = ({ tool, strokeWidth, color }: CanvasProps) => {
 
       // Existing selection handling
       if (tool === Tools.SELECT) {
-        handleSelectionEnd(x, y, selection, elements, setSelection);
+        handleSelectionEnd(
+          x,
+          y,
+          selection,
+          elements,
+          setSelection,
+          fontManager
+        );
         return;
       }
 
@@ -309,7 +322,8 @@ function handleSelectionEnd(
   y: number,
   selection: Selection | null,
   elements: CanvasElement[],
-  setSelection: React.Dispatch<React.SetStateAction<Selection | null>>
+  setSelection: React.Dispatch<React.SetStateAction<Selection | null>>,
+  fontManager?: any
 ) {
   if (!selection) return;
 
@@ -336,9 +350,23 @@ function handleSelectionEnd(
     return;
   }
 
-  // Process valid selection
-  const selectionBox = normalizeSelectionBox(selection);
-  const selectedElements = findElementsInSelection(elements, selectionBox);
+  // Normalize selection coordinates (handle negative width/height)
+  const normalizedSelection = {
+    ...selection,
+    x: selection.width < 0 ? selection.x + selection.width : selection.x,
+    y: selection.height < 0 ? selection.y + selection.height : selection.y,
+    width: Math.abs(selection.width),
+    height: Math.abs(selection.height),
+  };
+
+  // Process valid selection with normalized coordinates
+  const selectedElements = findElementsInSelection(
+    elements,
+    normalizedSelection,
+    fontManager
+  );
+
+  console.log('Selected elements:', selectedElements);
 
   if (selectedElements.length === 0) {
     setSelection(null);
@@ -346,7 +374,13 @@ function handleSelectionEnd(
   }
 
   const selectedIds = selectedElements.map(element => element.id);
-  const combinedBox = calculateCombinedBoundingBox(selectedElements);
+  const combinedBox = calculateCombinedBoundingBox(
+    selectedElements,
+    10,
+    fontManager
+  );
+
+  console.log('Combined box:', combinedBox);
 
   if (combinedBox) {
     setSelection({

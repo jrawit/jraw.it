@@ -1,7 +1,7 @@
 import { CanvasElements } from '@/constants/CanvasElement';
 import { Tools } from '@/constants/Tools';
 import { CanvasElement } from '@/hooks/useCanvas';
-import { Skia } from '@shopify/react-native-skia';
+import { Skia, TextAlign } from '@shopify/react-native-skia';
 
 /* * This function calculates the bounding box of a given canvas element based on its type.
  * It takes the tool type and the element data as arguments and returns an object with x, y, width, and height properties.
@@ -26,7 +26,8 @@ export type Selection = {
 
 export const calculateBoundingBox = (
   tool: Tools,
-  data: CanvasElements.Any
+  data: CanvasElements.Any,
+  fontManager?: any
 ): BoundingBox | null => {
   switch (tool) {
     case Tools.PEN:
@@ -141,16 +142,66 @@ export const calculateBoundingBox = (
         height: bounds.height + starStrokeWidth * 2,
       };
     case Tools.TEXT:
-      // TODO: Calculate correct width
-      const { text, fontSize, point: textPoint } = data as CanvasElements.Text;
-      const textWidth = text.length * fontSize * 0.45; // Approximate width based on font size
-      const textHeight = fontSize; // Height is equal to font size
-      return {
-        x: textPoint.x,
-        y: textPoint.y,
-        width: textWidth,
-        height: textHeight,
-      };
+      const {
+        text,
+        fontSize,
+        fontFamily,
+        fontStyle,
+        fontWeight,
+        point: textPoint,
+      } = data as CanvasElements.Text;
+
+      if (!fontManager) {
+        console.warn(
+          'Font manager is not available. Cannot calculate bounding box for text.'
+        );
+        return null;
+      }
+
+      try {
+        const paragraph = Skia.ParagraphBuilder.Make(
+          { textAlign: TextAlign.Left },
+          fontManager
+        )
+          .pushStyle({
+            fontFamilies: [fontFamily],
+            fontSize: fontSize,
+            fontStyle: {
+              weight: fontWeight as any,
+              slant: fontStyle === 'italic' ? 1 : 0,
+            },
+          })
+          .addText(text)
+          .build();
+
+        // Measure text accurately
+        paragraph.layout(1000);
+        let textWidth = paragraph.getLongestLine();
+        const textHeight = paragraph.getHeight();
+
+        // Validate width - use fallback if invalid
+        if (textWidth <= 0 || !isFinite(textWidth)) {
+          console.warn(
+            'Invalid text width detected, using fallback measurement'
+          );
+          textWidth = text.length * (fontSize * 0.6);
+        }
+
+        return {
+          x: textPoint.x,
+          y: textPoint.y,
+          width: textWidth,
+          height: textHeight,
+        };
+      } catch (error) {
+        console.error('Error measuring text:', error);
+        return {
+          x: textPoint.x,
+          y: textPoint.y,
+          width: text.length * (fontSize * 0.6),
+          height: fontSize * 1.2,
+        };
+      }
     case Tools.IMAGE:
       const {
         point: imagePoint,
@@ -169,36 +220,29 @@ export const calculateBoundingBox = (
 };
 
 /**
- * Normalizes a selection box into min/max coordinates
- */
-export const normalizeSelectionBox = (selection: Selection) => {
-  return {
-    minX: Math.min(selection.x, selection.x + selection.width),
-    maxX: Math.max(selection.x, selection.x + selection.width),
-    minY: Math.min(selection.y, selection.y + selection.height),
-    maxY: Math.max(selection.y, selection.y + selection.height),
-  };
-};
-
-/**
  * Finds all canvas elements that are completely within the selection box
  */
 export const findElementsInSelection = (
   elements: CanvasElement[],
-  selectionBox: ReturnType<typeof normalizeSelectionBox>
+  selectionBox: { x: number; y: number; width: number; height: number },
+  fontManager?: any
 ) => {
-  const { minX, maxX, minY, maxY } = selectionBox;
-
   return elements.filter(element => {
-    const boundingBox = calculateBoundingBox(element.tool, element.element);
+    const boundingBox = calculateBoundingBox(
+      element.tool,
+      element.element,
+      fontManager
+    );
+
     if (!boundingBox) return false;
 
     // Check if element is completely inside selection box
     return (
-      boundingBox.x >= minX &&
-      boundingBox.x + boundingBox.width <= maxX &&
-      boundingBox.y >= minY &&
-      boundingBox.y + boundingBox.height <= maxY
+      boundingBox.x >= selectionBox.x &&
+      boundingBox.x + boundingBox.width <=
+        selectionBox.x + selectionBox.width &&
+      boundingBox.y >= selectionBox.y &&
+      boundingBox.y + boundingBox.height <= selectionBox.y + selectionBox.height
     );
   });
 };
@@ -208,10 +252,13 @@ export const findElementsInSelection = (
  */
 export const calculateCombinedBoundingBox = (
   elements: CanvasElement[],
-  margin: number = 10
+  margin: number = 10,
+  fontManager?: any
 ) => {
   const boundingBoxes = elements
-    .map(element => calculateBoundingBox(element.tool, element.element))
+    .map(element =>
+      calculateBoundingBox(element.tool, element.element, fontManager)
+    )
     .filter(Boolean) as {
     x: number;
     y: number;

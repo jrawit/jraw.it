@@ -1,4 +1,5 @@
 import { CanvasElements } from '@/constants/CanvasElement';
+import { cloneDeep } from 'lodash';
 import { Tools } from '../constants/Tools';
 import { CanvasElement } from './useCanvas';
 
@@ -34,13 +35,13 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       tool: Tools.PEN,
     }),
     updateElement: (element, x, y) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
       path.points.push({ x, y });
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
       path.points = path.points.map(point => ({
         x: point.x + deltaX,
@@ -60,13 +61,13 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       tool: Tools.HIGHLIGHTER,
     }),
     updateElement: (element, x, y) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
       path.points.push({ x, y });
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
       path.points = path.points.map(point => ({
         x: point.x + deltaX,
@@ -86,7 +87,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       tool: Tools.ERASER,
     }),
     updateElement: (element, x, y) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
       path.points.push({ x, y });
       return newElement;
@@ -108,13 +109,13 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       tool: Tools.LINE,
     }),
     updateElement: (element, x, y) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const line = newElement.element as CanvasElements.Line;
       line.endPoint = { x, y };
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const line = newElement.element as CanvasElements.Line;
       line.startPoint = {
         x: line.startPoint.x + deltaX,
@@ -139,7 +140,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       tool: Tools.CIRCLE,
     }),
     updateElement: (element, x, y) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
       circle.radius = Math.sqrt(
         Math.pow(x - circle.center.x, 2) + Math.pow(y - circle.center.y, 2)
@@ -147,7 +148,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
       circle.center = {
         x: circle.center.x + deltaX,
@@ -169,14 +170,14 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       tool: Tools.RECTANGLE,
     }),
     updateElement: (element, x, y) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const rect = newElement.element as CanvasElements.Rectangle;
       rect.width = x - rect.point.x;
       rect.height = y - rect.point.y;
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const rect = newElement.element as CanvasElements.Rectangle;
       rect.point = {
         x: rect.point.x + deltaX,
@@ -198,7 +199,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       tool: Tools.TRIANGLE,
     }),
     updateElement: (element, x, y) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const triangle = newElement.element as CanvasElements.Triangle;
 
       triangle.point2 = { x, y: triangle.point1.y };
@@ -210,7 +211,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const triangle = newElement.element as CanvasElements.Triangle;
       triangle.point1 = {
         x: triangle.point1.x + deltaX,
@@ -240,7 +241,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       tool: Tools.STAR,
     }),
     updateElement: (element, x, y) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const star = newElement.element as CanvasElements.Star;
       star.radius = Math.sqrt(
         Math.pow(x - star.point.x, 2) + Math.pow(y - star.point.y, 2)
@@ -248,7 +249,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const star = newElement.element as CanvasElements.Star;
       star.point = {
         x: star.point.x + deltaX,
@@ -274,7 +275,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       return element;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const text = newElement.element as CanvasElements.Text;
       text.point = {
         x: text.point.x + deltaX,
@@ -299,7 +300,7 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       return element;
     },
     moveElement: (element, deltaX, deltaY) => {
-      const newElement = structuredClone(element);
+      const newElement = cloneDeep(element);
       const image = newElement.element as CanvasElements.Image;
       image.point = {
         x: image.point.x + deltaX,
