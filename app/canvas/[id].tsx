@@ -26,7 +26,7 @@ import {
 } from '@shopify/react-native-skia';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
@@ -110,7 +110,10 @@ export default function CanvasScreen() {
     openSettings,
     hidePermissionModal,
   } = useMediaLibraryPermissions();
-
+  const navigation = useNavigation();
+  const handleBackButtonPress = () => {
+    navigation.goBack();
+  };
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
 
@@ -406,7 +409,21 @@ export default function CanvasScreen() {
             fontWeight: 'bold',
           },
           header: () => (
-            <View style={{ flex: 1, padding: 20, backgroundColor: 'black' }}>
+            <View
+              style={{
+                flex: 1,
+                padding: 20,
+                backgroundColor: 'black',
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <TouchableOpacity
+                onPress={handleBackButtonPress}
+                style={styles.backButton}
+              >
+                <MaterialIcons name="arrow-left" size={24} color="black" />
+              </TouchableOpacity>
               <TextInput
                 style={{
                   fontSize: 18,
@@ -722,5 +739,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 20,
     textAlign: 'center',
+  },
+  backButton: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 12,
+    borderRadius: 50,
+    marginHorizontal: 5,
   },
 });
