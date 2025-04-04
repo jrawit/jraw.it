@@ -35,7 +35,11 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  Gesture,
+  GestureDetector,
+  TextInput,
+} from 'react-native-gesture-handler';
 import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
@@ -64,9 +68,14 @@ export default function CanvasScreen() {
     y: number;
   }>({ x: 0, y: 0 });
 
-  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(null);
+  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const [highlighterAngle, setHighlighterAngle] = useState<number>(0);
-  const [previousPoint, setPreviousPoint] = useState<{ x: number; y: number } | null>(null);
+  const [previousPoint, setPreviousPoint] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   const colorScheme = useColorScheme();
   const { id } = useLocalSearchParams();
@@ -91,9 +100,9 @@ export default function CanvasScreen() {
     color,
     fontManager,
   });
+  const [title, setTitle] = useState(id?.toString() ?? ''); // Ensure id is valid
 
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
-
   const {
     isPermissionModalVisible,
     isPermanentlyDenied,
@@ -384,7 +393,6 @@ export default function CanvasScreen() {
     },
     [strokeWidth, color]
   );
-
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -397,9 +405,31 @@ export default function CanvasScreen() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
+          header: () => (
+            <View style={{ flex: 1, padding: 20, backgroundColor: 'black' }}>
+              <TextInput
+                style={{
+                  fontSize: 18,
+                  backgroundColor: 'black',
+                  color: 'white',
+                  padding: 3,
+                  borderRadius: 7,
+                  paddingHorizontal: 10,
+                  borderWidth: 1,
+                  outline: 'none',
+                }}
+                value={title} // Controlled input
+                onChangeText={value => setTitle(value)} // Update state & emit to server
+                placeholderTextColor="gray"
+                placeholder="Enter board title"
+              />
+            </View>
+          ),
         }}
       />
-      <GestureDetector gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}>
+      <GestureDetector
+        gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
+      >
         <Canvas
           style={{ flex: 1 }}
           ref={ref}
@@ -487,13 +517,16 @@ export default function CanvasScreen() {
                   <Circle
                     circleData={{
                       center: hoverPoint,
-                      radius: strokeWidth/2,
+                      radius: strokeWidth / 2,
                       strokeWidth: 1,
-                      strokeColor: tool === Tools.ERASER ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 134, 223, 0.8)'
+                      strokeColor:
+                        tool === Tools.ERASER
+                          ? 'rgba(255, 0, 0, 0.8)'
+                          : 'rgba(0, 134, 223, 0.8)',
                     }}
                   />
                 )}
-                
+
                 {/* Square indicator for Highlighter with rotation */}
                 {tool === Tools.HIGHLIGHTER && (
                   <Group
