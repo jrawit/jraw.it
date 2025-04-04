@@ -64,6 +64,10 @@ export default function CanvasScreen() {
     y: number;
   }>({ x: 0, y: 0 });
 
+  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(null);
+  const [highlighterAngle, setHighlighterAngle] = useState<number>(0);
+  const [previousPoint, setPreviousPoint] = useState<{ x: number; y: number } | null>(null);
+
   const colorScheme = useColorScheme();
   const { id } = useLocalSearchParams();
   const ref = useCanvasRef();
@@ -174,6 +178,7 @@ export default function CanvasScreen() {
     .runOnJS(true)
     .minDistance(5)
     .onStart(e => {
+      setPreviousPoint(null);
       if (tool !== Tools.PAN) {
         const adjustedX = e.x - elementsOffset.x;
         const adjustedY = e.y - elementsOffset.y;
@@ -189,10 +194,22 @@ export default function CanvasScreen() {
       } else {
         const adjustedX = e.x - elementsOffset.x;
         const adjustedY = e.y - elementsOffset.y;
+
+        if (tool === Tools.HIGHLIGHTER && previousPoint) {
+          const dx = adjustedX - previousPoint.x;
+          const dy = adjustedY - previousPoint.y;
+          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+            const angle = Math.atan2(dy, dx);
+            setHighlighterAngle(angle);
+          }
+        }
+
+        setPreviousPoint({ x: adjustedX, y: adjustedY });
         onMoveInput(adjustedX, adjustedY);
       }
     })
     .onEnd(e => {
+      setPreviousPoint(null);
       if (tool !== Tools.PAN) {
         const adjustedX = e.x - elementsOffset.x;
         const adjustedY = e.y - elementsOffset.y;
@@ -223,6 +240,19 @@ export default function CanvasScreen() {
         y: prev.y + e.translationY,
       }));
       setCurrentElementOffset({ x: 0, y: 0 });
+    });
+
+  const hover = Gesture.Hover()
+    .runOnJS(true)
+    .onBegin(e => {
+      const adjustedX = e.x - elementsOffset.x;
+      const adjustedY = e.y - elementsOffset.y;
+      setHoverPoint({ x: adjustedX, y: adjustedY });
+    })
+    .onChange(e => {
+      const adjustedX = e.x - elementsOffset.x;
+      const adjustedY = e.y - elementsOffset.y;
+      setHoverPoint({ x: adjustedX, y: adjustedY });
     });
 
   useEffect(() => {
@@ -369,7 +399,7 @@ export default function CanvasScreen() {
           },
         }}
       />
-      <GestureDetector gesture={Gesture.Exclusive(pan, tap, twoFingerPan)}>
+      <GestureDetector gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}>
         <Canvas
           style={{ flex: 1 }}
           ref={ref}
@@ -447,6 +477,45 @@ export default function CanvasScreen() {
                     />
                   </RoundedRect>
                 ))}
+              </>
+            )}
+
+            {/* Brush size hover indicator */}
+            {hoverPoint && (
+              <>
+                {[Tools.PEN, Tools.ERASER].includes(tool) && (
+                  <Circle
+                    circleData={{
+                      center: hoverPoint,
+                      radius: strokeWidth/2,
+                      strokeWidth: 1,
+                      strokeColor: tool === Tools.ERASER ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 134, 223, 0.8)'
+                    }}
+                  />
+                )}
+                
+                {/* Square indicator for Highlighter with rotation */}
+                {tool === Tools.HIGHLIGHTER && (
+                  <Group
+                    transform={[
+                      { translateX: hoverPoint.x },
+                      { translateY: hoverPoint.y },
+                      { rotate: highlighterAngle },
+                      { translateX: -hoverPoint.x },
+                      { translateY: -hoverPoint.y },
+                    ]}
+                  >
+                    <SkRect
+                      x={hoverPoint.x - (strokeWidth + 10) / 2}
+                      y={hoverPoint.y - (strokeWidth + 10) / 2}
+                      width={strokeWidth + 10}
+                      height={strokeWidth + 10}
+                      style="stroke"
+                    >
+                      <Paint color="rgba(0, 0, 0, 0)" />
+                    </SkRect>
+                  </Group>
+                )}
               </>
             )}
           </Group>
