@@ -420,9 +420,18 @@ export default function CanvasScreen() {
             >
               <TouchableOpacity
                 onPress={handleBackButtonPress}
-                style={styles.backButton}
+                style={[
+                  styles.backButton,
+                  {
+                    backgroundColor: colorScheme === 'dark' ? 'white' : 'black',
+                  },
+                ]}
               >
-                <MaterialIcons name="arrow-left" size={24} color="black" />
+                <MaterialIcons
+                  name="arrow-left"
+                  size={24}
+                  color={colorScheme === 'dark' ? 'black' : 'white'}
+                />
               </TouchableOpacity>
               <TextInput
                 style={{
@@ -745,7 +754,6 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'white',
     padding: 12,
     borderRadius: 50,
     marginHorizontal: 5,
