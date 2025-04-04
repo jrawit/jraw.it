@@ -413,7 +413,7 @@ export default function CanvasScreen() {
               style={{
                 flex: 1,
                 padding: 20,
-                backgroundColor: 'black',
+                backgroundColor: colorScheme === 'dark' ? 'black' : 'white',
                 flexDirection: 'row',
                 alignItems: 'center',
               }}
@@ -427,8 +427,8 @@ export default function CanvasScreen() {
               <TextInput
                 style={{
                   fontSize: 18,
-                  backgroundColor: 'black',
-                  color: 'white',
+                  backgroundColor: colorScheme === 'dark' ? 'black' : 'white',
+                  color: colorScheme === 'dark' ? 'white' : 'black',
                   padding: 3,
                   borderRadius: 7,
                   paddingHorizontal: 10,
