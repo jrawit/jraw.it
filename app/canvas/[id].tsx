@@ -30,16 +30,14 @@ import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
+  Platform, // Import Platform
   StyleSheet,
+  TextInput, // Add TextInput import
   TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
-import {
-  Gesture,
-  GestureDetector,
-  TextInput,
-} from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
@@ -400,57 +398,22 @@ export default function CanvasScreen() {
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
         options={{
-          title: `Canvas ${id}`,
+          headerTitle: () => (
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              style={[
+                styles.headerTitleInput,
+                { color: colorScheme === 'dark' ? 'white' : 'black' },
+              ]}
+              placeholder="Canvas Title"
+              placeholderTextColor={colorScheme === 'dark' ? '#888' : '#aaa'}
+            />
+          ),
           headerStyle: {
             backgroundColor: colorScheme === 'dark' ? 'black' : 'white',
           },
           headerTintColor: colorScheme === 'dark' ? 'white' : 'black',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
-          header: () => (
-            <View
-              style={{
-                flex: 1,
-                padding: 20,
-                backgroundColor: colorScheme === 'dark' ? 'black' : 'white',
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-            >
-              <TouchableOpacity
-                onPress={handleBackButtonPress}
-                style={[
-                  styles.backButton,
-                  {
-                    backgroundColor: colorScheme === 'dark' ? 'white' : 'black',
-                  },
-                ]}
-              >
-                <MaterialIcons
-                  name="arrow-left"
-                  size={24}
-                  color={colorScheme === 'dark' ? 'black' : 'white'}
-                />
-              </TouchableOpacity>
-              <TextInput
-                style={{
-                  fontSize: 18,
-                  backgroundColor: colorScheme === 'dark' ? 'black' : 'white',
-                  color: colorScheme === 'dark' ? 'white' : 'black',
-                  padding: 3,
-                  borderRadius: 7,
-                  paddingHorizontal: 10,
-                  borderWidth: 1,
-                  outline: 'none',
-                }}
-                value={title} // Controlled input
-                onChangeText={value => setTitle(value)} // Update state & emit to server
-                placeholderTextColor="gray"
-                placeholder="Enter board title"
-              />
-            </View>
-          ),
         }}
       />
       <GestureDetector
@@ -757,5 +720,17 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 50,
     marginHorizontal: 5,
+  },
+  headerTitleInput: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    flex: 1,
+    marginHorizontal: 10,
+    borderWidth: 0,
+    padding: 0,
+    // Use Platform specific styling for outline
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none',
+    }),
   },
 });
