@@ -406,7 +406,7 @@ export default function CanvasScreen() {
                 styles.headerTitleInput,
                 { color: colorScheme === 'dark' ? 'white' : 'black' },
               ]}
-              placeholder="Canvas Title"
+              placeholder="Untitled Canvas"
               placeholderTextColor={colorScheme === 'dark' ? '#888' : '#aaa'}
             />
           ),
