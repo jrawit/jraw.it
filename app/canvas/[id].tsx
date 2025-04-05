@@ -64,9 +64,14 @@ export default function CanvasScreen() {
     y: number;
   }>({ x: 0, y: 0 });
 
-  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(null);
+  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const [highlighterAngle, setHighlighterAngle] = useState<number>(0);
-  const [previousPoint, setPreviousPoint] = useState<{ x: number; y: number } | null>(null);
+  const [previousPoint, setPreviousPoint] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   const colorScheme = useColorScheme();
   const { id } = useLocalSearchParams();
@@ -194,17 +199,6 @@ export default function CanvasScreen() {
       } else {
         const adjustedX = e.x - elementsOffset.x;
         const adjustedY = e.y - elementsOffset.y;
-
-        if (tool === Tools.HIGHLIGHTER && previousPoint) {
-          const dx = adjustedX - previousPoint.x;
-          const dy = adjustedY - previousPoint.y;
-          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-            const angle = Math.atan2(dy, dx);
-            setHighlighterAngle(angle);
-          }
-        }
-
-        setPreviousPoint({ x: adjustedX, y: adjustedY });
         onMoveInput(adjustedX, adjustedY);
       }
     })
@@ -247,12 +241,28 @@ export default function CanvasScreen() {
     .onBegin(e => {
       const adjustedX = e.x - elementsOffset.x;
       const adjustedY = e.y - elementsOffset.y;
+      setPreviousPoint(null);
       setHoverPoint({ x: adjustedX, y: adjustedY });
     })
     .onChange(e => {
       const adjustedX = e.x - elementsOffset.x;
       const adjustedY = e.y - elementsOffset.y;
+
+      setPreviousPoint(hoverPoint);
+      if (tool === Tools.HIGHLIGHTER && previousPoint) {
+        const dx = adjustedX - previousPoint.x;
+        const dy = adjustedY - previousPoint.y;
+        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+          const angle = Math.atan2(dy, dx);
+          setHighlighterAngle(angle);
+        }
+      }
+
       setHoverPoint({ x: adjustedX, y: adjustedY });
+    })
+    .onEnd(() => {
+      setHoverPoint(null);
+      setPreviousPoint(null);
     });
 
   useEffect(() => {
@@ -399,7 +409,9 @@ export default function CanvasScreen() {
           },
         }}
       />
-      <GestureDetector gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}>
+      <GestureDetector
+        gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
+      >
         <Canvas
           style={{ flex: 1 }}
           ref={ref}
@@ -487,13 +499,16 @@ export default function CanvasScreen() {
                   <Circle
                     circleData={{
                       center: hoverPoint,
-                      radius: strokeWidth/2,
+                      radius: strokeWidth / 2,
                       strokeWidth: 1,
-                      strokeColor: tool === Tools.ERASER ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 134, 223, 0.8)'
+                      strokeColor:
+                        tool === Tools.ERASER
+                          ? 'rgba(255, 0, 0, 0.8)'
+                          : 'rgba(0, 134, 223, 0.8)',
                     }}
                   />
                 )}
-                
+
                 {/* Square indicator for Highlighter with rotation */}
                 {tool === Tools.HIGHLIGHTER && (
                   <Group
