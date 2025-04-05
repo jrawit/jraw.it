@@ -42,6 +42,9 @@ import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
+import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';
+
 
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
@@ -291,6 +294,77 @@ export default function CanvasScreen() {
     }
   }, [socket]);
 
+  const preventContextMenu = useCallback((e: any) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return false;
+  }, []);
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+
+      document.addEventListener('contextmenu', preventContextMenu);
+      return () => {
+        document.removeEventListener('contextmenu', preventContextMenu);
+      };
+    }
+  }, [preventContextMenu]);
+
+  /// Save canvas as image
+  const saveCanvasAsImage = useCallback(async () => {
+    try {
+      if (!ref.current) {
+        throw new Error('Canvas reference is not available');
+      }
+      const image = ref.current.makeImageSnapshot();
+      if (!image) {
+        throw new Error('Failed to capture canvas snapshot');
+      }
+      // Get base64 encoding
+      const base64 = image.encodeToBase64();
+      if (!base64) {
+        throw new Error('Failed to encode image to base64');
+      }   
+      if (Platform.OS === 'web') {
+        // Web implementation - browser download dialog
+        const link = document.createElement('a');
+        link.href = `data:image/png;base64,${base64}`;
+        link.download = `jraw-canvas-${new Date().toISOString().slice(0, 10)}.png`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        alert('Image downloaded');
+      } else {
+        // Mobile implementation - save to gallery
+        const status = await requestPermission();
+        if (status !== 'granted') {
+          alert('Permission denied. Cannot save image.');
+          return;
+        }
+        
+        const fileName = `jraw-canvas-${new Date().getTime()}.png`;
+        const fileUri = FileSystem.documentDirectory + fileName;
+        
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        const asset = await MediaLibrary.saveToLibraryAsync(fileUri);
+        
+        await FileSystem.deleteAsync(fileUri, { idempotent: true });
+        
+        alert('Image saved to gallery');
+      }
+      
+      console.log('Image saved successfully');
+    } catch (error) {
+      console.error('Failed to save image:', error);
+      alert(`Failed to save image: ${error.message || 'Unknown error'}`);
+    }
+  }, [ref, requestPermission]);
+  
   const pickImage = useCallback(async () => {
     const status = await requestPermission();
     if (status !== 'granted') return;
@@ -559,6 +633,9 @@ export default function CanvasScreen() {
           </TouchableOpacity>
           <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
             <MaterialIcons name="image" size={24} color="black" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={saveCanvasAsImage} style={styles.controlButton}>
+            <MaterialIcons name="save" size={24} color="black" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={clear}
