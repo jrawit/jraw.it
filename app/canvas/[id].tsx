@@ -26,11 +26,13 @@ import {
 } from '@shopify/react-native-skia';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
+  Platform, // Import Platform
   StyleSheet,
+  TextInput, // Add TextInput import
   TouchableOpacity,
   useColorScheme,
   View,
@@ -96,9 +98,9 @@ export default function CanvasScreen() {
     color,
     fontManager,
   });
+  const [title, setTitle] = useState(id?.toString() ?? ''); // Ensure id is valid
 
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
-
   const {
     isPermissionModalVisible,
     isPermanentlyDenied,
@@ -106,7 +108,10 @@ export default function CanvasScreen() {
     openSettings,
     hidePermissionModal,
   } = useMediaLibraryPermissions();
-
+  const navigation = useNavigation();
+  const handleBackButtonPress = () => {
+    navigation.goBack();
+  };
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
 
@@ -394,19 +399,26 @@ export default function CanvasScreen() {
     },
     [strokeWidth, color]
   );
-
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
         options={{
-          title: `Canvas ${id}`,
+          headerTitle: () => (
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              style={[
+                styles.headerTitleInput,
+                { color: colorScheme === 'dark' ? 'white' : 'black' },
+              ]}
+              placeholder="Untitled Canvas"
+              placeholderTextColor={colorScheme === 'dark' ? '#888' : '#aaa'}
+            />
+          ),
           headerStyle: {
             backgroundColor: colorScheme === 'dark' ? 'black' : 'white',
           },
           headerTintColor: colorScheme === 'dark' ? 'white' : 'black',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
         }}
       />
       <GestureDetector
@@ -704,5 +716,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 20,
     textAlign: 'center',
+  },
+  backButton: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 50,
+    marginHorizontal: 5,
+  },
+  headerTitleInput: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    flex: 1,
+    marginHorizontal: 10,
+    borderWidth: 0,
+    padding: 0,
+    // Use Platform specific styling for outline
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none',
+    }),
   },
 });
