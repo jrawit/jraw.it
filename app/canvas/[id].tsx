@@ -115,6 +115,11 @@ export default function CanvasScreen() {
   const [backgroundColor, setBackgroundColor] = useState<string>('#F2F2F2');
   const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
 
+  const [backgroundTexture, setBackgroundTexture] = useState<boolean>(false);
+  const [backgroundGridSize, setBackgroundGridSize] = useState<number>(20);
+  const [backgroundTextureOpacity, setBackgroundTextureOpacity] =
+    useState<number>(0.1);
+
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
 
@@ -493,6 +498,88 @@ export default function CanvasScreen() {
           }}
         >
           <Fill color={backgroundColor} />
+
+          {backgroundTexture && (
+            <Group
+              transform={[
+                {
+                  translate: [
+                    elementsOffset.x +
+                      (tool === Tools.PAN ? currentElementOffset.x : 0),
+                    elementsOffset.y +
+                      (tool === Tools.PAN ? currentElementOffset.y : 0),
+                  ],
+                },
+              ]}
+            >
+              {(() => {
+                // Calculate grid bounds
+                const startY =
+                  Math.floor(
+                    (-elementsOffset.y - canvasSize.height) / backgroundGridSize
+                  ) * backgroundGridSize;
+                const endY =
+                  Math.ceil(
+                    (-elementsOffset.y + 2 * canvasSize.height) /
+                      backgroundGridSize
+                  ) * backgroundGridSize;
+
+                const startX =
+                  Math.floor(
+                    (-elementsOffset.x - canvasSize.width) / backgroundGridSize
+                  ) * backgroundGridSize;
+                const endX =
+                  Math.ceil(
+                    (-elementsOffset.x + 2 * canvasSize.width) /
+                      backgroundGridSize
+                  ) * backgroundGridSize;
+
+                // Calculate how many lines we need
+                const numHorizontalLines =
+                  Math.ceil((endY - startY) / backgroundGridSize) + 1;
+                const numVerticalLines =
+                  Math.ceil((endX - startX) / backgroundGridSize) + 1;
+
+                // Create lines
+                const lines = [];
+
+                // Horizontal lines
+                for (let i = 0; i < numHorizontalLines; i++) {
+                  const y = startY + i * backgroundGridSize;
+                  lines.push(
+                    <Line
+                      key={`h-${y}`}
+                      lineData={{
+                        startPoint: { x: startX - 5000, y: y },
+                        endPoint: { x: endX + 5000, y: y },
+                        strokeWidth: 1,
+                        strokeColor: `rgba(0,0,0,${backgroundTextureOpacity})`,
+                      }}
+                    />
+                  );
+                }
+
+                // Vertical lines
+                for (let i = 0; i < numVerticalLines; i++) {
+                  const x = startX + i * backgroundGridSize;
+                  lines.push(
+                    <Line
+                      key={`v-${x}`}
+                      lineData={{
+                        startPoint: { x: x, y: startY - 5000 },
+                        endPoint: { x: x, y: endY + 5000 },
+                        strokeWidth: 1,
+                        strokeColor: `rgba(0,0,0,${backgroundTextureOpacity})`,
+                      }}
+                    />
+                  );
+                }
+
+                return lines;
+              })()}
+            </Group>
+          )}
+
           <Group
             transform={[
               {
@@ -717,8 +804,19 @@ export default function CanvasScreen() {
       <ColorPickerModal
         visible={colorPickerVisible}
         initialColor={backgroundColor}
-        onSelectColor={color => {
+        initialTexture={backgroundTexture}
+        initialGridSize={backgroundGridSize}
+        initialTextureOpacity={backgroundTextureOpacity}
+        onSelectColor={(
+          color,
+          texture = false,
+          gridSize = 20,
+          opacity = 0.1
+        ) => {
           setBackgroundColor(color);
+          setBackgroundTexture(texture);
+          setBackgroundGridSize(gridSize);
+          setBackgroundTextureOpacity(opacity);
           setColorPickerVisible(false);
         }}
         onCancel={() => setColorPickerVisible(false)}

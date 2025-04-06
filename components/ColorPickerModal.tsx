@@ -1,64 +1,182 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  TouchableWithoutFeedback,
-  useColorScheme,
-  Pressable,
-} from 'react-native';
-import ColorPicker, {
-    Panel2,
-    BrightnessSlider,
-    OpacitySlider,
-    InputWidget,
-    ColorFormatsObject,
-  } from 'reanimated-color-picker';
-import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useEffect, useState } from 'react';
+import {
+  Modal,
+  StyleProp,
+  StyleSheet,
+  TouchableOpacity,
+  useColorScheme,
+  View,
+  ViewStyle,
+} from 'react-native';
+import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import ColorPicker, {
+  BrightnessSlider,
+  ColorFormatsObject,
+  InputWidget,
+  OpacitySlider,
+  Panel2,
+} from 'reanimated-color-picker';
+
+// Add the COLORS constant here
+const COLORS = [
+  '#F44336',
+  '#E91E63',
+  '#9C27B0',
+  '#673AB7',
+  '#3F51B5',
+  '#2196F3',
+  '#03A9F4',
+  '#00BCD4',
+  '#009688',
+  '#4CAF50',
+  '#8BC34A',
+  '#CDDC39',
+  '#FFEB3B',
+  '#FFC107',
+  '#FF9800',
+  '#FF5722',
+  '#795548',
+  '#607D8B',
+  '#FFFFFF',
+  '#000000',
+];
+// Define props interface for TexturedColorView
+interface TexturedColorViewProps {
+  color: string;
+  style: StyleProp<ViewStyle>; // Use StyleProp<ViewStyle> to allow arrays
+  texture?: 'grid' | 'none';
+  textureOpacity?: number;
+  gridSize?: number;
+}
+
+const TexturedColorView = ({
+  color,
+  style,
+  texture = 'grid',
+  textureOpacity = 0.1,
+  gridSize = 4,
+}: TexturedColorViewProps) => {
+  // Flatten the style to handle arrays and ensure it's an object
+  const flatStyle = StyleSheet.flatten(style);
+  const viewHeight =
+    typeof flatStyle?.height === 'number' ? flatStyle.height : 0;
+  const viewWidth = typeof flatStyle?.width === 'number' ? flatStyle.width : 0;
+
+  return (
+    <View style={[{ position: 'relative' }, style]}>
+      <View style={[style, { backgroundColor: color }]} />
+
+      {texture === 'grid' && (
+        <View
+          style={[
+            style,
+            styles.textureOverlay,
+            {
+              opacity: textureOpacity,
+              borderWidth: 0,
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            },
+          ]}
+        >
+          {/* Horizontal lines */}
+          {Array.from({
+            length: Math.floor(viewHeight / gridSize), // Use flattened height
+          }).map((_, i) => (
+            <View
+              key={`h-${i}`}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                height: 1,
+                top: i * gridSize,
+                backgroundColor: 'rgba(0,0,0,0.2)',
+              }}
+            />
+          ))}
+
+          {/* Vertical lines */}
+          {Array.from({
+            length: Math.floor(viewWidth / gridSize), // Use flattened width
+          }).map((_, i) => (
+            <View
+              key={`v-${i}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                width: 1,
+                left: i * gridSize,
+                backgroundColor: 'rgba(0,0,0,0.2)',
+              }}
+            />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
 
 interface ColorPickerModalProps {
   visible: boolean;
   initialColor: string;
-  onSelectColor: (color: string) => void;
+  onSelectColor: (
+    color: string,
+    applyTexture?: boolean,
+    gridSize?: number,
+    textureOpacity?: number
+  ) => void;
   onCancel: () => void;
+  initialTexture?: boolean;
+  initialGridSize?: number;
+  initialTextureOpacity?: number;
 }
-
-// Keep the predefined colors for quick selection
-const COLORS = [
-  '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3', '#03A9F4', 
-  '#00BCD4', '#009688', '#4CAF50', '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', 
-  '#FF9800', '#FF5722', '#795548', '#607D8B', '#FFFFFF', '#000000',
-];
 
 export default function ColorPickerModal({
   visible,
   initialColor,
   onSelectColor,
   onCancel,
+  initialTexture = false,
+  initialGridSize = 20,
+  initialTextureOpacity = 0.1,
 }: ColorPickerModalProps) {
   const [color, setColor] = useState<string>(initialColor);
   const [showAdvancedPicker, setShowAdvancedPicker] = useState<boolean>(false);
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  
-  // Shared value for animations
-  const selectedColor = useSharedValue(initialColor);
+  const [applyTexture, setApplyTexture] = useState<boolean>(initialTexture);
+  const [gridSize, setGridSize] = useState<number>(initialGridSize);
+  const [textureOpacity, setTextureOpacity] = useState<number>(
+    initialTextureOpacity
+  );
+  const isDark = useColorScheme() === 'dark'; // Add this line to define isDark
+  const selectedColor = useSharedValue(initialColor); // Fix missing selectedColor
 
   // Reset state when modal becomes visible with initialColor
   useEffect(() => {
     if (visible) {
       setColor(initialColor);
       selectedColor.value = initialColor;
+      setApplyTexture(initialTexture);
+      setGridSize(initialGridSize);
+      setTextureOpacity(initialTextureOpacity);
     }
-  }, [visible, initialColor]);
-  
+  }, [
+    visible,
+    initialColor,
+    initialTexture,
+    initialGridSize,
+    initialTextureOpacity,
+  ]);
+
   const colorButtonStyle = useAnimatedStyle(() => {
     return {
-      backgroundColor: selectedColor.value,
       width: 40,
       height: 40,
       borderRadius: 20,
@@ -73,7 +191,7 @@ export default function ColorPickerModal({
   };
 
   const handleSubmit = () => {
-    onSelectColor(color);
+    onSelectColor(color, applyTexture, gridSize, textureOpacity);
   };
 
   const handleCancel = () => {
@@ -90,15 +208,105 @@ export default function ColorPickerModal({
     >
       <ThemedView style={styles.modalOverlay}>
         <ThemedView style={styles.modalContent}>
-          <ThemedText style={styles.modalTitle}>Choose Background Color</ThemedText>
-
-          {/* Color Preview */}
+          <ThemedText style={styles.modalTitle}>
+            Choose Background Color
+          </ThemedText>
+          {/* Color Preview with Texture */}
           <View style={styles.colorPreview}>
             <ThemedText style={styles.previewText}>Selected:</ThemedText>
-            <Animated.View style={colorButtonStyle} />
-            <ThemedText style={styles.previewText}>{color.toUpperCase()}</ThemedText>
+            <TexturedColorView
+              color={color}
+              style={colorButtonStyle}
+              gridSize={gridSize}
+              textureOpacity={textureOpacity}
+              texture={applyTexture ? 'grid' : 'none'}
+            />
+            <ThemedText style={styles.previewText}>
+              {color.toUpperCase()}
+            </ThemedText>
           </View>
+          <ThemedView style={styles.textureOptions}>
+            <ThemedText style={styles.sectionTitle}>
+              Texture Settings
+            </ThemedText>
 
+            <View style={styles.optionRow}>
+              <ThemedText>Apply Grid Texture</ThemedText>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  applyTexture && styles.toggleActive,
+                ]}
+                onPress={() => setApplyTexture(!applyTexture)}
+              >
+                <ThemedText
+                  style={
+                    applyTexture ? styles.toggleTextActive : styles.toggleText
+                  }
+                >
+                  {applyTexture ? 'ON' : 'OFF'}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {applyTexture && (
+              <>
+                <View style={styles.optionRow}>
+                  <ThemedText>Grid Size: {gridSize}px</ThemedText>
+                  <View style={styles.sliderContainer}>
+                    <TouchableOpacity
+                      onPress={() => setGridSize(Math.max(5, gridSize - 5))}
+                    >
+                      <MaterialIcons
+                        name="remove"
+                        size={20}
+                        color={isDark ? 'white' : 'black'}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setGridSize(Math.min(50, gridSize + 5))}
+                    >
+                      <MaterialIcons
+                        name="add"
+                        size={20}
+                        color={isDark ? 'white' : 'black'}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.optionRow}>
+                  <ThemedText>
+                    Opacity: {Math.round(textureOpacity * 100)}%
+                  </ThemedText>
+                  <View style={styles.sliderContainer}>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setTextureOpacity(Math.max(0.05, textureOpacity - 0.05))
+                      }
+                    >
+                      <MaterialIcons
+                        name="remove"
+                        size={20}
+                        color={isDark ? 'white' : 'black'}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setTextureOpacity(Math.min(0.5, textureOpacity + 0.05))
+                      }
+                    >
+                      <MaterialIcons
+                        name="add"
+                        size={20}
+                        color={isDark ? 'white' : 'black'}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            )}
+          </ThemedView>
           {/* Toggle between simple and advanced pickers */}
           <TouchableOpacity
             style={[
@@ -110,28 +318,34 @@ export default function ColorPickerModal({
             onPress={() => setShowAdvancedPicker(!showAdvancedPicker)}
           >
             <ThemedText style={styles.buttonText}>
-              {showAdvancedPicker ? 'Simple Color Grid' : 'Advanced Color Picker'}
+              {showAdvancedPicker
+                ? 'Simple Color Grid'
+                : 'Advanced Color Picker'}
             </ThemedText>
           </TouchableOpacity>
-
-          {/* Quick Color Selection */}
+          {/* Quick Color Selection with Textures */}
           {!showAdvancedPicker && (
             <View style={styles.colorGrid}>
-              {COLORS.map((colorOption) => (
+              {COLORS.map(colorOption => (
                 <TouchableOpacity
                   key={colorOption}
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: colorOption },
-                    color === colorOption && styles.selectedColorOption,
-                  ]}
+                  style={[color === colorOption && styles.selectedColorOption]}
                   onPress={() => handleColorSelect(colorOption)}
-                />
+                >
+                  <TexturedColorView
+                    color={colorOption}
+                    style={[
+                      styles.colorOption,
+                      color === colorOption && { borderWidth: 0 },
+                    ]}
+                    gridSize={3}
+                    textureOpacity={0.12}
+                  />
+                </TouchableOpacity>
               ))}
             </View>
           )}
-
-          {/* Advanced Color Picker */}
+          ){/* Advanced Color Picker */}
           {showAdvancedPicker && (
             <ColorPicker
               style={{
@@ -176,7 +390,6 @@ export default function ColorPickerModal({
               </View>
             </ColorPicker>
           )}
-
           {/* Action Buttons */}
           <ThemedView style={styles.modalButtons}>
             <TouchableOpacity
@@ -211,11 +424,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  textureOptions: {
+    marginVertical: 15,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  sectionTitle: {
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 80,
+    justifyContent: 'space-between',
+  },
+  toggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#ccc',
+  },
+  toggleActive: {
+    backgroundColor: '#007AFF',
+  },
+  toggleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#333',
+  },
+  toggleTextActive: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'white',
+  },
   modalContent: {
     borderRadius: 10,
     padding: 20,
     width: '80%',
     maxWidth: 500,
+  },
+  textureOverlay: {
+    overflow: 'hidden',
   },
   modalTitle: {
     fontSize: 18,
@@ -250,12 +507,6 @@ const styles = StyleSheet.create({
   selectedColorOption: {
     borderWidth: 3,
     borderColor: '#007AFF',
-  },
-  toggleButton: {
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 15,
-    alignItems: 'center',
   },
   buttonText: {
     fontSize: 14,
