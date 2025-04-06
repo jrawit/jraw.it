@@ -16,7 +16,7 @@ import { CanvasElement } from '@/hooks/useCanvas';
 import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Foundation from '@expo/vector-icons/Foundation';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   Canvas,
@@ -31,13 +31,13 @@ import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
 import * as MediaLibrary from 'expo-media-library';
-import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
-  Platform, // Import Platform
+  Platform,
   StyleSheet,
-  TextInput, // Add TextInput import
+  TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -56,7 +56,6 @@ export default function CanvasScreen() {
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   const [textModalVisible, setTextModalVisible] = useState<boolean>(false);
-  const [textInputValue, setTextInputValue] = useState<string>('');
   const [textPosition, setTextPosition] = useState<{ x: number; y: number }>({
     x: 0,
     y: 0,
@@ -113,17 +112,15 @@ export default function CanvasScreen() {
     openSettings,
     hidePermissionModal,
   } = useMediaLibraryPermissions();
-  const navigation = useNavigation();
-  const handleBackButtonPress = () => {
-    navigation.goBack();
-  };
-  const [backgroundColor, setBackgroundColor] = useState<string>('white');
+
+  const [backgroundColor, setBackgroundColor] = useState<string>('#F2F2F2');
   const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
 
   const [backgroundTexture, setBackgroundTexture] = useState<boolean>(false);
   const [backgroundGridSize, setBackgroundGridSize] = useState<number>(20);
   const [backgroundTextureOpacity, setBackgroundTextureOpacity] =
     useState<number>(0.1);
+
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
 
@@ -424,23 +421,6 @@ export default function CanvasScreen() {
     setColorPickerVisible(true);
   }, []);
 
-  const onTextSubmit = useCallback(() => {
-    if (textInputValue.trim()) {
-      const textElement = {
-        text: textInputValue,
-        point: textPosition,
-        fontFamily: 'Roboto',
-        fontSize: strokeWidth,
-        color: color,
-      };
-
-      addExternalElement(textElement, Tools.TEXT);
-    }
-
-    setTextModalVisible(false);
-    setTextInputValue('');
-  }, [textInputValue, textPosition, strokeWidth, color, addExternalElement]);
-
   const getElement = useCallback(
     (canvasElement: CanvasElement) => {
       const { id, element, tool } = canvasElement;
@@ -739,7 +719,11 @@ export default function CanvasScreen() {
             onPress={pickBackgroundColor}
             style={styles.controlButton}
           >
-            <Foundation name="background-color" size={24} color="black" />
+            <MaterialCommunityIcons
+              name="format-color-fill"
+              size={24}
+              color="black"
+            />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={clear}
