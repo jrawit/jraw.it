@@ -18,6 +18,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   Canvas,
+  Fill,
   Group,
   Paint,
   RoundedRect,
@@ -507,17 +508,14 @@ export default function CanvasScreen() {
         gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
       >
         <Canvas
-          style={{ flex: 1 }} // Remove backgroundColor from style
+          style={{ flex: 1, backgroundColor: backgroundColor }}
           ref={ref}
           onLayout={event => {
             const { width, height } = event.nativeEvent.layout;
             setCanvasSize({ width, height });
           }}
         >
-        {/* Background layer */}
-        <SkRect x={0} y={0} width={canvasSize.width} height={canvasSize.height}>
-          <Paint color={backgroundColor} />
-        </SkRect>
+          <Fill color={backgroundColor} />
           <Group
             transform={[
               {
