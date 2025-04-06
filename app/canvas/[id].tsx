@@ -507,13 +507,17 @@ export default function CanvasScreen() {
         gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
       >
         <Canvas
-          style={{ flex: 1, backgroundColor: backgroundColor }}
+          style={{ flex: 1 }} // Remove backgroundColor from style
           ref={ref}
           onLayout={event => {
             const { width, height } = event.nativeEvent.layout;
             setCanvasSize({ width, height });
           }}
         >
+        {/* Background layer */}
+        <SkRect x={0} y={0} width={canvasSize.width} height={canvasSize.height}>
+          <Paint color={backgroundColor} />
+        </SkRect>
           <Group
             transform={[
               {
