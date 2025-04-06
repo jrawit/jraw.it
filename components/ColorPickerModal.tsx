@@ -4,11 +4,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import {
   Modal,
+  StyleProp,
   StyleSheet,
   TouchableOpacity,
   useColorScheme,
   View,
-  ViewStyle, // Import ViewStyle
+  ViewStyle,
 } from 'react-native';
 import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import ColorPicker, {
@@ -42,11 +43,10 @@ const COLORS = [
   '#FFFFFF',
   '#000000',
 ];
-
 // Define props interface for TexturedColorView
 interface TexturedColorViewProps {
   color: string;
-  style: ViewStyle;
+  style: StyleProp<ViewStyle>; // Use StyleProp<ViewStyle> to allow arrays
   texture?: 'grid' | 'none';
   textureOpacity?: number;
   gridSize?: number;
@@ -59,7 +59,12 @@ const TexturedColorView = ({
   textureOpacity = 0.1,
   gridSize = 4,
 }: TexturedColorViewProps) => {
-  // Use the interface here
+  // Flatten the style to handle arrays and ensure it's an object
+  const flatStyle = StyleSheet.flatten(style);
+  const viewHeight =
+    typeof flatStyle?.height === 'number' ? flatStyle.height : 0;
+  const viewWidth = typeof flatStyle?.width === 'number' ? flatStyle.width : 0;
+
   return (
     <View style={[{ position: 'relative' }, style]}>
       <View style={[style, { backgroundColor: color }]} />
@@ -81,38 +86,38 @@ const TexturedColorView = ({
           ]}
         >
           {/* Horizontal lines */}
-          {Array.from({ length: Math.floor(style.height / gridSize) }).map(
-            (_, i) => (
-              <View
-                key={`h-${i}`}
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  height: 1,
-                  top: i * gridSize,
-                  backgroundColor: 'rgba(0,0,0,0.2)',
-                }}
-              />
-            )
-          )}
+          {Array.from({
+            length: Math.floor(viewHeight / gridSize), // Use flattened height
+          }).map((_, i) => (
+            <View
+              key={`h-${i}`}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                height: 1,
+                top: i * gridSize,
+                backgroundColor: 'rgba(0,0,0,0.2)',
+              }}
+            />
+          ))}
 
           {/* Vertical lines */}
-          {Array.from({ length: Math.floor(style.width / gridSize) }).map(
-            (_, i) => (
-              <View
-                key={`v-${i}`}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  bottom: 0,
-                  width: 1,
-                  left: i * gridSize,
-                  backgroundColor: 'rgba(0,0,0,0.2)',
-                }}
-              />
-            )
-          )}
+          {Array.from({
+            length: Math.floor(viewWidth / gridSize), // Use flattened width
+          }).map((_, i) => (
+            <View
+              key={`v-${i}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                width: 1,
+                left: i * gridSize,
+                backgroundColor: 'rgba(0,0,0,0.2)',
+              }}
+            />
+          ))}
         </View>
       )}
     </View>
