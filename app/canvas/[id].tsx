@@ -1,3 +1,4 @@
+import ColorPickerModal from '@/components/ColorPickerModal';
 import { TextModal } from '@/components/TextModal';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -15,6 +16,7 @@ import { CanvasElement } from '@/hooks/useCanvas';
 import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   Canvas,
@@ -25,16 +27,17 @@ import {
   Rect as SkRect,
   useCanvasRef,
 } from '@shopify/react-native-skia';
-import Foundation from '@expo/vector-icons/Foundation';
+import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
-import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
+import * as MediaLibrary from 'expo-media-library';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
-  Platform, // Import Platform
+  Platform,
   StyleSheet,
-  TextInput, // Add TextInput import
+  TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -44,9 +47,6 @@ import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
-import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
-import ColorPickerModal from '@/components/ColorPickerModal';
 
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
@@ -56,7 +56,6 @@ export default function CanvasScreen() {
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   const [textModalVisible, setTextModalVisible] = useState<boolean>(false);
-  const [textInputValue, setTextInputValue] = useState<string>('');
   const [textPosition, setTextPosition] = useState<{ x: number; y: number }>({
     x: 0,
     y: 0,
@@ -113,11 +112,7 @@ export default function CanvasScreen() {
     openSettings,
     hidePermissionModal,
   } = useMediaLibraryPermissions();
-  const navigation = useNavigation();
-  const handleBackButtonPress = () => {
-    navigation.goBack();
-  };
-  const [backgroundColor, setBackgroundColor] = useState<string>('white');
+  const [backgroundColor, setBackgroundColor] = useState<string>('#F2F2F2');
   const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
 
   useEffect(() => {
@@ -308,7 +303,6 @@ export default function CanvasScreen() {
   }, []);
   useEffect(() => {
     if (Platform.OS === 'web') {
-
       document.addEventListener('contextmenu', preventContextMenu);
       return () => {
         document.removeEventListener('contextmenu', preventContextMenu);
@@ -330,7 +324,7 @@ export default function CanvasScreen() {
       const base64 = image.encodeToBase64();
       if (!base64) {
         throw new Error('Failed to encode image to base64');
-      }   
+      }
       if (Platform.OS === 'web') {
         // Web implementation - browser download dialog
         const link = document.createElement('a');
@@ -348,28 +342,28 @@ export default function CanvasScreen() {
           alert('Permission denied. Cannot save image.');
           return;
         }
-        
+
         const fileName = `jraw-canvas-${new Date().getTime()}.png`;
         const fileUri = FileSystem.documentDirectory + fileName;
-        
+
         await FileSystem.writeAsStringAsync(fileUri, base64, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        
+
         const asset = await MediaLibrary.saveToLibraryAsync(fileUri);
-        
+
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
-        
+
         alert('Image saved to gallery');
       }
-      
+
       console.log('Image saved successfully');
     } catch (error) {
       console.error('Failed to save image:', error);
       alert(`Failed to save image: ${error || 'Unknown error'}`);
     }
   }, [ref, requestPermission]);
-  
+
   const pickImage = useCallback(async () => {
     const status = await requestPermission();
     if (status !== 'granted') return;
@@ -420,23 +414,6 @@ export default function CanvasScreen() {
   const pickBackgroundColor = useCallback(() => {
     setColorPickerVisible(true);
   }, []);
-
-  const onTextSubmit = useCallback(() => {
-    if (textInputValue.trim()) {
-      const textElement = {
-        text: textInputValue,
-        point: textPosition,
-        fontFamily: 'Roboto',
-        fontSize: strokeWidth,
-        color: color,
-      };
-
-      addExternalElement(textElement, Tools.TEXT);
-    }
-
-    setTextModalVisible(false);
-    setTextInputValue('');
-  }, [textInputValue, textPosition, strokeWidth, color, addExternalElement]);
 
   const getElement = useCallback(
     (canvasElement: CanvasElement) => {
@@ -644,11 +621,21 @@ export default function CanvasScreen() {
           <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
             <MaterialIcons name="image" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={saveCanvasAsImage} style={styles.controlButton}>
+          <TouchableOpacity
+            onPress={saveCanvasAsImage}
+            style={styles.controlButton}
+          >
             <MaterialIcons name="save" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={pickBackgroundColor} style={styles.controlButton}>
-            <Foundation name="background-color" size={24} color="black" />
+          <TouchableOpacity
+            onPress={pickBackgroundColor}
+            style={styles.controlButton}
+          >
+            <MaterialCommunityIcons
+              name="format-color-fill"
+              size={24}
+              color="black"
+            />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={clear}
@@ -730,7 +717,7 @@ export default function CanvasScreen() {
       <ColorPickerModal
         visible={colorPickerVisible}
         initialColor={backgroundColor}
-        onSelectColor={(color) => {
+        onSelectColor={color => {
           setBackgroundColor(color);
           setColorPickerVisible(false);
         }}
