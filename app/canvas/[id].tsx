@@ -568,13 +568,14 @@ export default function CanvasScreen() {
                 for (let i = 0; i < numHorizontalLines; i++) {
                   const y = startY + i * backgroundGridSize;
                   lines.push(
-                    <SkRect
+                    <Line
                       key={`h-${y}`}
-                      x={startX - 5000}
-                      y={y}
-                      width={endX - startX + 10000}
-                      height={1}
-                      color={`rgba(0,0,0,${backgroundTextureOpacity})`}
+                      lineData={{
+                        startPoint: { x: startX - 5000, y: y },
+                        endPoint: { x: endX + 5000, y: y },
+                        strokeWidth: 1,
+                        strokeColor: `rgba(0,0,0,${backgroundTextureOpacity})`,
+                      }}
                     />
                   );
                 }
@@ -583,13 +584,14 @@ export default function CanvasScreen() {
                 for (let i = 0; i < numVerticalLines; i++) {
                   const x = startX + i * backgroundGridSize;
                   lines.push(
-                    <SkRect
+                    <Line
                       key={`v-${x}`}
-                      x={x}
-                      y={startY - 5000}
-                      width={1}
-                      height={endY - startY + 10000}
-                      color={`rgba(0,0,0,${backgroundTextureOpacity})`}
+                      lineData={{
+                        startPoint: { x: x, y: startY - 5000 },
+                        endPoint: { x: x, y: endY + 5000 },
+                        strokeWidth: 1,
+                        strokeColor: `rgba(0,0,0,${backgroundTextureOpacity})`,
+                      }}
                     />
                   );
                 }
