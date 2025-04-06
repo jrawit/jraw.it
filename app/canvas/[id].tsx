@@ -1,3 +1,4 @@
+import ColorPickerModal from '@/components/ColorPickerModal';
 import { TextModal } from '@/components/TextModal';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -15,6 +16,7 @@ import { CanvasElement } from '@/hooks/useCanvas';
 import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Foundation from '@expo/vector-icons/Foundation';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   Canvas,
@@ -25,9 +27,10 @@ import {
   Rect as SkRect,
   useCanvasRef,
 } from '@shopify/react-native-skia';
-import Foundation from '@expo/vector-icons/Foundation';
+import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
+import * as MediaLibrary from 'expo-media-library';
 import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -44,9 +47,6 @@ import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
-import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
-import ColorPickerModal from '@/components/ColorPickerModal';
 
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
@@ -120,9 +120,10 @@ export default function CanvasScreen() {
   const [backgroundColor, setBackgroundColor] = useState<string>('white');
   const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
 
-const [backgroundTexture, setBackgroundTexture] = useState<boolean>(false);
-const [backgroundGridSize, setBackgroundGridSize] = useState<number>(20);
-const [backgroundTextureOpacity, setBackgroundTextureOpacity] = useState<number>(0.1);
+  const [backgroundTexture, setBackgroundTexture] = useState<boolean>(false);
+  const [backgroundGridSize, setBackgroundGridSize] = useState<number>(20);
+  const [backgroundTextureOpacity, setBackgroundTextureOpacity] =
+    useState<number>(0.1);
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
 
@@ -311,7 +312,6 @@ const [backgroundTextureOpacity, setBackgroundTextureOpacity] = useState<number>
   }, []);
   useEffect(() => {
     if (Platform.OS === 'web') {
-
       document.addEventListener('contextmenu', preventContextMenu);
       return () => {
         document.removeEventListener('contextmenu', preventContextMenu);
@@ -333,7 +333,7 @@ const [backgroundTextureOpacity, setBackgroundTextureOpacity] = useState<number>
       const base64 = image.encodeToBase64();
       if (!base64) {
         throw new Error('Failed to encode image to base64');
-      }   
+      }
       if (Platform.OS === 'web') {
         // Web implementation - browser download dialog
         const link = document.createElement('a');
@@ -351,28 +351,28 @@ const [backgroundTextureOpacity, setBackgroundTextureOpacity] = useState<number>
           alert('Permission denied. Cannot save image.');
           return;
         }
-        
+
         const fileName = `jraw-canvas-${new Date().getTime()}.png`;
         const fileUri = FileSystem.documentDirectory + fileName;
-        
+
         await FileSystem.writeAsStringAsync(fileUri, base64, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        
+
         const asset = await MediaLibrary.saveToLibraryAsync(fileUri);
-        
+
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
-        
+
         alert('Image saved to gallery');
       }
-      
+
       console.log('Image saved successfully');
     } catch (error) {
       console.error('Failed to save image:', error);
       alert(`Failed to save image: ${error || 'Unknown error'}`);
     }
   }, [ref, requestPermission]);
-  
+
   const pickImage = useCallback(async () => {
     const status = await requestPermission();
     if (status !== 'granted') return;
@@ -511,69 +511,106 @@ const [backgroundTextureOpacity, setBackgroundTextureOpacity] = useState<number>
         gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
       >
         <Canvas
-  style={{ flex: 1, backgroundColor: backgroundColor }}
-  ref={ref}
-  onLayout={event => {
-    const { width, height } = event.nativeEvent.layout;
-    setCanvasSize({ width, height });
-  }}
->
-  <Fill color={backgroundColor} />
-  
-    {backgroundTexture && (
-  <Group>
+          style={{ flex: 1, backgroundColor: backgroundColor }}
+          ref={ref}
+          onLayout={event => {
+            const { width, height } = event.nativeEvent.layout;
+            setCanvasSize({ width, height });
+          }}
+        >
+          <Fill color={backgroundColor} />
 
-    {Array.from({ length: 500 }).map((_, i) => {
-      const y = ((i * backgroundGridSize) - 
-        ((elementsOffset.y + (tool === Tools.PAN ? currentElementOffset.y : 0)) % backgroundGridSize));
-      
-      if (y < -1000 || y > canvasSize.height + 1000) return null;
-      
-      return (
-        <SkRect
-          key={`bg-h-${i}`}
-          x={-10000} 
-          y={y}
-          width={20000}
-          height={1}
-          color={`rgba(0,0,0,${backgroundTextureOpacity})`}
-        />
-      );
-    })}
-    
+          {backgroundTexture && (
+            <Group
+              transform={[
+                {
+                  translate: [
+                    elementsOffset.x +
+                      (tool === Tools.PAN ? currentElementOffset.x : 0),
+                    elementsOffset.y +
+                      (tool === Tools.PAN ? currentElementOffset.y : 0),
+                  ],
+                },
+              ]}
+            >
+              {(() => {
+                // Calculate grid bounds
+                const startY =
+                  Math.floor(
+                    (-elementsOffset.y - canvasSize.height) / backgroundGridSize
+                  ) * backgroundGridSize;
+                const endY =
+                  Math.ceil(
+                    (-elementsOffset.y + 2 * canvasSize.height) /
+                      backgroundGridSize
+                  ) * backgroundGridSize;
 
-    {Array.from({ length: 500 }).map((_, i) => {
+                const startX =
+                  Math.floor(
+                    (-elementsOffset.x - canvasSize.width) / backgroundGridSize
+                  ) * backgroundGridSize;
+                const endX =
+                  Math.ceil(
+                    (-elementsOffset.x + 2 * canvasSize.width) /
+                      backgroundGridSize
+                  ) * backgroundGridSize;
 
-      const x = ((i * backgroundGridSize) - 
-        ((elementsOffset.x + (tool === Tools.PAN ? currentElementOffset.x : 0)) % backgroundGridSize));
-      
-      if (x < -1000 || x > canvasSize.width + 1000) return null;
-      
-      return (
-        <SkRect
-          key={`bg-v-${i}`}
-          x={x}
-          y={-10000}
-          width={1}
-          height={20000} 
-          color={`rgba(0,0,0,${backgroundTextureOpacity})`}
-        />
-      );
-    })}
-  </Group>
-)}
+                // Calculate how many lines we need
+                const numHorizontalLines =
+                  Math.ceil((endY - startY) / backgroundGridSize) + 1;
+                const numVerticalLines =
+                  Math.ceil((endX - startX) / backgroundGridSize) + 1;
 
-  {/* Content group */}
-  <Group
-    transform={[
-      {
-        translate: [
-          elementsOffset.x + (tool === Tools.PAN ? currentElementOffset.x : 0),
-          elementsOffset.y + (tool === Tools.PAN ? currentElementOffset.y : 0),
-        ],
-      },
-    ]}
-  >
+                // Create lines
+                const lines = [];
+
+                // Horizontal lines
+                for (let i = 0; i < numHorizontalLines; i++) {
+                  const y = startY + i * backgroundGridSize;
+                  lines.push(
+                    <SkRect
+                      key={`h-${y}`}
+                      x={startX - 5000}
+                      y={y}
+                      width={endX - startX + 10000}
+                      height={1}
+                      color={`rgba(0,0,0,${backgroundTextureOpacity})`}
+                    />
+                  );
+                }
+
+                // Vertical lines
+                for (let i = 0; i < numVerticalLines; i++) {
+                  const x = startX + i * backgroundGridSize;
+                  lines.push(
+                    <SkRect
+                      key={`v-${x}`}
+                      x={x}
+                      y={startY - 5000}
+                      width={1}
+                      height={endY - startY + 10000}
+                      color={`rgba(0,0,0,${backgroundTextureOpacity})`}
+                    />
+                  );
+                }
+
+                return lines;
+              })()}
+            </Group>
+          )}
+
+          <Group
+            transform={[
+              {
+                translate: [
+                  elementsOffset.x +
+                    (tool === Tools.PAN ? currentElementOffset.x : 0),
+                  elementsOffset.y +
+                    (tool === Tools.PAN ? currentElementOffset.y : 0),
+                ],
+              },
+            ]}
+          >
             {useMemo(
               () =>
                 elements.map((canvasElement: CanvasElement) =>
@@ -690,10 +727,16 @@ const [backgroundTextureOpacity, setBackgroundTextureOpacity] = useState<number>
           <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
             <MaterialIcons name="image" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={saveCanvasAsImage} style={styles.controlButton}>
+          <TouchableOpacity
+            onPress={saveCanvasAsImage}
+            style={styles.controlButton}
+          >
             <MaterialIcons name="save" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={pickBackgroundColor} style={styles.controlButton}>
+          <TouchableOpacity
+            onPress={pickBackgroundColor}
+            style={styles.controlButton}
+          >
             <Foundation name="background-color" size={24} color="black" />
           </TouchableOpacity>
           <TouchableOpacity
@@ -774,20 +817,25 @@ const [backgroundTextureOpacity, setBackgroundTextureOpacity] = useState<number>
 
       {/* Background Color Picker Modal */}
       <ColorPickerModal
-  visible={colorPickerVisible}
-  initialColor={backgroundColor}
-  initialTexture={backgroundTexture}
-  initialGridSize={backgroundGridSize}
-  initialTextureOpacity={backgroundTextureOpacity}
-  onSelectColor={(color, texture = false, gridSize = 20, opacity = 0.1) => {
-    setBackgroundColor(color);
-    setBackgroundTexture(texture);
-    setBackgroundGridSize(gridSize);
-    setBackgroundTextureOpacity(opacity);
-    setColorPickerVisible(false);
-  }}
-  onCancel={() => setColorPickerVisible(false)}
-/>
+        visible={colorPickerVisible}
+        initialColor={backgroundColor}
+        initialTexture={backgroundTexture}
+        initialGridSize={backgroundGridSize}
+        initialTextureOpacity={backgroundTextureOpacity}
+        onSelectColor={(
+          color,
+          texture = false,
+          gridSize = 20,
+          opacity = 0.1
+        ) => {
+          setBackgroundColor(color);
+          setBackgroundTexture(texture);
+          setBackgroundGridSize(gridSize);
+          setBackgroundTextureOpacity(opacity);
+          setColorPickerVisible(false);
+        }}
+        onCancel={() => setColorPickerVisible(false)}
+      />
     </View>
   );
 }
