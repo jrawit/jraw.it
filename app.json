@@ -54,6 +54,13 @@
         {
           "photosPermission": "The app accesses your photos to let you upload images to canvas."
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "The app accesses your photos to let you save canvas as an image.",
+          "isAccessMediaLocationEnabled": true
+        }
       ]
     ],
     "experiments": {
