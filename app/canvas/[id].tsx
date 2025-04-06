@@ -24,6 +24,7 @@ import {
   Rect as SkRect,
   useCanvasRef,
 } from '@shopify/react-native-skia';
+import Foundation from '@expo/vector-icons/Foundation';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
 import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -44,7 +45,7 @@ import { ToolData, Tools } from '../../constants/Tools';
 import { useCanvas } from '../../hooks/useCanvas';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
-
+import ColorPickerModal from '@/components/ColorPickerModal';
 
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
@@ -115,6 +116,9 @@ export default function CanvasScreen() {
   const handleBackButtonPress = () => {
     navigation.goBack();
   };
+  const [backgroundColor, setBackgroundColor] = useState<string>('white');
+  const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
+
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
 
@@ -361,7 +365,7 @@ export default function CanvasScreen() {
       console.log('Image saved successfully');
     } catch (error) {
       console.error('Failed to save image:', error);
-      alert(`Failed to save image: ${error.message || 'Unknown error'}`);
+      alert(`Failed to save image: ${error || 'Unknown error'}`);
     }
   }, [ref, requestPermission]);
   
@@ -411,6 +415,10 @@ export default function CanvasScreen() {
       }
     }
   }, [canvasSize, elementsOffset, addExternalElement, requestPermission]);
+
+  const pickBackgroundColor = useCallback(() => {
+    setColorPickerVisible(true);
+  }, []);
 
   const onTextSubmit = useCallback(() => {
     if (textInputValue.trim()) {
@@ -499,7 +507,7 @@ export default function CanvasScreen() {
         gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
       >
         <Canvas
-          style={{ flex: 1 }}
+          style={{ flex: 1, backgroundColor: backgroundColor }}
           ref={ref}
           onLayout={event => {
             const { width, height } = event.nativeEvent.layout;
@@ -637,6 +645,9 @@ export default function CanvasScreen() {
           <TouchableOpacity onPress={saveCanvasAsImage} style={styles.controlButton}>
             <MaterialIcons name="save" size={24} color="black" />
           </TouchableOpacity>
+          <TouchableOpacity onPress={pickBackgroundColor} style={styles.controlButton}>
+            <Foundation name="background-color" size={24} color="black" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={clear}
             style={[styles.controlButton, styles.clearButton]}
@@ -712,6 +723,17 @@ export default function CanvasScreen() {
           </ThemedView>
         </ThemedView>
       </Modal>
+
+      {/* Background Color Picker Modal */}
+      <ColorPickerModal
+        visible={colorPickerVisible}
+        initialColor={backgroundColor}
+        onSelectColor={(color) => {
+          setBackgroundColor(color);
+          setColorPickerVisible(false);
+        }}
+        onCancel={() => setColorPickerVisible(false)}
+      />
     </View>
   );
 }
