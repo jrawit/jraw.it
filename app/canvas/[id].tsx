@@ -112,7 +112,6 @@ export default function CanvasScreen() {
     openSettings,
     hidePermissionModal,
   } = useMediaLibraryPermissions();
-
   const [backgroundColor, setBackgroundColor] = useState<string>('#F2F2F2');
   const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
 
