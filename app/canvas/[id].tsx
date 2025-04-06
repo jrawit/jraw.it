@@ -120,6 +120,9 @@ export default function CanvasScreen() {
   const [backgroundColor, setBackgroundColor] = useState<string>('white');
   const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
 
+const [backgroundTexture, setBackgroundTexture] = useState<boolean>(false);
+const [backgroundGridSize, setBackgroundGridSize] = useState<number>(20);
+const [backgroundTextureOpacity, setBackgroundTextureOpacity] = useState<number>(0.1);
   useEffect(() => {
     setSocket(io('http://localhost:3000/room'));
 
@@ -508,26 +511,69 @@ export default function CanvasScreen() {
         gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
       >
         <Canvas
-          style={{ flex: 1, backgroundColor: backgroundColor }}
-          ref={ref}
-          onLayout={event => {
-            const { width, height } = event.nativeEvent.layout;
-            setCanvasSize({ width, height });
-          }}
-        >
-          <Fill color={backgroundColor} />
-          <Group
-            transform={[
-              {
-                translate: [
-                  elementsOffset.x +
-                    (tool === Tools.PAN ? currentElementOffset.x : 0),
-                  elementsOffset.y +
-                    (tool === Tools.PAN ? currentElementOffset.y : 0),
-                ],
-              },
-            ]}
-          >
+  style={{ flex: 1, backgroundColor: backgroundColor }}
+  ref={ref}
+  onLayout={event => {
+    const { width, height } = event.nativeEvent.layout;
+    setCanvasSize({ width, height });
+  }}
+>
+  <Fill color={backgroundColor} />
+  
+    {backgroundTexture && (
+  <Group>
+
+    {Array.from({ length: 500 }).map((_, i) => {
+      const y = ((i * backgroundGridSize) - 
+        ((elementsOffset.y + (tool === Tools.PAN ? currentElementOffset.y : 0)) % backgroundGridSize));
+      
+      if (y < -1000 || y > canvasSize.height + 1000) return null;
+      
+      return (
+        <SkRect
+          key={`bg-h-${i}`}
+          x={-10000} 
+          y={y}
+          width={20000}
+          height={1}
+          color={`rgba(0,0,0,${backgroundTextureOpacity})`}
+        />
+      );
+    })}
+    
+
+    {Array.from({ length: 500 }).map((_, i) => {
+
+      const x = ((i * backgroundGridSize) - 
+        ((elementsOffset.x + (tool === Tools.PAN ? currentElementOffset.x : 0)) % backgroundGridSize));
+      
+      if (x < -1000 || x > canvasSize.width + 1000) return null;
+      
+      return (
+        <SkRect
+          key={`bg-v-${i}`}
+          x={x}
+          y={-10000}
+          width={1}
+          height={20000} 
+          color={`rgba(0,0,0,${backgroundTextureOpacity})`}
+        />
+      );
+    })}
+  </Group>
+)}
+
+  {/* Content group */}
+  <Group
+    transform={[
+      {
+        translate: [
+          elementsOffset.x + (tool === Tools.PAN ? currentElementOffset.x : 0),
+          elementsOffset.y + (tool === Tools.PAN ? currentElementOffset.y : 0),
+        ],
+      },
+    ]}
+  >
             {useMemo(
               () =>
                 elements.map((canvasElement: CanvasElement) =>
@@ -728,14 +774,20 @@ export default function CanvasScreen() {
 
       {/* Background Color Picker Modal */}
       <ColorPickerModal
-        visible={colorPickerVisible}
-        initialColor={backgroundColor}
-        onSelectColor={(color) => {
-          setBackgroundColor(color);
-          setColorPickerVisible(false);
-        }}
-        onCancel={() => setColorPickerVisible(false)}
-      />
+  visible={colorPickerVisible}
+  initialColor={backgroundColor}
+  initialTexture={backgroundTexture}
+  initialGridSize={backgroundGridSize}
+  initialTextureOpacity={backgroundTextureOpacity}
+  onSelectColor={(color, texture = false, gridSize = 20, opacity = 0.1) => {
+    setBackgroundColor(color);
+    setBackgroundTexture(texture);
+    setBackgroundGridSize(gridSize);
+    setBackgroundTextureOpacity(opacity);
+    setColorPickerVisible(false);
+  }}
+  onCancel={() => setColorPickerVisible(false)}
+/>
     </View>
   );
 }
