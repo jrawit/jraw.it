@@ -124,56 +124,53 @@ const TexturedColorView = ({
   );
 };
 
+interface Background {
+  color: string;
+  texture: boolean;
+  gridSize: number;
+  textureOpacity: number;
+}
+
 interface ColorPickerModalProps {
   visible: boolean;
-  initialColor: string;
-  onSelectColor: (
-    color: string,
-    applyTexture?: boolean,
-    gridSize?: number,
-    textureOpacity?: number
-  ) => void;
+  initialBackground: Background;
+  onSelectBackground: (backgroundState: Background) => void;
   onCancel: () => void;
-  initialTexture?: boolean;
-  initialGridSize?: number;
-  initialTextureOpacity?: number;
 }
 
 export default function ColorPickerModal({
   visible,
-  initialColor,
-  onSelectColor,
+  // Destructure initialBackground
+  initialBackground,
+  onSelectBackground,
   onCancel,
-  initialTexture = false,
-  initialGridSize = 20,
-  initialTextureOpacity = 0.1,
 }: ColorPickerModalProps) {
-  const [color, setColor] = useState<string>(initialColor);
-  const [showAdvancedPicker, setShowAdvancedPicker] = useState<boolean>(false);
-  const [applyTexture, setApplyTexture] = useState<boolean>(initialTexture);
-  const [gridSize, setGridSize] = useState<number>(initialGridSize);
-  const [textureOpacity, setTextureOpacity] = useState<number>(
-    initialTextureOpacity
+  // Initialize state from initialBackground object
+  const [color, setColor] = useState<string>(initialBackground.color);
+  const [applyTexture, setApplyTexture] = useState<boolean>(
+    initialBackground.texture
   );
-  const isDark = useColorScheme() === 'dark'; // Add this line to define isDark
-  const selectedColor = useSharedValue(initialColor); // Fix missing selectedColor
 
-  // Reset state when modal becomes visible with initialColor
+  const [showAdvancedPicker, setShowAdvancedPicker] = useState<boolean>(false);
+
+  const [gridSize, setGridSize] = useState<number>(initialBackground.gridSize);
+  const [textureOpacity, setTextureOpacity] = useState<number>(
+    initialBackground.textureOpacity
+  );
+  const isDark = useColorScheme() === 'dark';
+  const selectedColor = useSharedValue(initialBackground.color);
+
+  // Reset state when modal becomes visible using initialBackground
   useEffect(() => {
     if (visible) {
-      setColor(initialColor);
-      selectedColor.value = initialColor;
-      setApplyTexture(initialTexture);
-      setGridSize(initialGridSize);
-      setTextureOpacity(initialTextureOpacity);
+      setColor(initialBackground.color);
+      selectedColor.value = initialBackground.color;
+      setApplyTexture(initialBackground.texture);
+      setGridSize(initialBackground.gridSize);
+      setTextureOpacity(initialBackground.textureOpacity);
     }
-  }, [
-    visible,
-    initialColor,
-    initialTexture,
-    initialGridSize,
-    initialTextureOpacity,
-  ]);
+    // Depend on the initialBackground object
+  }, [visible, initialBackground]);
 
   const colorButtonStyle = useAnimatedStyle(() => {
     return {
@@ -191,11 +188,15 @@ export default function ColorPickerModal({
   };
 
   const handleSubmit = () => {
-    onSelectColor(color, applyTexture, gridSize, textureOpacity);
+    onSelectBackground({
+      color,
+      texture: applyTexture,
+      gridSize,
+      textureOpacity,
+    });
   };
 
   const handleCancel = () => {
-    setColor(initialColor);
     onCancel();
   };
 
@@ -405,7 +406,7 @@ export default function ColorPickerModal({
               <ThemedText style={styles.actionButtonText}>Cancel</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={handleSubmit}
+              onPress={handleSubmit} // handleSubmit now sends the object
               style={[styles.modalButton, styles.applyButton]}
             >
               <ThemedText style={styles.actionButtonText}>Apply</ThemedText>

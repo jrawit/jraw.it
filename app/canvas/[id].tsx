@@ -1,38 +1,23 @@
+import CanvasComponent, {
+  CanvasComponentHandle,
+} from '@/components/CanvasComponent';
 import ColorPickerModal from '@/components/ColorPickerModal';
 import { TextModal } from '@/components/TextModal';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { Circle } from '@/components/tools/Circle';
-import { Image } from '@/components/tools/Image';
-import { Line } from '@/components/tools/Line';
-import { Path } from '@/components/tools/Path';
-import { Rect } from '@/components/tools/Rectangle';
-import { Star } from '@/components/tools/Star';
-import { Text } from '@/components/tools/Text';
-import { Triangle } from '@/components/tools/Triangle';
 import { CanvasElements } from '@/constants/CanvasElement';
 import { processImageForCanvas } from '@/hooks/tool-handlers';
-import { CanvasElement } from '@/hooks/useCanvas';
-import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import {
-  Canvas,
-  Fill,
-  Group,
-  Paint,
-  RoundedRect,
-  Rect as SkRect,
-  useCanvasRef,
-} from '@shopify/react-native-skia';
+import { useCanvasRef } from '@shopify/react-native-skia';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
 import * as MediaLibrary from 'expo-media-library';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Platform,
@@ -42,101 +27,39 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
-import { ToolData, Tools } from '../../constants/Tools';
-import { useCanvas } from '../../hooks/useCanvas';
+import { Tools } from '../../constants/Tools';
+
+// Define an interface for the background state
+interface Background {
+  color: string;
+  texture: boolean;
+  gridSize: number;
+  textureOpacity: number;
+}
 
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
   const [tool, setTool] = useState<Tools>(Tools.PEN);
-  const [strokeWidth, setStrokeWidth] = useState<number>(3);
-  const [color, setSelectedColor] = useState<string>('black');
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
-  const [textModalVisible, setTextModalVisible] = useState<boolean>(false);
-  const [textPosition, setTextPosition] = useState<{ x: number; y: number }>({
-    x: 0,
-    y: 0,
-  });
-
-  const [elementsOffset, setElementsOffset] = useState<{
-    x: number;
-    y: number;
-  }>({ x: 0, y: 0 });
-  const [currentElementOffset, setCurrentElementOffset] = useState<{
-    x: number;
-    y: number;
-  }>({ x: 0, y: 0 });
-
-  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(
-    null
-  );
-  const [highlighterAngle, setHighlighterAngle] = useState<number>(0);
-  const [previousPoint, setPreviousPoint] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const colorScheme = useColorScheme();
-  const { id } = useLocalSearchParams();
-  const ref = useCanvasRef();
-  const fontManager = useFontManager();
-
-  const {
-    elements,
-    currentElement,
-    onStartInput,
-    onMoveInput,
-    onEndInput,
-    undo,
-    redo,
-    clear,
-    addExternalElement,
-    modifyElements,
-    selection,
-  } = useCanvas({
-    tool,
-    strokeWidth,
-    color,
-    fontManager,
-  });
-  const [title, setTitle] = useState(id?.toString() ?? ''); // Ensure id is valid
-
+  // Keybinds
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
-  const {
-    isPermissionModalVisible,
-    isPermanentlyDenied,
-    requestPermission,
-    openSettings,
-    hidePermissionModal,
-  } = useMediaLibraryPermissions();
-  const [backgroundColor, setBackgroundColor] = useState<string>('#F2F2F2');
-  const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
-
-  const [backgroundTexture, setBackgroundTexture] = useState<boolean>(false);
-  const [backgroundGridSize, setBackgroundGridSize] = useState<number>(20);
-  const [backgroundTextureOpacity, setBackgroundTextureOpacity] =
-    useState<number>(0.1);
-
   useEffect(() => {
-    setSocket(io('http://localhost:3000/room'));
-
     startListening();
-    return () => {
-      socket?.emit('leaveRoom', { roomId: id });
-      stopListening();
-    };
-  }, []);
+    return () => stopListening();
+  }, [startListening, stopListening]);
+
+  const skiaCanvasRef = useCanvasRef();
+  const canvasComponentRef = useRef<CanvasComponentHandle>(null);
 
   useEffect(() => {
     switch (keyEvent?.key) {
       case 'KeyZ':
-        undo();
+        canvasComponentRef.current?.undo();
         break;
       case 'KeyY':
-        redo();
+        canvasComponentRef.current?.redo();
         break;
       case 'Digit1':
         setTool(Tools.PEN);
@@ -169,169 +92,67 @@ export default function CanvasScreen() {
         setTool(Tools.PAN);
         break;
     }
-  }, [keyEvent]);
+  }, [keyEvent, setTool, canvasComponentRef]);
 
-  const tap = Gesture.Tap()
-    .runOnJS(true)
-    .onStart(e => {
-      const adjustedX = e.x - elementsOffset.x;
-      const adjustedY = e.y - elementsOffset.y;
+  const [strokeWidth, setStrokeWidth] = useState<number>(3);
+  const [color, setSelectedColor] = useState<string>('black');
 
-      if (tool === Tools.TEXT) {
-        setTextPosition({ x: adjustedX, y: adjustedY });
-        setTextModalVisible(true);
-      } else {
-        onStartInput(adjustedX, adjustedY);
-      }
-    })
-    .onEnd(e => {
-      if (tool !== Tools.TEXT) {
-        const adjustedX = e.x - elementsOffset.x;
-        const adjustedY = e.y - elementsOffset.y;
-        onEndInput(adjustedX, adjustedY);
-      }
-    });
+  const [textModalVisible, setTextModalVisible] = useState<boolean>(false);
+  const [textPosition, setTextPosition] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
 
-  const pan = Gesture.Pan()
-    .runOnJS(true)
-    .minDistance(5)
-    .onStart(e => {
-      setPreviousPoint(null);
-      if (tool !== Tools.PAN) {
-        const adjustedX = e.x - elementsOffset.x;
-        const adjustedY = e.y - elementsOffset.y;
-        onStartInput(adjustedX, adjustedY);
-      }
-    })
-    .onChange(e => {
-      if (tool === Tools.PAN) {
-        setCurrentElementOffset({
-          x: e.translationX,
-          y: e.translationY,
-        });
-      } else {
-        const adjustedX = e.x - elementsOffset.x;
-        const adjustedY = e.y - elementsOffset.y;
-        onMoveInput(adjustedX, adjustedY);
-      }
-    })
-    .onEnd(e => {
-      setPreviousPoint(null);
-      if (tool !== Tools.PAN) {
-        const adjustedX = e.x - elementsOffset.x;
-        const adjustedY = e.y - elementsOffset.y;
-        onEndInput(adjustedX, adjustedY);
-      } else {
-        setElementsOffset(prev => ({
-          x: prev.x + e.translationX,
-          y: prev.y + e.translationY,
-        }));
-        setCurrentElementOffset({ x: 0, y: 0 });
-      }
-    });
+  const [elementsOffset, setElementsOffset] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
 
-  // For mobile devices, two-finger pan gesture
-  const twoFingerPan = Gesture.Pan()
-    .runOnJS(true)
-    .minPointers(2) // Requires at least 2 fingers
-    .onChange(e => {
-      // Always pan when using two fingers, regardless of selected tool
-      setCurrentElementOffset({
-        x: e.translationX,
-        y: e.translationY,
-      });
-    })
-    .onEnd(e => {
-      setElementsOffset(prev => ({
-        x: prev.x + e.translationX,
-        y: prev.y + e.translationY,
-      }));
-      setCurrentElementOffset({ x: 0, y: 0 });
-    });
+  const colorScheme = useColorScheme();
 
-  const hover = Gesture.Hover()
-    .runOnJS(true)
-    .onBegin(e => {
-      const adjustedX = e.x - elementsOffset.x;
-      const adjustedY = e.y - elementsOffset.y;
-      setPreviousPoint(null);
-      setHoverPoint({ x: adjustedX, y: adjustedY });
-    })
-    .onChange(e => {
-      const adjustedX = e.x - elementsOffset.x;
-      const adjustedY = e.y - elementsOffset.y;
+  const { id } = useLocalSearchParams();
 
-      setPreviousPoint(hoverPoint);
-      if (tool === Tools.HIGHLIGHTER && previousPoint) {
-        const dx = adjustedX - previousPoint.x;
-        const dy = adjustedY - previousPoint.y;
-        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-          const angle = Math.atan2(dy, dx);
-          setHighlighterAngle(angle);
-        }
-      }
+  const [title, setTitle] = useState(id?.toString() ?? '');
 
-      setHoverPoint({ x: adjustedX, y: adjustedY });
-    })
-    .onEnd(() => {
-      setHoverPoint(null);
-      setPreviousPoint(null);
-    });
+  const {
+    isPermissionModalVisible,
+    isPermanentlyDenied,
+    requestPermission,
+    openSettings,
+    hidePermissionModal,
+  } = useMediaLibraryPermissions();
+
+  const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
+
+  const [background, setBackground] = useState<Background>({
+    color: '#F2F2F2',
+    texture: false,
+    gridSize: 20,
+    textureOpacity: 0.1,
+  });
 
   useEffect(() => {
-    if (socket) {
-      socket.emit(
-        'joinRoom',
-        { name: id },
-        (response: { success: any; roomId: any; paths: any }) => {
-          console.log('Room:', response);
-          if (response.success) {
-            let paths = response.paths;
-            if (paths) {
-              // Update paths in the canvas
-              // setPaths(newPaths);
-            } else {
-              console.log('No paths received');
-            }
-          }
-        }
-      );
-    }
-  }, [socket]);
+    setSocket(io('http://localhost:3000/room'));
 
-  const preventContextMenu = useCallback((e: any) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    return false;
+    return () => {
+      socket?.emit('leaveRoom', { roomId: id });
+    };
   }, []);
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      document.addEventListener('contextmenu', preventContextMenu);
-      return () => {
-        document.removeEventListener('contextmenu', preventContextMenu);
-      };
-    }
-  }, [preventContextMenu]);
 
-  /// Save canvas as image
   const saveCanvasAsImage = useCallback(async () => {
     try {
-      if (!ref.current) {
+      if (!skiaCanvasRef.current) {
         throw new Error('Canvas reference is not available');
       }
-      const image = ref.current.makeImageSnapshot();
+      const image = skiaCanvasRef.current.makeImageSnapshot();
       if (!image) {
         throw new Error('Failed to capture canvas snapshot');
       }
-      // Get base64 encoding
       const base64 = image.encodeToBase64();
       if (!base64) {
         throw new Error('Failed to encode image to base64');
       }
       if (Platform.OS === 'web') {
-        // Web implementation - browser download dialog
         const link = document.createElement('a');
         link.href = `data:image/png;base64,${base64}`;
         link.download = `jraw-canvas-${new Date().toISOString().slice(0, 10)}.png`;
@@ -341,7 +162,6 @@ export default function CanvasScreen() {
         document.body.removeChild(link);
         alert('Image downloaded');
       } else {
-        // Mobile implementation - save to gallery
         const status = await requestPermission();
         if (status !== 'granted') {
           alert('Permission denied. Cannot save image.');
@@ -355,7 +175,7 @@ export default function CanvasScreen() {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        const asset = await MediaLibrary.saveToLibraryAsync(fileUri);
+        await MediaLibrary.saveToLibraryAsync(fileUri);
 
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
 
@@ -367,13 +187,19 @@ export default function CanvasScreen() {
       console.error('Failed to save image:', error);
       alert(`Failed to save image: ${error || 'Unknown error'}`);
     }
-  }, [ref, requestPermission]);
+  }, [skiaCanvasRef, requestPermission]);
 
   const pickImage = useCallback(async () => {
+    const size = canvasComponentRef.current?.getCanvasSize();
+    if (!size || size.width === 0 || size.height === 0) {
+      console.warn('Canvas size not available via ref yet.');
+      return;
+    }
+    const { width: canvasWidth, height: canvasHeight } = size;
+
     const status = await requestPermission();
     if (status !== 'granted') return;
 
-    // Initial image selection with low quality
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images',
       allowsEditing: false,
@@ -384,7 +210,6 @@ export default function CanvasScreen() {
 
     if (!result.canceled) {
       try {
-        // Get original dimensions
         const imageAsset = result.assets[0];
         const imageWidth = imageAsset.width || 100;
         const imageHeight = imageAsset.height || 100;
@@ -393,14 +218,12 @@ export default function CanvasScreen() {
           processImageForCanvas(
             imageWidth,
             imageHeight,
-            canvasSize.width || 300,
-            canvasSize.height || 300
+            canvasWidth || 300,
+            canvasHeight || 300
           );
 
-        // Center the image on the visible portion of the canvas
-        const centerX = (canvasSize.width - finalWidth) / 2 - elementsOffset.x;
-        const centerY =
-          (canvasSize.height - finalHeight) / 2 - elementsOffset.y;
+        const centerX = (canvasWidth - finalWidth) / 2 - elementsOffset.x;
+        const centerY = (canvasHeight - finalHeight) / 2 - elementsOffset.y;
 
         const imageElement = {
           uri: imageAsset.uri,
@@ -409,61 +232,16 @@ export default function CanvasScreen() {
           height: finalHeight,
         };
 
-        addExternalElement(imageElement, Tools.IMAGE);
+        canvasComponentRef.current?.addExternalElement(
+          imageElement,
+          Tools.IMAGE
+        );
       } catch (error) {
         console.error('Error processing image:', error);
       }
     }
-  }, [canvasSize, elementsOffset, addExternalElement, requestPermission]);
+  }, [elementsOffset, requestPermission]);
 
-  const pickBackgroundColor = useCallback(() => {
-    setColorPickerVisible(true);
-  }, []);
-
-  const getElement = useCallback(
-    (canvasElement: CanvasElement) => {
-      const { id, element, tool } = canvasElement;
-      switch (tool) {
-        case Tools.PEN:
-        case Tools.HIGHLIGHTER:
-        case Tools.ERASER:
-          (element as CanvasElements.Path).capStyle = ToolData[tool].cap;
-          (element as CanvasElements.Path).blendMode = ToolData[tool].blendMode;
-          (element as CanvasElements.Path).strokeWidth =
-            ToolData[tool].sizeTransform(strokeWidth);
-          (element as CanvasElements.Path).strokeColor =
-            ToolData[tool].colorTransform(color);
-          return <Path key={id} pathData={element as CanvasElements.Path} />;
-        case Tools.LINE:
-          return <Line key={id} lineData={element as CanvasElements.Line} />;
-        case Tools.RECTANGLE:
-          return (
-            <Rect key={id} rectData={element as CanvasElements.Rectangle} />
-          );
-        case Tools.CIRCLE:
-          return (
-            <Circle key={id} circleData={element as CanvasElements.Circle} />
-          );
-        case Tools.TRIANGLE:
-          return (
-            <Triangle
-              key={id}
-              triangleData={element as CanvasElements.Triangle}
-            />
-          );
-        case Tools.STAR:
-          return <Star key={id} starData={element as CanvasElements.Star} />;
-        case Tools.TEXT:
-          return <Text key={id} textData={element as CanvasElements.Text} />;
-        case Tools.IMAGE:
-          return <Image key={id} imageData={element as CanvasElements.Image} />;
-        default:
-          console.warn(`Unhandled tool type: ${tool}`);
-          return null;
-      }
-    },
-    [strokeWidth, color]
-  );
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -486,223 +264,33 @@ export default function CanvasScreen() {
           headerTintColor: colorScheme === 'dark' ? 'white' : 'black',
         }}
       />
-      <GestureDetector
-        gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
-      >
-        <Canvas
-          style={{ flex: 1, backgroundColor: backgroundColor }}
-          ref={ref}
-          onLayout={event => {
-            const { width, height } = event.nativeEvent.layout;
-            setCanvasSize({ width, height });
-          }}
-        >
-          <Fill color={backgroundColor} />
-
-          {backgroundTexture && (
-            <Group
-              transform={[
-                {
-                  translate: [
-                    elementsOffset.x +
-                      (tool === Tools.PAN ? currentElementOffset.x : 0),
-                    elementsOffset.y +
-                      (tool === Tools.PAN ? currentElementOffset.y : 0),
-                  ],
-                },
-              ]}
-            >
-              {(() => {
-                // Calculate grid bounds
-                const startY =
-                  Math.floor(
-                    (-elementsOffset.y - canvasSize.height) / backgroundGridSize
-                  ) * backgroundGridSize;
-                const endY =
-                  Math.ceil(
-                    (-elementsOffset.y + 2 * canvasSize.height) /
-                      backgroundGridSize
-                  ) * backgroundGridSize;
-
-                const startX =
-                  Math.floor(
-                    (-elementsOffset.x - canvasSize.width) / backgroundGridSize
-                  ) * backgroundGridSize;
-                const endX =
-                  Math.ceil(
-                    (-elementsOffset.x + 2 * canvasSize.width) /
-                      backgroundGridSize
-                  ) * backgroundGridSize;
-
-                // Calculate how many lines we need
-                const numHorizontalLines =
-                  Math.ceil((endY - startY) / backgroundGridSize) + 1;
-                const numVerticalLines =
-                  Math.ceil((endX - startX) / backgroundGridSize) + 1;
-
-                // Create lines
-                const lines = [];
-
-                // Horizontal lines
-                for (let i = 0; i < numHorizontalLines; i++) {
-                  const y = startY + i * backgroundGridSize;
-                  lines.push(
-                    <Line
-                      key={`h-${y}`}
-                      lineData={{
-                        startPoint: { x: startX - 5000, y: y },
-                        endPoint: { x: endX + 5000, y: y },
-                        strokeWidth: 1,
-                        strokeColor: `rgba(0,0,0,${backgroundTextureOpacity})`,
-                      }}
-                    />
-                  );
-                }
-
-                // Vertical lines
-                for (let i = 0; i < numVerticalLines; i++) {
-                  const x = startX + i * backgroundGridSize;
-                  lines.push(
-                    <Line
-                      key={`v-${x}`}
-                      lineData={{
-                        startPoint: { x: x, y: startY - 5000 },
-                        endPoint: { x: x, y: endY + 5000 },
-                        strokeWidth: 1,
-                        strokeColor: `rgba(0,0,0,${backgroundTextureOpacity})`,
-                      }}
-                    />
-                  );
-                }
-
-                return lines;
-              })()}
-            </Group>
-          )}
-
-          <Group
-            transform={[
-              {
-                translate: [
-                  elementsOffset.x +
-                    (tool === Tools.PAN ? currentElementOffset.x : 0),
-                  elementsOffset.y +
-                    (tool === Tools.PAN ? currentElementOffset.y : 0),
-                ],
-              },
-            ]}
-          >
-            {useMemo(
-              () =>
-                elements.map((canvasElement: CanvasElement) =>
-                  getElement(canvasElement)
-                ),
-              [elements]
-            )}
-
-            {currentElement && getElement(currentElement)}
-
-            {selection && selection.width !== 0 && selection.height !== 0 && (
-              <>
-                {/* Selection area with multiple Paint layers */}
-                <SkRect
-                  x={selection.x}
-                  y={selection.y}
-                  width={selection.width}
-                  height={selection.height}
-                  style="stroke"
-                >
-                  {/* Background fill */}
-                  <Paint color="rgba(0, 134, 223, 0.1)" />
-
-                  {/* Dashed border */}
-                  <Paint
-                    color="rgba(0, 134, 223, 0.8)"
-                    style="stroke"
-                    strokeWidth={1.5}
-                  />
-                </SkRect>
-
-                {/* Corner handles */}
-                {[
-                  { x: selection.x, y: selection.y }, // top-left
-                  { x: selection.x + selection.width, y: selection.y }, // top-right
-                  { x: selection.x, y: selection.y + selection.height }, // bottom-left
-                  {
-                    x: selection.x + selection.width,
-                    y: selection.y + selection.height,
-                  }, // bottom-right
-                ].map((point, i) => (
-                  <RoundedRect
-                    key={`handle-${i}`}
-                    x={point.x - 4}
-                    y={point.y - 4}
-                    width={8}
-                    height={8}
-                    r={2}
-                  >
-                    <Paint color="white" />
-                    <Paint
-                      color="rgba(0, 134, 223, 1)"
-                      style="stroke"
-                      strokeWidth={1}
-                    />
-                  </RoundedRect>
-                ))}
-              </>
-            )}
-
-            {/* Brush size hover indicator */}
-            {hoverPoint && (
-              <>
-                {[Tools.PEN, Tools.ERASER].includes(tool) && (
-                  <Circle
-                    circleData={{
-                      center: hoverPoint,
-                      radius: strokeWidth / 2,
-                      strokeWidth: 1,
-                      strokeColor:
-                        tool === Tools.ERASER
-                          ? 'rgba(255, 0, 0, 0.8)'
-                          : 'rgba(0, 134, 223, 0.8)',
-                    }}
-                  />
-                )}
-
-                {/* Square indicator for Highlighter with rotation */}
-                {tool === Tools.HIGHLIGHTER && (
-                  <Group
-                    transform={[
-                      { translateX: hoverPoint.x },
-                      { translateY: hoverPoint.y },
-                      { rotate: highlighterAngle },
-                      { translateX: -hoverPoint.x },
-                      { translateY: -hoverPoint.y },
-                    ]}
-                  >
-                    <SkRect
-                      x={hoverPoint.x - (strokeWidth + 10) / 2}
-                      y={hoverPoint.y - (strokeWidth + 10) / 2}
-                      width={strokeWidth + 10}
-                      height={strokeWidth + 10}
-                      style="stroke"
-                    >
-                      <Paint color="rgba(0, 0, 0, 0)" />
-                    </SkRect>
-                  </Group>
-                )}
-              </>
-            )}
-          </Group>
-        </Canvas>
-      </GestureDetector>
+      <CanvasComponent
+        ref={canvasComponentRef}
+        canvasRef={skiaCanvasRef}
+        tool={tool}
+        strokeWidth={strokeWidth}
+        color={color}
+        background={background}
+        elementsOffset={elementsOffset}
+        setElementsOffset={setElementsOffset}
+        onTapText={(x: number, y: number) => {
+          setTextPosition({ x, y });
+          setTextModalVisible(true);
+        }}
+      />
 
       <View style={styles.controlsContainer}>
         <View style={styles.buttonRow}>
-          <TouchableOpacity onPress={undo} style={styles.controlButton}>
+          <TouchableOpacity
+            onPress={() => canvasComponentRef.current?.undo()}
+            style={styles.controlButton}
+          >
             <MaterialIcons name="undo" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={redo} style={styles.controlButton}>
+          <TouchableOpacity
+            onPress={() => canvasComponentRef.current?.redo()}
+            style={styles.controlButton}
+          >
             <MaterialIcons name="redo" size={24} color="black" />
           </TouchableOpacity>
           <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
@@ -715,7 +303,8 @@ export default function CanvasScreen() {
             <MaterialIcons name="save" size={24} color="black" />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={pickBackgroundColor}
+            // Open the color picker modal
+            onPress={() => setColorPickerVisible(true)}
             style={styles.controlButton}
           >
             <MaterialCommunityIcons
@@ -725,7 +314,7 @@ export default function CanvasScreen() {
             />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={clear}
+            onPress={() => canvasComponentRef.current?.clear()}
             style={[styles.controlButton, styles.clearButton]}
           >
             <FontAwesome name="trash" size={24} color="black" />
@@ -733,22 +322,24 @@ export default function CanvasScreen() {
         </View>
         <Toolbar
           tool={tool}
-          setTool={setTool}
+          setTool={(newTool: Tools) => {
+            setTool(newTool);
+          }}
           strokeWidth={strokeWidth}
           setStrokeWidth={setStrokeWidth}
           setColor={setSelectedColor}
         />
       </View>
 
-      {/* Text input modal */}
       <TextModal
         visible={textModalVisible}
         position={textPosition}
-        onCancel={() => {
-          setTextModalVisible(false);
-        }}
-        onSubmit={textElement => {
-          addExternalElement(textElement, Tools.TEXT);
+        onCancel={() => setTextModalVisible(false)}
+        onSubmit={(textElement: CanvasElements.Text) => {
+          canvasComponentRef.current?.addExternalElement(
+            textElement,
+            Tools.TEXT
+          );
           setTextModalVisible(false);
         }}
         initialText={{
@@ -757,7 +348,6 @@ export default function CanvasScreen() {
         }}
       />
 
-      {/* Permissions modal */}
       <Modal
         transparent={true}
         visible={isPermissionModalVisible}
@@ -800,23 +390,11 @@ export default function CanvasScreen() {
         </ThemedView>
       </Modal>
 
-      {/* Background Color Picker Modal */}
       <ColorPickerModal
         visible={colorPickerVisible}
-        initialColor={backgroundColor}
-        initialTexture={backgroundTexture}
-        initialGridSize={backgroundGridSize}
-        initialTextureOpacity={backgroundTextureOpacity}
-        onSelectColor={(
-          color,
-          texture = false,
-          gridSize = 20,
-          opacity = 0.1
-        ) => {
-          setBackgroundColor(color);
-          setBackgroundTexture(texture);
-          setBackgroundGridSize(gridSize);
-          setBackgroundTextureOpacity(opacity);
+        initialBackground={background}
+        onSelectBackground={(newBackground: Background) => {
+          setBackground(newBackground);
           setColorPickerVisible(false);
         }}
         onCancel={() => setColorPickerVisible(false)}
@@ -919,7 +497,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     borderWidth: 0,
     padding: 0,
-    // Use Platform specific styling for outline
     ...(Platform.OS === 'web' && {
       outlineStyle: 'none',
     }),

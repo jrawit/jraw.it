@@ -31,6 +31,7 @@ export namespace CanvasElements {
     point: Point;
     width: number;
     height: number;
+    round?: number;
   } & StrokeProps &
     FillProps;
 
