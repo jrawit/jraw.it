@@ -51,7 +51,7 @@ export const Image: React.FC<ImageProps> = React.memo(({ imageData }) => {
   );
 });
 
-export const renderImage = (
+export const renderImage = async (
   canvas: SkCanvas,
   paint: SkPaint,
   imageData: CanvasElements.Image
@@ -84,37 +84,35 @@ export const renderImage = (
     }
   };
 
-  if (Platform.OS !== 'web') {
-    FileSystem.readAsStringAsync(uriString, {
-      encoding: FileSystem.EncodingType.Base64,
-    })
-      .then(processImage)
-      .catch(error => {
-        console.error('Error reading image file:', error);
+  try {
+    if (Platform.OS !== 'web') {
+      // Non-web implementation using FileSystem
+      const base64 = await FileSystem.readAsStringAsync(uriString, {
+        encoding: FileSystem.EncodingType.Base64,
       });
-  } else {
-    // Web implementation using fetch and FileReader
-    fetch(uriString)
-      .then(response => response.blob())
-      .then(blob => {
+      processImage(base64);
+    } else {
+      // Web implementation using fetch and FileReader
+      const response = await fetch(uriString);
+      const blob = await response.blob();
+
+      // Convert blob to base64 using FileReader
+      const base64data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64data = reader.result as string;
-          // Remove the "data:image/...;base64," prefix
-          const base64 = base64data.split(',')[1];
-          if (base64) {
-            processImage(base64);
-          } else {
-            console.error('Failed to extract base64 data from data URL.');
-          }
-        };
-        reader.onerror = error => {
-          console.error('FileReader error:', error);
-        };
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
         reader.readAsDataURL(blob);
-      })
-      .catch(error => {
-        console.error('Error fetching image for web:', error);
       });
+
+      // Remove the "data:image/...;base64," prefix
+      const base64 = base64data.split(',')[1];
+      if (base64) {
+        processImage(base64);
+      } else {
+        console.error('Failed to extract base64 data from data URL.');
+      }
+    }
+  } catch (error) {
+    console.error('Error processing image:', error);
   }
 };

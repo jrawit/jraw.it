@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
 import * as MediaLibrary from 'expo-media-library';
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { cloneDeep } from 'lodash';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
@@ -150,9 +151,7 @@ export default function CanvasScreen() {
 
     let image;
 
-    let elements = structuredClone(
-      canvasComponentRef.current?.getElements() ?? []
-    );
+    let elements = cloneDeep(canvasComponentRef.current?.getElements() ?? []);
     if (!elements) {
       console.warn('No elements found on canvas. Capturing empty canvas.');
       image = skiaCanvasRef?.current?.makeImageSnapshot();

@@ -100,7 +100,7 @@ const drawElementOntoCanvas = async (
       const imgData = elementData as CanvasElements.Image;
       imgData.point.x += offsetX;
       imgData.point.y += offsetY;
-      renderImage(canvas, paint, imgData);
+      await renderImage(canvas, paint, imgData);
       break;
 
     default:
