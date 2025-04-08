@@ -1,5 +1,12 @@
 import { CanvasElements } from '@/constants/CanvasElement';
-import { Line as SkLine, vec } from '@shopify/react-native-skia';
+import {
+  PaintStyle,
+  SkCanvas,
+  Skia,
+  Line as SkLine,
+  SkPaint,
+  vec,
+} from '@shopify/react-native-skia';
 import React from 'react';
 
 interface LineProps {
@@ -19,3 +26,17 @@ export const Line: React.FC<LineProps> = React.memo(({ lineData }) => {
     />
   );
 });
+
+export const renderLine = (
+  canvas: SkCanvas,
+  paint: SkPaint,
+  lineData: CanvasElements.Line
+) => {
+  const { startPoint, endPoint, strokeColor, strokeWidth } = lineData;
+
+  paint.setStyle(PaintStyle.Stroke);
+  paint.setStrokeWidth(strokeWidth);
+  paint.setColor(Skia.Color(strokeColor));
+
+  canvas.drawLine(startPoint.x, startPoint.y, endPoint.x, endPoint.y, paint);
+};

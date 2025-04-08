@@ -7,7 +7,9 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { CanvasElements } from '@/constants/CanvasElement';
 import { processImageForCanvas } from '@/hooks/tool-handlers';
+import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
+import { renderElementsOffscreen } from '@/utils/offscreenRenderer';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -139,54 +141,71 @@ export default function CanvasScreen() {
     };
   }, []);
 
+  const fontManager = useFontManager();
+
   const saveCanvasAsImage = useCallback(async () => {
-    try {
-      if (!skiaCanvasRef.current) {
-        throw new Error('Canvas reference is not available');
-      }
-      const image = skiaCanvasRef.current.makeImageSnapshot();
-      if (!image) {
-        throw new Error('Failed to capture canvas snapshot');
-      }
-      const base64 = image.encodeToBase64();
-      if (!base64) {
-        throw new Error('Failed to encode image to base64');
-      }
-      if (Platform.OS === 'web') {
-        const link = document.createElement('a');
-        link.href = `data:image/png;base64,${base64}`;
-        link.download = `jraw-canvas-${new Date().toISOString().slice(0, 10)}.png`;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        alert('Image downloaded');
-      } else {
-        const status = await requestPermission();
-        if (status !== 'granted') {
-          alert('Permission denied. Cannot save image.');
-          return;
-        }
-
-        const fileName = `jraw-canvas-${new Date().getTime()}.png`;
-        const fileUri = FileSystem.documentDirectory + fileName;
-
-        await FileSystem.writeAsStringAsync(fileUri, base64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        await MediaLibrary.saveToLibraryAsync(fileUri);
-
-        await FileSystem.deleteAsync(fileUri, { idempotent: true });
-
-        alert('Image saved to gallery');
-      }
-
-      console.log('Image saved successfully');
-    } catch (error) {
-      console.error('Failed to save image:', error);
-      alert(`Failed to save image: ${error || 'Unknown error'}`);
+    if (!skiaCanvasRef.current) {
+      throw new Error('Canvas reference is not available');
     }
+
+    let image;
+
+    let elements = structuredClone(
+      canvasComponentRef.current?.getElements() ?? []
+    );
+    if (!elements) {
+      console.warn('No elements found on canvas. Capturing empty canvas.');
+      image = skiaCanvasRef?.current?.makeImageSnapshot();
+    } else {
+      console.log('FontManager', fontManager);
+
+      image = await renderElementsOffscreen(
+        elements,
+        fontManager,
+        10,
+        background.color
+      );
+    }
+
+    if (!image) {
+      throw new Error('Failed to create image snapshot');
+    }
+
+    const base64 = image.encodeToBase64();
+    if (!base64) {
+      throw new Error('Failed to encode image to base64');
+    }
+    if (Platform.OS === 'web') {
+      const link = document.createElement('a');
+      link.href = `data:image/png;base64,${base64}`;
+      link.download = `jraw-canvas-${new Date().toISOString().slice(0, 10)}.png`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      alert('Image downloaded');
+    } else {
+      const status = await requestPermission();
+      if (status !== 'granted') {
+        alert('Permission denied. Cannot save image.');
+        return;
+      }
+
+      const fileName = `jraw-canvas-${new Date().getTime()}.png`;
+      const fileUri = FileSystem.documentDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      await MediaLibrary.saveToLibraryAsync(fileUri);
+
+      await FileSystem.deleteAsync(fileUri, { idempotent: true });
+
+      alert('Image saved to gallery');
+    }
+
+    console.log('Image saved successfully');
   }, [skiaCanvasRef, requestPermission]);
 
   const pickImage = useCallback(async () => {

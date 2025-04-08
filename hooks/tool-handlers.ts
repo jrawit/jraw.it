@@ -1,22 +1,22 @@
 import { CanvasElements } from '@/constants/CanvasElement';
 import { cloneDeep } from 'lodash';
-import { Tools } from '../constants/Tools';
+import { ToolData, Tools } from '../constants/Tools';
 import { CanvasElement } from './useCanvas';
 
 type ToolHandler = {
-  initElement: (
+  initElement?: (
     x: number,
     y: number,
     strokeWidth: number,
     color: string,
     generateId: () => string
   ) => CanvasElement;
-  updateElement: (
+  updateElement?: (
     element: CanvasElement,
     x: number,
     y: number
   ) => CanvasElement;
-  moveElement: (
+  moveElement?: (
     element: CanvasElement,
     deltaX: number,
     deltaY: number
@@ -29,8 +29,10 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       id: generateId(),
       element: {
         points: [{ x, y }],
-        strokeWidth,
-        strokeColor: color,
+        strokeWidth: ToolData[Tools.PEN].sizeTransform(strokeWidth),
+        strokeColor: ToolData[Tools.PEN].colorTransform(color),
+        capStyle: ToolData[Tools.PEN].cap,
+        blendMode: ToolData[Tools.PEN].blendMode,
       } as CanvasElements.Path,
       tool: Tools.PEN,
     }),
@@ -55,8 +57,10 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       id: generateId(),
       element: {
         points: [{ x, y }],
-        strokeWidth,
-        strokeColor: color,
+        strokeWidth: ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth),
+        strokeColor: ToolData[Tools.HIGHLIGHTER].colorTransform(color),
+        capStyle: ToolData[Tools.HIGHLIGHTER].cap,
+        blendMode: ToolData[Tools.HIGHLIGHTER].blendMode,
       } as CanvasElements.Path,
       tool: Tools.HIGHLIGHTER,
     }),
@@ -81,8 +85,10 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       id: generateId(),
       element: {
         points: [{ x, y }],
-        strokeWidth,
-        strokeColor: color,
+        strokeWidth: ToolData[Tools.ERASER].sizeTransform(strokeWidth),
+        strokeColor: ToolData[Tools.ERASER].colorTransform(color),
+        capStyle: ToolData[Tools.ERASER].cap,
+        blendMode: ToolData[Tools.ERASER].blendMode,
       } as CanvasElements.Path,
       tool: Tools.ERASER,
     }),
@@ -259,21 +265,6 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
     },
   },
   [Tools.TEXT]: {
-    initElement: (x, y, strokeWidth, color, generateId) => ({
-      id: generateId(),
-      element: {
-        text: '', // Empty text initially - will be filled by modal input
-        point: { x, y },
-        fontFamily: 'Roboto',
-        fontSize: strokeWidth * 5,
-        color: color,
-      } as CanvasElements.Text,
-      tool: Tools.TEXT,
-    }),
-    updateElement: (element, x, y) => {
-      // Text doesn't really need updating during drawing as it's handled by modal
-      return element;
-    },
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const text = newElement.element as CanvasElements.Text;
@@ -285,20 +276,6 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
     },
   },
   [Tools.IMAGE]: {
-    initElement: (x, y, strokeWidth, color, generateId) => ({
-      id: generateId(),
-      element: {
-        uri: '', // Empty URI initially - will be filled after image selection
-        point: { x, y },
-        width: 0,
-        height: 0,
-      } as CanvasElements.Image,
-      tool: Tools.IMAGE,
-    }),
-    updateElement: (element, x, y) => {
-      // Images don't need updating during drawing
-      return element;
-    },
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const image = newElement.element as CanvasElements.Image;

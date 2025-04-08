@@ -9,6 +9,7 @@ import { Triangle } from '@/components/tools/Triangle';
 import { CanvasElements } from '@/constants/CanvasElement';
 import { ToolData, Tools } from '@/constants/Tools';
 import { CanvasElement, useCanvas } from '@/hooks/useCanvas';
+import { useFontManager } from '@/hooks/useFontManager';
 import { Canvas, Fill, Group, SkiaDomView } from '@shopify/react-native-skia';
 import React, {
   forwardRef,
@@ -29,6 +30,7 @@ interface Background {
 
 export interface CanvasComponentHandle {
   getCanvasSize: () => { width: number; height: number };
+  getElements: () => CanvasElement[];
   undo: () => void;
   redo: () => void;
   clear: () => void;
@@ -78,6 +80,8 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       y: number;
     } | null>(null);
 
+    const fontManager = useFontManager();
+
     const {
       elements,
       currentElement,
@@ -94,10 +98,12 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       tool,
       strokeWidth,
       color,
+      fontManager,
     });
 
     useImperativeHandle(ref, () => ({
       getCanvasSize: () => canvasSize,
+      getElements: () => elements,
       undo,
       redo,
       clear,
@@ -216,13 +222,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
           case Tools.PEN:
           case Tools.HIGHLIGHTER:
           case Tools.ERASER:
-            const pathElement = element as CanvasElements.Path;
-            const toolData = ToolData[elementTool];
-            pathElement.capStyle = toolData.cap;
-            pathElement.blendMode = toolData.blendMode;
-            pathElement.strokeWidth = toolData.sizeTransform(strokeWidth);
-            pathElement.strokeColor = toolData.colorTransform(color);
-            return <Path key={id} pathData={pathElement} />;
+            return <Path key={id} pathData={element as CanvasElements.Path} />;
           case Tools.LINE:
             return <Line key={id} lineData={element as CanvasElements.Line} />;
           case Tools.RECTANGLE:
