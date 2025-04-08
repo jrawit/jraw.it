@@ -1,7 +1,11 @@
 import { CanvasElements } from '@/constants/CanvasElement';
 import {
+  Paint,
+  PaintStyle,
+  SkCanvas,
   Circle as SkCircle,
-  Paint as SkPaint,
+  Skia,
+  SkPaint,
 } from '@shopify/react-native-skia';
 import React from 'react';
 
@@ -14,8 +18,28 @@ export const Circle: React.FC<CircleProps> = React.memo(({ circleData }) => {
 
   return (
     <SkCircle cx={center.x} cy={center.y} r={radius} style="stroke">
-      <SkPaint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
-      {fillColor && <SkPaint color={fillColor} />}
+      <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
+      {fillColor && <Paint color={fillColor} />}
     </SkCircle>
   );
 });
+
+export const renderCircle = (
+  canvas: SkCanvas,
+  paint: SkPaint,
+  circleData: CanvasElements.Circle
+) => {
+  const { center, radius, strokeColor, strokeWidth, fillColor } = circleData;
+  // Draw fill first
+  if (fillColor) {
+    paint.setStyle(PaintStyle.Fill);
+    paint.setColor(Skia.Color(fillColor));
+    canvas.drawCircle(center.x, center.y, radius, paint);
+  }
+
+  // Draw stroke
+  paint.setStyle(PaintStyle.Stroke);
+  paint.setStrokeWidth(strokeWidth);
+  paint.setColor(Skia.Color(strokeColor));
+  canvas.drawCircle(center.x, center.y, radius, paint);
+};

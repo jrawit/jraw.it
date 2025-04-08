@@ -1,6 +1,10 @@
 import { CanvasElements } from '@/constants/CanvasElement';
 import {
-  Paint as SkPaint,
+  Paint,
+  PaintStyle,
+  SkCanvas,
+  Skia,
+  SkPaint,
   Rect as SkRect,
   RoundedRect as SkRoundedRect,
 } from '@shopify/react-native-skia';
@@ -25,12 +29,8 @@ export const Rect: React.FC<RectProps> = React.memo(
           r={round}
           style="stroke"
         >
-          <SkPaint
-            color={strokeColor}
-            style="stroke"
-            strokeWidth={strokeWidth}
-          />
-          {fillColor && <SkPaint color={fillColor} />}
+          <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
+          {fillColor && <Paint color={fillColor} />}
         </SkRoundedRect>
       );
     }
@@ -43,9 +43,53 @@ export const Rect: React.FC<RectProps> = React.memo(
         height={height}
         style="stroke"
       >
-        <SkPaint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
-        {fillColor && <SkPaint color={fillColor} />}
+        <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
+        {fillColor && <Paint color={fillColor} />}
       </SkRect>
     );
   }
 );
+
+export const renderRect = (
+  canvas: SkCanvas,
+  paint: SkPaint,
+  rectData: CanvasElements.Rectangle
+) => {
+  const { point, width, height, round, strokeColor, strokeWidth, fillColor } =
+    rectData;
+
+  // Draw fill first
+  if (fillColor) {
+    paint.setStyle(PaintStyle.Fill);
+    paint.setColor(Skia.Color(fillColor));
+
+    if (round) {
+      const skRRect = Skia.RRectXY(
+        Skia.XYWHRect(point.x, point.y, width, height),
+        round,
+        round
+      );
+      canvas.drawRRect(skRRect, paint);
+    } else {
+      const skRect = Skia.XYWHRect(point.x, point.y, width, height);
+      canvas.drawRect(skRect, paint);
+    }
+  }
+
+  // Draw stroke
+  paint.setStyle(PaintStyle.Stroke);
+  paint.setStrokeWidth(strokeWidth);
+  paint.setColor(Skia.Color(strokeColor));
+
+  if (round) {
+    const skRRect = Skia.RRectXY(
+      Skia.XYWHRect(point.x, point.y, width, height),
+      round,
+      round
+    );
+    canvas.drawRRect(skRRect, paint);
+  } else {
+    const skRect = Skia.XYWHRect(point.x, point.y, width, height);
+    canvas.drawRect(skRect, paint);
+  }
+};

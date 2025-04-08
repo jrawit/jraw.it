@@ -106,7 +106,7 @@ export const useCanvas = ({
       setSelection(null);
 
       // Use the tool handler to create the element
-      if (toolHandlers[tool]) {
+      if (toolHandlers[tool] && toolHandlers[tool].initElement) {
         const newElement = toolHandlers[tool].initElement(
           x,
           y,
@@ -143,23 +143,28 @@ export const useCanvas = ({
         });
 
         // Update element positions based on their original positions
-        setElements(
-          originalElements.map(originalElement => {
-            if (
-              selection.ids.includes(originalElement.id) &&
-              toolHandlers[originalElement.tool]?.moveElement
-            ) {
-              return toolHandlers[originalElement.tool]!.moveElement(
-                originalElement,
-                deltaX,
-                deltaY
-              );
-            }
-            return originalElement;
-          })
-        );
+        const updatedElements = originalElements
+          .map(element => {
+            // Check if the element is in the selection
+            if (!selection.ids.includes(element.id)) return null;
 
-        return;
+            const handler = toolHandlers[element.tool];
+            if (handler && handler.moveElement) {
+              return handler.moveElement(element, deltaX, deltaY);
+            }
+            return null;
+          })
+          .filter(Boolean) as CanvasElement[];
+
+        // Only update the elements that were moved by id
+        setElements(prev => {
+          const updatedMap = new Map(
+            updatedElements.map(element => [element.id, element])
+          );
+          return prev.map(element =>
+            updatedMap.has(element.id) ? updatedMap.get(element.id)! : element
+          );
+        });
       }
 
       // Rest of your existing code for other tools
@@ -179,7 +184,11 @@ export const useCanvas = ({
         return;
       }
 
-      if (currentElement && toolHandlers[tool]) {
+      if (
+        currentElement &&
+        toolHandlers[tool] &&
+        toolHandlers[tool].updateElement
+      ) {
         const updatedElement = toolHandlers[tool].updateElement(
           currentElement,
           x,
@@ -365,8 +374,6 @@ function handleSelectionEnd(
     normalizedSelection,
     fontManager
   );
-
-  console.log('Selected elements:', selectedElements);
 
   if (selectedElements.length === 0) {
     setSelection(null);
