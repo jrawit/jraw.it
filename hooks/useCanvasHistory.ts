@@ -1,5 +1,5 @@
-import { Selection } from '@/utils/selectionUtils';
 import { useCallback, useState } from 'react';
+import toolHandlers from './tool-handlers';
 import { CanvasElement } from './useCanvas';
 
 export type HistoryActionType =
@@ -9,18 +9,19 @@ export type HistoryActionType =
 
 export type HistoryAction = {
   type: HistoryActionType;
-  elementIds?: string[];
+  elementIds?: string[]; // Not used when adding elements
   elements?: CanvasElement[];
-  previousData?: CanvasElement[];
+  offset?: { x: number; y: number };
+  rotation?: number;
+  scale?: { x: number; y: number };
 };
 
 export const useCanvasHistory = (
   setElements: React.Dispatch<React.SetStateAction<CanvasElement[]>>,
-  setSelection: React.Dispatch<React.SetStateAction<Selection | null>>
+  clearSelection: () => void
 ) => {
   const [undoStack, setUndoStack] = useState<HistoryAction[]>([]);
   const [redoStack, setRedoStack] = useState<HistoryAction[]>([]);
-  const [selection, setSelectionState] = useState<Selection | null>(null);
 
   const addToHistory = useCallback((action: HistoryAction) => {
     setUndoStack(prev => [...prev, action]);
@@ -40,34 +41,36 @@ export const useCanvasHistory = (
         }
         break;
       case 'MODIFY_ELEMENT':
-        if (action.previousData) {
-          // Restore elements to their previous state
-          setElements(prev => {
-            // Start with all elements that weren't modified
-            const unmodifiedElements = prev.filter(
-              p => !action.elementIds?.includes(p.id)
-            );
-            // Add back the elements in their previous state
-            return [...unmodifiedElements, ...(action.previousData || [])];
-          });
+        if (action.elementIds && action.offset) {
+          // Restore the previous state of the modified elements
+          const idsToModify = action.elementIds;
+          const undoDeltaX = -action.offset.x;
+          const undoDeltaY = -action.offset.y;
+
+          setElements(prev =>
+            prev.map(el => {
+              if (idsToModify.includes(el.id)) {
+                // Find the appropriate tool handler for the element
+                const handler = toolHandlers[el.tool];
+                if (handler && handler.moveElement) {
+                  // Apply the inverse delta
+                  return handler.moveElement(el, undoDeltaX, undoDeltaY);
+                }
+              }
+              return el;
+            })
+          );
         }
         break;
       case 'DELETE_ELEMENT':
-        if (action.elements) {
-          // Restore deleted elements
-          setElements(prev => [...prev, ...(action.elements || [])]);
-        }
+        // Not actually used for now
         break;
     }
 
     setUndoStack(prev => prev.slice(0, -1));
     setRedoStack(prev => [...prev, action]);
-
-    // Instead of always clearing, just reset to null if currently has a value
-    if (selection) {
-      setSelection(null);
-    }
-  }, [undoStack, setElements, setSelection, selection]);
+    clearSelection();
+  }, [undoStack, setElements, clearSelection]);
 
   const redo = useCallback(() => {
     if (redoStack.length === 0) return;
@@ -84,40 +87,37 @@ export const useCanvasHistory = (
         }
         break;
       case 'MODIFY_ELEMENT':
-        if (action.elements) {
-          // Apply the modifications again
-          setElements(prev => {
-            // Start with all elements that weren't modified
-            const unmodifiedElements = prev.filter(
-              p => !action.elementIds?.includes(p.id)
-            );
-            // Add the modified elements
-            const modifiedElements = action.elements?.filter(e =>
-              action.elementIds?.includes(e.id)
-            );
-            return [...unmodifiedElements, ...(modifiedElements || [])];
-          });
+        if (action.elementIds && action.offset) {
+          // Restore the modified elements to their new positions
+          const idsToModify = action.elementIds;
+          const redoDeltaX = action.offset.x;
+          const redoDeltaY = action.offset.y;
+
+          setElements(prev =>
+            prev.map(el => {
+              if (idsToModify.includes(el.id)) {
+                // Find the appropriate tool handler for the element
+                const handler = toolHandlers[el.tool];
+                if (handler && handler.moveElement) {
+                  // Apply the delta
+                  return handler.moveElement(el, redoDeltaX, redoDeltaY);
+                }
+              }
+              return el;
+            })
+          );
         }
         break;
       case 'DELETE_ELEMENT':
-        if (action.elementIds) {
-          // Re-delete the elements
-          setElements(prev =>
-            prev.filter(p => !action.elementIds?.includes(p.id))
-          );
-        }
+        // Not actually used for now
         break;
     }
 
     // Move the action back to the undo stack
     setRedoStack(prev => prev.slice(0, -1));
     setUndoStack(prev => [...prev, action]);
-
-    // Instead of always clearing, just reset to null if currently has a value
-    if (selection) {
-      setSelection(null);
-    }
-  }, [redoStack, setElements, setSelection, selection]);
+    clearSelection();
+  }, [redoStack, setElements, clearSelection]);
 
   const clear = useCallback(() => {
     setUndoStack([]);

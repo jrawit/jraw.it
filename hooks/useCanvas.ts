@@ -1,10 +1,10 @@
 import { CanvasElements } from '@/constants/CanvasElement';
 import {
-  Selection as SelectionType,
+  Selection,
   calculateCombinedBoundingBox,
   findElementsInSelection,
 } from '@/utils/selectionUtils';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { Tools } from '../constants/Tools';
@@ -24,7 +24,7 @@ export type CanvasProps = {
   fontManager?: any;
 };
 
-export type Selection = SelectionType;
+type SelectionState = 'selecting' | 'moving' | 'selected' | null;
 
 export const useCanvas = ({
   tool,
@@ -37,18 +37,23 @@ export const useCanvas = ({
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(
     null
   );
-  const [selection, setSelection] = useState<Selection | null>(null);
 
-  const [moveOffset, setMoveOffset] = useState<{
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const selectionStateRef = useRef<SelectionState>(null);
+  const initialPointRef = useRef<{
     x: number;
     y: number;
-    originalSelectionX?: number;
-    originalSelectionY?: number;
   } | null>(null);
+  const initialSelectionRef = useRef<Selection | null>(null);
+  const inititalSelectionElementsRef = useRef<CanvasElement[]>([]);
 
-  const [originalElements, setOriginalElements] = useState<
-    CanvasElement[] | null
-  >(null);
+  const clearSelection = useCallback(() => {
+    setSelection(null);
+    selectionStateRef.current = null;
+    initialPointRef.current = null;
+    initialSelectionRef.current = null;
+    inititalSelectionElementsRef.current = [];
+  }, []);
 
   // History management
   const {
@@ -56,7 +61,7 @@ export const useCanvas = ({
     undo,
     redo,
     clear: clearHistory,
-  } = useCanvasHistory(setElements, setSelection);
+  } = useCanvasHistory(setElements, clearSelection);
 
   // ID generation
   const generateId = useCallback(() => uuidv4(), []);
@@ -68,29 +73,30 @@ export const useCanvas = ({
       if (
         tool === Tools.SELECT &&
         selection &&
-        selection.state === 'selected'
+        selectionStateRef.current === 'selected'
       ) {
-        // Check if click is inside the selection
         if (
           x >= selection.x &&
           x <= selection.x + selection.width &&
           y >= selection.y &&
           y <= selection.y + selection.height
         ) {
-          // Start moving the selection - store initial position AND original selection coordinates
-          setMoveOffset({
-            x,
-            y,
-            originalSelectionX: selection.x,
-            originalSelectionY: selection.y,
-          });
-          // Save original elements to reference during move
-          setOriginalElements([...elements]);
-          return;
+          // Set the initial point to the current position and the selection
+          initialPointRef.current = { x, y };
+          initialSelectionRef.current = selection;
+          inititalSelectionElementsRef.current = elements.filter(element =>
+            selection.ids.includes(element.id)
+          );
+          selectionStateRef.current = 'moving';
+        } else {
+          // Clicked outside the selected area, clear selection
+          clearSelection();
         }
+
+        return;
       }
 
-      // Rest of existing code
+      // Start new selection
       if (tool === Tools.SELECT) {
         setSelection({
           ids: [],
@@ -98,12 +104,12 @@ export const useCanvas = ({
           y,
           width: 0,
           height: 0,
-          state: 'selecting',
         });
+        selectionStateRef.current = 'selecting';
         return;
       }
 
-      setSelection(null);
+      clearSelection();
 
       // Use the tool handler to create the element
       if (toolHandlers[tool] && toolHandlers[tool].initElement) {
@@ -122,66 +128,62 @@ export const useCanvas = ({
 
   const onMoveInput = useCallback(
     (x: number, y: number) => {
-      // If we're moving a selection
-      if (moveOffset && selection && originalElements) {
-        const deltaX = x - moveOffset.x;
-        const deltaY = y - moveOffset.y;
+      // If we're moving or selecting
+      if (selection && selectionStateRef.current) {
+        if (selectionStateRef.current === 'selecting') {
+          // Update the selection box position
+          setSelection(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              width: x - selection.x, // Delta X
+              height: y - selection.y, // Delta Y
+            };
+          });
+        } else if (selectionStateRef.current === 'moving') {
+          // Update the selection box and move the elements
 
-        // Update the selection box position to show movement preview
-        setSelection(prev => {
-          if (!prev) return null;
+          if (!initialPointRef.current) return;
 
-          // Important: Start with the original selection position
-          const originalX = moveOffset.originalSelectionX;
-          const originalY = moveOffset.originalSelectionY;
+          const deltaX = x - initialPointRef.current.x;
+          const deltaY = y - initialPointRef.current.y;
 
-          return {
-            ...prev,
-            x: originalX! + deltaX,
-            y: originalY! + deltaY,
-          };
-        });
+          // Move the selection box by deltaX and deltaY
+          setSelection(prev => {
+            if (!prev) return null;
+            if (!initialSelectionRef.current) return null;
 
-        // Update element positions based on their original positions
-        const updatedElements = originalElements
-          .map(element => {
+            return {
+              ...prev,
+              x: initialSelectionRef.current.x + deltaX,
+              y: initialSelectionRef.current!.y + deltaY,
+            };
+          });
+
+          // Map the initial elements to their IDs
+          const initialElementsMap = new Map(
+            inititalSelectionElementsRef.current.map(element => [
+              element.id,
+              element,
+            ])
+          );
+
+          // Construct new elements based on the delta
+          const newElements = elements.map(element => {
             // Check if the element is in the selection
-            if (!selection.ids.includes(element.id)) return null;
+            if (!selection.ids.includes(element.id)) return element; // Not selected
 
             const handler = toolHandlers[element.tool];
+            const initialElement = initialElementsMap.get(element.id); // Get the initial element
+            if (!initialElement) return element; // Should not happen
             if (handler && handler.moveElement) {
-              return handler.moveElement(element, deltaX, deltaY);
+              return handler.moveElement(initialElement, deltaX, deltaY); // Move the element
             }
-            return null;
-          })
-          .filter(Boolean) as CanvasElement[];
+            return element;
+          });
 
-        // Only update the elements that were moved by id
-        setElements(prev => {
-          const updatedMap = new Map(
-            updatedElements.map(element => [element.id, element])
-          );
-          return prev.map(element =>
-            updatedMap.has(element.id) ? updatedMap.get(element.id)! : element
-          );
-        });
-      }
-
-      // Rest of your existing code for other tools
-      if (
-        tool === Tools.SELECT &&
-        selection &&
-        selection.state === 'selecting'
-      ) {
-        setSelection(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            width: x - prev.x,
-            height: y - prev.y,
-          };
-        });
-        return;
+          setElements(newElements);
+        }
       }
 
       if (
@@ -189,6 +191,7 @@ export const useCanvas = ({
         toolHandlers[tool] &&
         toolHandlers[tool].updateElement
       ) {
+        // Adding new "frames" of the element
         const updatedElement = toolHandlers[tool].updateElement(
           currentElement,
           x,
@@ -197,47 +200,51 @@ export const useCanvas = ({
         setCurrentElement(updatedElement);
       }
     },
-    [currentElement, tool, selection, moveOffset, originalElements]
+    [currentElement, tool, selection]
   );
 
   const onEndInput = useCallback(
     (x: number, y: number) => {
-      // If we were moving elements, finalize their position
-      if (moveOffset && selection && originalElements) {
-        // Add to history using original elements as previous state
-        const action: HistoryAction = {
-          type: 'MODIFY_ELEMENT',
-          elementIds: selection.ids,
-          elements: elements,
-          previousData: originalElements,
-        };
+      // If we were selecting or moving elements
+      if (selection && selectionStateRef.current) {
+        // If we were moving
+        if (selectionStateRef.current === 'moving') {
+          // Finalize move, set state to 'selected'
+          selectionStateRef.current = 'selected';
+          // Add history action for move
+          const finalDeltaX = x - initialPointRef.current!.x;
+          const finalDeltaY = y - initialPointRef.current!.y;
+          const action: HistoryAction = {
+            type: 'MODIFY_ELEMENT',
+            elementIds: selection.ids,
+            offset: { x: finalDeltaX, y: finalDeltaY },
+          };
+          addToHistory(action);
+          // Reset selection move state
+          initialPointRef.current = null;
+          initialSelectionRef.current = null;
+          inititalSelectionElementsRef.current = [];
+          return; // Keep selection active after move
+        }
 
-        addToHistory(action);
-
-        // Reset state
-        setMoveOffset(null);
-        setOriginalElements(null);
-        return;
-      }
-
-      // Existing selection handling
-      if (tool === Tools.SELECT) {
-        handleSelectionEnd(
-          x,
-          y,
-          selection,
-          elements,
-          setSelection,
-          fontManager
-        );
-        return;
+        // If we were selecting
+        if (selectionStateRef.current === 'selecting') {
+          const newSelection = calculateSelectionBounds(
+            selection,
+            elements,
+            fontManager
+          );
+          setSelection(newSelection);
+          // Set state based on whether a selection was found
+          selectionStateRef.current = newSelection ? 'selected' : null;
+          return;
+        }
       }
 
       // Existing element handling...
       if (currentElement) {
         const action: HistoryAction = {
           type: 'ADD_ELEMENT',
-          elementIds: [currentElement.id],
           elements: [currentElement],
         };
 
@@ -246,15 +253,7 @@ export const useCanvas = ({
         setCurrentElement(null);
       }
     },
-    [
-      currentElement,
-      tool,
-      elements,
-      selection,
-      addToHistory,
-      moveOffset,
-      originalElements,
-    ]
+    [currentElement, tool, elements, selection, addToHistory, fontManager]
   );
 
   // External element handling
@@ -268,7 +267,6 @@ export const useCanvas = ({
 
       const action: HistoryAction = {
         type: 'ADD_ELEMENT',
-        elementIds: [newElementData.id],
         elements: [newElementData],
       };
 
@@ -289,15 +287,6 @@ export const useCanvas = ({
       });
 
       setElements(modifiedElements);
-
-      const action: HistoryAction = {
-        type: 'MODIFY_ELEMENT',
-        elementIds: ids,
-        elements: modifiedElements,
-        previousData: elements,
-      };
-
-      addToHistory(action);
     },
     [elements, addToHistory]
   );
@@ -306,7 +295,7 @@ export const useCanvas = ({
   const clear = useCallback(() => {
     setElements([]);
     setCurrentElement(null);
-    setSelection(null);
+    clearSelection();
     clearHistory();
   }, [clearHistory]);
 
@@ -326,37 +315,22 @@ export const useCanvas = ({
 };
 
 // Helper function for selection logic
-function handleSelectionEnd(
-  x: number,
-  y: number,
-  selection: Selection | null,
+function calculateSelectionBounds(
+  selection: Selection | null, // Use the local Selection type (without state)
   elements: CanvasElement[],
-  setSelection: React.Dispatch<React.SetStateAction<Selection | null>>,
   fontManager?: any
-) {
-  if (!selection) return;
+): Selection | null {
+  // Return type is Selection | null
+  if (!selection) return null;
 
   const MINIMUM_SELECTION_SIZE = 5;
-
-  // Check if clicking outside
-  if (
-    selection.state !== 'selecting' &&
-    (selection.x > x ||
-      selection.x + selection.width < x ||
-      selection.y > y ||
-      selection.y + selection.height < y)
-  ) {
-    setSelection(null);
-    return;
-  }
 
   // Check if too small
   if (
     Math.abs(selection.width) < MINIMUM_SELECTION_SIZE &&
     Math.abs(selection.height) < MINIMUM_SELECTION_SIZE
   ) {
-    setSelection(null);
-    return;
+    return null;
   }
 
   // Normalize selection coordinates (handle negative width/height)
@@ -376,8 +350,7 @@ function handleSelectionEnd(
   );
 
   if (selectedElements.length === 0) {
-    setSelection(null);
-    return;
+    return null;
   }
 
   const selectedIds = selectedElements.map(element => element.id);
@@ -387,15 +360,12 @@ function handleSelectionEnd(
     fontManager
   );
 
-  console.log('Combined box:', combinedBox);
-
-  if (combinedBox) {
-    setSelection({
-      ids: selectedIds,
-      ...combinedBox,
-      state: 'selected',
-    });
-  } else {
-    setSelection(null);
+  if (!combinedBox) {
+    return null;
   }
+
+  return {
+    ids: selectedIds,
+    ...combinedBox,
+  };
 }

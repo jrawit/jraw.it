@@ -21,6 +21,12 @@ type ToolHandler = {
     deltaX: number,
     deltaY: number
   ) => CanvasElement;
+  rotateElement?: (element: CanvasElement, angle: number) => CanvasElement;
+  scaleElement?: (
+    element: CanvasElement,
+    scaleX: number,
+    scaleY: number
+  ) => CanvasElement;
 };
 
 const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
