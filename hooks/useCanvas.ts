@@ -45,14 +45,14 @@ export const useCanvas = ({
     y: number;
   } | null>(null);
   const initialSelectionRef = useRef<Selection | null>(null);
-  const inititalSelectionElementsRef = useRef<CanvasElement[]>([]);
+  const initialCanvasElementsRef = useRef<CanvasElement[]>([]);
 
   const clearSelection = useCallback(() => {
     setSelection(null);
     selectionStateRef.current = null;
     initialPointRef.current = null;
     initialSelectionRef.current = null;
-    inititalSelectionElementsRef.current = [];
+    initialCanvasElementsRef.current = [];
   }, []);
 
   // History management
@@ -84,7 +84,7 @@ export const useCanvas = ({
           // Set the initial point to the current position and the selection
           initialPointRef.current = { x, y };
           initialSelectionRef.current = selection;
-          inititalSelectionElementsRef.current = elements.filter(element =>
+          initialCanvasElementsRef.current = elements.filter(element =>
             selection.ids.includes(element.id)
           );
           selectionStateRef.current = 'moving';
@@ -162,7 +162,7 @@ export const useCanvas = ({
 
           // Map the initial elements to their IDs
           const initialElementsMap = new Map(
-            inititalSelectionElementsRef.current.map(element => [
+            initialCanvasElementsRef.current.map(element => [
               element.id,
               element,
             ])
@@ -223,7 +223,7 @@ export const useCanvas = ({
           // Reset selection move state
           initialPointRef.current = null;
           initialSelectionRef.current = null;
-          inititalSelectionElementsRef.current = [];
+          initialCanvasElementsRef.current = [];
           return; // Keep selection active after move
         }
 
