@@ -37,3 +37,4 @@ yarn-error.*
 
 # eslint
 .eslintcache
+jraw.it.code-workspace

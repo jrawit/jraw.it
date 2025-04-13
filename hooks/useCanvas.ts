@@ -304,11 +304,25 @@ export const useCanvas = ({
 
   // Complete clear action
   const clear = useCallback(() => {
+    // Only add to history if there are elements to clear
+    if (elements.length > 0) {
+      // Create a history action before clearing
+      const action: HistoryAction = {
+        type: 'DELETE_ELEMENT',
+        elementIds: elements.map(el => el.id),
+        elements: [...elements], // Save the current elements for undo
+      };
+      
+      // Add this action to history
+      addToHistory(action);
+    }
+    
+    // Always clear the canvas, regardless of history
     setElements([]);
     setCurrentElement(null);
     setSelection(null);
-    clearHistory();
-  }, [clearHistory]);
+    
+  }, [elements, addToHistory]);
 
   return {
     elements,
