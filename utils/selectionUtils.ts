@@ -21,7 +21,6 @@ export type Selection = {
   y: number;
   width: number;
   height: number;
-  state: 'selecting' | 'selected';
 };
 
 export const calculateBoundingBox = (
@@ -68,11 +67,17 @@ export const calculateBoundingBox = (
         strokeWidth: rectStrokeWidth = 0,
       } = data as CanvasElements.Rectangle;
       const halfRectStrokeWidth = rectStrokeWidth / 2;
+      // Normalize coordinates and dimensions for bounding box calculation
+      const actualX = width < 0 ? point.x + width : point.x;
+      const actualY = height < 0 ? point.y + height : point.y;
+      const actualWidth = Math.abs(width);
+      const actualHeight = Math.abs(height);
+
       return {
-        x: point.x - halfRectStrokeWidth,
-        y: point.y - halfRectStrokeWidth,
-        width: width + rectStrokeWidth,
-        height: height + rectStrokeWidth,
+        x: actualX - halfRectStrokeWidth,
+        y: actualY - halfRectStrokeWidth,
+        width: actualWidth + rectStrokeWidth,
+        height: actualHeight + rectStrokeWidth,
       };
     case Tools.TRIANGLE:
       const {
