@@ -298,7 +298,6 @@ export const useCanvas = ({
       // Create a history action before clearing
       const action: HistoryAction = {
         type: 'DELETE_ELEMENT',
-        elementIds: elements.map(el => el.id),
         elements: [...elements], // Save the current elements for undo
       };
 
@@ -310,8 +309,7 @@ export const useCanvas = ({
     setElements([]);
     setCurrentElement(null);
     clearSelection();
-    clearHistory();
-  }, [clearHistory]);
+  }, [elements, addToHistory, clearSelection]);
 
   return {
     elements,

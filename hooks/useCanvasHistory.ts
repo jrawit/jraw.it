@@ -63,7 +63,10 @@ export const useCanvasHistory = (
         }
         break;
       case 'DELETE_ELEMENT':
-        // Not actually used for now
+        if (action.elements) {
+          // Re-add the previously deleted elements
+          setElements(prev => [...prev, ...(action.elements || [])]);
+        }
         break;
     }
 
@@ -109,7 +112,11 @@ export const useCanvasHistory = (
         }
         break;
       case 'DELETE_ELEMENT':
-        // Not actually used for now
+        if (action.elements) {
+          // Delete the previously undone elements
+          const elementIds = action.elements.map(p => p.id);
+          setElements(prev => prev.filter(p => !elementIds.includes(p.id)));
+        }
         break;
     }
 
