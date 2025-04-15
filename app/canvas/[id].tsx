@@ -340,12 +340,11 @@ export default function CanvasScreen() {
         </View>
         <Toolbar
           tool={tool}
-          setTool={(newTool: Tools) => {
+          onToolChange={(newTool: Tools) => {
             setTool(newTool);
           }}
-          strokeWidth={strokeWidth}
-          setStrokeWidth={setStrokeWidth}
-          setColor={setSelectedColor}
+          onStrokeWidthChange={setStrokeWidth}
+          onColorChange={setSelectedColor}
         />
       </View>
 

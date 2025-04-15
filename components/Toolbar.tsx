@@ -23,24 +23,23 @@ import { ThemedView } from './ThemedView';
 
 type ToolbarProps = {
   tool: Tools;
-  setTool: (tool: Tools) => void;
-  strokeWidth: number;
-  setStrokeWidth: (strokeWidth: number) => void;
-  setColor: (color: string) => void;
+  onToolChange: (tool: Tools) => void;
+  onStrokeWidthChange: (strokeWidth: number) => void;
+  onColorChange: (color: string) => void;
 };
 
 const Toolbar: React.FC<ToolbarProps> = ({
   tool,
-  setTool,
-  strokeWidth,
-  setStrokeWidth,
-  setColor,
+  onToolChange,
+  onStrokeWidthChange,
+  onColorChange,
 }) => {
   const colorScheme = useColorScheme();
   const [colorPickerVisible, setColorPickerVisible] = useState(false);
 
   // React state for initial color
   const [initialColor, setInitialColor] = useState('#000000');
+  const [strokeWidth, setStrokeWidth] = useState(3);
 
   // Shared value for animations
   const selectedColor = useSharedValue(initialColor);
@@ -62,7 +61,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
             return (
               <TouchableOpacity
                 key={toolType}
-                onPress={() => setTool(toolType as Tools)}
+                onPress={() => onToolChange(toolType as Tools)}
                 style={[
                   styles.button,
                   tool === toolType && styles.activeButton,
@@ -94,7 +93,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           }}
           onCompleteJS={(color: ColorFormatsObject) => {
             setInitialColor(color.hex);
-            setColor(color.hex);
+            onColorChange(color.hex);
           }}
           adaptSpectrum
           boundedThumb
@@ -137,6 +136,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           value={strokeWidth}
           onSlidingComplete={value => {
             setStrokeWidth(value);
+            onStrokeWidthChange(value);
           }}
           minimumTrackTintColor="#007AFF"
           thumbTintColor="#007AFF"
