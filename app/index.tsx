@@ -9,10 +9,16 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
+  TouchableOpacity,
   useColorScheme,
   useWindowDimensions,
 } from 'react-native';
 import { io } from 'socket.io-client';
+
+interface UserState {
+  isLoggedIn: boolean;
+  username?: string;
+}
 
 interface CreateRoomResponse {
   success: boolean;
@@ -27,6 +33,14 @@ export default function HomeScreen() {
   const [numColumns, setNumColumns] = useState(
     Math.max(1, Math.floor(width / 220))
   );
+
+  const [user, setUser] = useState<UserState>({
+    isLoggedIn: false
+  });
+  
+  const handleLogout = () => {
+    setUser({ isLoggedIn: false });
+  };
 
   useEffect(() => {
     // Ensure we have at least 1 column and account for proper padding
@@ -100,12 +114,20 @@ export default function HomeScreen() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
+          headerRight: () => 
+            user.isLoggedIn ? (
+              <TouchableOpacity onPress={handleLogout} style={styles.headerButton}>
+                <ThemedText>Logout</ThemedText>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                onPress={() => router.push('/login')} 
+                style={styles.headerButton}
+              >
+                <ThemedText>Login</ThemedText>
+              </TouchableOpacity>
+            ),
         }}
-      />
-
-      <Button
-        title="Go to test canvas"
-        onPress={() => router.push('/canvas/test')}
       />
 
       <ScrollView
@@ -120,8 +142,24 @@ export default function HomeScreen() {
           ]}
         >
           <ThemedText type="title" style={styles.welcomeTitle}>
-            Welcome to DrawIt
+            Welcome to JrawIt
+            {user.isLoggedIn ? `, ${user.username}` : ''}
           </ThemedText>
+          
+          {!user.isLoggedIn && (
+            <ThemedView style={styles.authBanner}>
+              <ThemedText style={styles.authText}>
+                Create an account to save your canvases
+              </ThemedText>
+              <TouchableOpacity 
+                style={styles.authButton}
+                onPress={() => router.push('/register')}
+              >
+                <ThemedText style={styles.authButtonText}>Sign Up</ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+          )}
+
           <ThemedText type="default" style={styles.welcomeSubtitle}>
             Create a new room or join an existing one
           </ThemedText>
@@ -162,6 +200,33 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     paddingBottom: 20, // Extra padding at the bottom
+  },
+  headerButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+  },
+  authBanner: {
+    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  authText: {
+    flex: 1,
+    marginRight: 10,
+  },
+  authButton: {
+    backgroundColor: '#007BFF',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+  },
+  authButtonText: {
+    color: 'white',
+    fontWeight: '600',
   },
   welcomeSection: {
     paddingTop: 24,
