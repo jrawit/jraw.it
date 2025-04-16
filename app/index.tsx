@@ -145,7 +145,10 @@ export default function HomeScreen() {
             Welcome to JrawIt
             {user.isLoggedIn ? `, ${user.username}` : ''}
           </ThemedText>
-          
+          <Button
+        title="Go to test canvas"
+        onPress={() => router.push('/canvas/test')}
+      />
           {!user.isLoggedIn && (
             <ThemedView style={styles.authBanner}>
               <ThemedText style={styles.authText}>
