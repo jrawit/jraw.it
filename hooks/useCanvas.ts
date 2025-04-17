@@ -2,6 +2,7 @@ import { CanvasElements } from '@/constants/CanvasElement';
 import {
   Selection,
   calculateCombinedBoundingBox,
+  calculateElementBoundingBox,
   findElementsInSelection,
 } from '@/utils/selectionUtils';
 import { useCallback, useRef, useState } from 'react';
@@ -56,12 +57,32 @@ export const useCanvas = ({
   }, []);
 
   // History management
-  const {
-    addToHistory,
-    undo,
-    redo,
-    clear: clearHistory,
-  } = useCanvasHistory(setElements, clearSelection);
+  const { addToHistory, undo, redo } = useCanvasHistory(
+    setElements,
+    clearSelection
+  );
+
+  const deleteSelection = useCallback(() => {
+    if (selection) {
+      const elementsToDelete = elements.filter(element =>
+        selection?.ids.includes(element.id)
+      );
+
+      const action: HistoryAction = {
+        type: 'DELETE_ELEMENT',
+        elements: [...elementsToDelete],
+      };
+
+      // Add this action to history
+      addToHistory(action);
+      // Remove selected elements from the canvas
+      const newElements = elements.filter(
+        element => !selection?.ids.includes(element.id)
+      );
+      setElements(newElements);
+      clearSelection();
+    }
+  }, [selection, elements, addToHistory, clearSelection]);
 
   // ID generation
   const generateId = useCallback(() => uuidv4(), []);
@@ -104,6 +125,7 @@ export const useCanvas = ({
           y,
           width: 0,
           height: 0,
+          selected: false,
         });
         selectionStateRef.current = 'selecting';
         return;
@@ -258,37 +280,90 @@ export const useCanvas = ({
 
   // External element handling
   const addExternalElement = useCallback(
-    (element: CanvasElements.Any, tool: Tools) => {
+    (element: CanvasElements.Any, tool: Tools, propagateToHistory = true) => {
       const newElementData: CanvasElement = {
         id: generateId(),
         element,
         tool,
       };
 
-      const action: HistoryAction = {
-        type: 'ADD_ELEMENT',
-        elements: [newElementData],
-      };
-
       setElements(prev => [...prev, newElementData]);
-      addToHistory(action);
+      if (propagateToHistory) {
+        const action: HistoryAction = {
+          type: 'ADD_ELEMENT',
+          elements: [newElementData],
+        };
+        addToHistory(action);
+      }
     },
     [generateId, addToHistory]
   );
 
   // Simplified modification handler
-  const modifyElements = useCallback(
-    (ids: string[], newElement: CanvasElements.Any) => {
+  const modifyElement = useCallback(
+    (id: string, newElement: CanvasElements.Any, propagateToHistory = true) => {
+      let newElementData: CanvasElement | null = null;
+      let originalElement: CanvasElement | null = null; // Store the original element
+
       const modifiedElements = elements.map(element => {
-        if (ids.includes(element.id)) {
-          return { ...element, element: newElement };
+        if (element.id === id) {
+          originalElement = { ...element }; // Capture original state before modification
+          newElementData = {
+            ...element,
+            element: newElement,
+          };
+          return newElementData;
         }
         return element;
       });
 
       setElements(modifiedElements);
+
+      // If the modified element is selected and it's the only one selected, update the selection box
+      if (
+        selection &&
+        selection.ids.includes(id) &&
+        selection.ids.length === 1 &&
+        newElementData
+      ) {
+        const newBoundingBox = calculateElementBoundingBox(
+          newElementData,
+          10,
+          fontManager
+        );
+        if (newBoundingBox) {
+          setSelection({
+            ...selection,
+            x: newBoundingBox.x,
+            y: newBoundingBox.y,
+            width: newBoundingBox.width,
+            height: newBoundingBox.height,
+          });
+        } else {
+          // If bounding box calculation fails (shouldn't happen for a valid element), clear selection
+          clearSelection();
+        }
+      }
+
+      // Add to history if requested and modification happened
+      if (propagateToHistory && originalElement && newElementData) {
+        const action: HistoryAction = {
+          type: 'MODIFY_ELEMENT',
+          elementId: id,
+          originalElement: originalElement, // Store original state
+          newElement: newElementData, // Store new state
+        };
+        addToHistory(action);
+      }
     },
-    [elements, addToHistory]
+    [
+      elements,
+      addToHistory,
+      selection,
+      setSelection,
+      fontManager,
+      clearSelection,
+    ]
   );
 
   // Complete clear action
@@ -321,8 +396,9 @@ export const useCanvas = ({
     redo,
     clear,
     addExternalElement,
-    modifyElements,
+    modifyElement,
     selection,
+    deleteSelection,
   };
 };
 
@@ -379,5 +455,6 @@ function calculateSelectionBounds(
   return {
     ids: selectedIds,
     ...combinedBox,
+    selected: true,
   };
 }

@@ -49,13 +49,13 @@ export const Star: React.FC<StarProps> = React.memo(
 
     return (
       <SkPath path={path} style="stroke">
+        {fillColor && <Paint color={fillColor} />}
         <Paint
           color={strokeColor}
           style="stroke"
           strokeWidth={strokeWidth}
           strokeJoin="miter"
         />
-        {fillColor && <Paint color={fillColor} />}
       </SkPath>
     );
   }

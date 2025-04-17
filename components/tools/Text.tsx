@@ -42,7 +42,7 @@ export const Text: React.FC<TextProps> = React.memo(
         .addText(text)
         .build();
       return paragraph;
-    }, [fontFamily, fontSize, fontStyle, fontWeight, text, fontManager]);
+    }, [fontFamily, fontSize, fontStyle, fontWeight, text, fontManager, color]);
 
     const width = useMemo(() => {
       if (!paragraph) {

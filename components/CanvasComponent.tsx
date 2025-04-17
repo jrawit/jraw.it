@@ -1,3 +1,5 @@
+import PropertiesPanel from '@/components/PropertiesPanel';
+import SelectionContextMenu from '@/components/SelectionContextMenu';
 import { Circle } from '@/components/tools/Circle';
 import { Image } from '@/components/tools/Image';
 import { Line } from '@/components/tools/Line';
@@ -35,7 +37,7 @@ export interface CanvasComponentHandle {
   redo: () => void;
   clear: () => void;
   addExternalElement: (element: CanvasElements.Any, tool: Tools) => void;
-  modifyElements: (ids: string[], newElement: CanvasElements.Any) => void;
+  modifyElement: (id: string, newElement: CanvasElements.Any) => void;
 }
 
 interface CanvasComponentProps {
@@ -93,7 +95,8 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       redo,
       clear,
       addExternalElement,
-      modifyElements,
+      modifyElement,
+      deleteSelection,
     } = useCanvas({
       tool,
       strokeWidth,
@@ -108,8 +111,15 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       redo,
       clear,
       addExternalElement,
-      modifyElements,
+      modifyElement,
     }));
+
+    const selectedCanvasElements = useMemo(() => {
+      if (!selection || !selection.selected) {
+        return [];
+      }
+      return elements.filter(element => selection.ids.includes(element.id));
+    }, [elements, selection]);
 
     const tap = Gesture.Tap()
       .runOnJS(true)
@@ -262,214 +272,244 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     }, []);
 
     return (
-      <GestureDetector
-        gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
-      >
-        <Canvas
-          style={{ flex: 1, backgroundColor: backgroundState.color }}
-          ref={canvasRef}
-          onLayout={handleLayout}
+      <>
+        <GestureDetector
+          gesture={Gesture.Exclusive(pan, tap, twoFingerPan, hover)}
         >
-          <Fill color={backgroundState.color} />
-
-          {backgroundState.texture &&
-            canvasSize.width > 0 &&
-            canvasSize.height > 0 && (
-              <Group
-                transform={[
-                  {
-                    translate: [
-                      elementsOffset.x +
-                        (tool === Tools.PAN ? currentElementOffset.x : 0),
-                      elementsOffset.y +
-                        (tool === Tools.PAN ? currentElementOffset.y : 0),
-                    ],
-                  },
-                ]}
-              >
-                {(() => {
-                  const { width: canvasWidth, height: canvasHeight } =
-                    canvasSize;
-                  const startY =
-                    Math.floor(
-                      (-elementsOffset.y - canvasHeight) /
-                        backgroundState.gridSize
-                    ) * backgroundState.gridSize;
-                  const endY =
-                    Math.ceil(
-                      (-elementsOffset.y + 2 * canvasHeight) /
-                        backgroundState.gridSize
-                    ) * backgroundState.gridSize;
-                  const startX =
-                    Math.floor(
-                      (-elementsOffset.x - canvasWidth) /
-                        backgroundState.gridSize
-                    ) * backgroundState.gridSize;
-                  const endX =
-                    Math.ceil(
-                      (-elementsOffset.x + 2 * canvasWidth) /
-                        backgroundState.gridSize
-                    ) * backgroundState.gridSize;
-
-                  const numHorizontalLines =
-                    Math.ceil((endY - startY) / backgroundState.gridSize) + 1;
-                  const numVerticalLines =
-                    Math.ceil((endX - startX) / backgroundState.gridSize) + 1;
-                  const lines = [];
-
-                  for (let i = 0; i < numHorizontalLines; i++) {
-                    const y = startY + i * backgroundState.gridSize;
-                    lines.push(
-                      <Line
-                        key={`h-${y}`}
-                        lineData={{
-                          startPoint: { x: startX - 5000, y: y },
-                          endPoint: { x: endX + 5000, y: y },
-                          strokeWidth: 1,
-                          strokeColor: `rgba(0,0,0,${backgroundState.textureOpacity})`,
-                        }}
-                      />
-                    );
-                  }
-                  for (let i = 0; i < numVerticalLines; i++) {
-                    const x = startX + i * backgroundState.gridSize;
-                    lines.push(
-                      <Line
-                        key={`v-${x}`}
-                        lineData={{
-                          startPoint: { x: x, y: startY - 5000 },
-                          endPoint: { x: x, y: endY + 5000 },
-                          strokeWidth: 1,
-                          strokeColor: `rgba(0,0,0,${backgroundState.textureOpacity})`,
-                        }}
-                      />
-                    );
-                  }
-                  return lines;
-                })()}
-              </Group>
-            )}
-
-          <Group
-            transform={[
-              {
-                translate: [
-                  elementsOffset.x +
-                    (tool === Tools.PAN ? currentElementOffset.x : 0),
-                  elementsOffset.y +
-                    (tool === Tools.PAN ? currentElementOffset.y : 0),
-                ],
-              },
-            ]}
+          <Canvas
+            style={{ flex: 1, backgroundColor: backgroundState.color }}
+            ref={canvasRef}
+            onLayout={handleLayout}
           >
-            {useMemo(
-              () => elements.map(element => getElement(element)),
-              [elements, getElement]
-            )}
+            <Fill color={backgroundState.color} />
 
-            {currentElement && getElement(currentElement)}
-
-            {selection && selection.width !== 0 && selection.height !== 0 && (
-              <>
-                <Rect
-                  rectData={{
-                    point: {
-                      x: selection.x,
-                      y: selection.y,
+            {backgroundState.texture &&
+              canvasSize.width > 0 &&
+              canvasSize.height > 0 && (
+                <Group
+                  transform={[
+                    {
+                      translate: [
+                        elementsOffset.x +
+                          (tool === Tools.PAN ? currentElementOffset.x : 0),
+                        elementsOffset.y +
+                          (tool === Tools.PAN ? currentElementOffset.y : 0),
+                      ],
                     },
-                    width: selection.width,
-                    height: selection.height,
-                    strokeWidth: 1.5,
-                    strokeColor: 'rgba(0, 134, 223, 0.8)',
-                    fillColor: 'rgba(0, 134, 223, 0.1)',
-                  }}
-                />
-                {[
-                  { x: selection.x, y: selection.y },
-                  { x: selection.x + selection.width, y: selection.y },
-                  { x: selection.x, y: selection.y + selection.height },
-                  {
-                    x: selection.x + selection.width,
-                    y: selection.y + selection.height,
-                  },
-                ].map((point, i) => (
+                  ]}
+                >
+                  {(() => {
+                    const { width: canvasWidth, height: canvasHeight } =
+                      canvasSize;
+                    const startY =
+                      Math.floor(
+                        (-elementsOffset.y - canvasHeight) /
+                          backgroundState.gridSize
+                      ) * backgroundState.gridSize;
+                    const endY =
+                      Math.ceil(
+                        (-elementsOffset.y + 2 * canvasHeight) /
+                          backgroundState.gridSize
+                      ) * backgroundState.gridSize;
+                    const startX =
+                      Math.floor(
+                        (-elementsOffset.x - canvasWidth) /
+                          backgroundState.gridSize
+                      ) * backgroundState.gridSize;
+                    const endX =
+                      Math.ceil(
+                        (-elementsOffset.x + 2 * canvasWidth) /
+                          backgroundState.gridSize
+                      ) * backgroundState.gridSize;
+
+                    const numHorizontalLines =
+                      Math.ceil((endY - startY) / backgroundState.gridSize) + 1;
+                    const numVerticalLines =
+                      Math.ceil((endX - startX) / backgroundState.gridSize) + 1;
+                    const lines = [];
+
+                    for (let i = 0; i < numHorizontalLines; i++) {
+                      const y = startY + i * backgroundState.gridSize;
+                      lines.push(
+                        <Line
+                          key={`h-${y}`}
+                          lineData={{
+                            startPoint: { x: startX - 5000, y: y },
+                            endPoint: { x: endX + 5000, y: y },
+                            strokeWidth: 1,
+                            strokeColor: `rgba(0,0,0,${backgroundState.textureOpacity})`,
+                          }}
+                        />
+                      );
+                    }
+                    for (let i = 0; i < numVerticalLines; i++) {
+                      const x = startX + i * backgroundState.gridSize;
+                      lines.push(
+                        <Line
+                          key={`v-${x}`}
+                          lineData={{
+                            startPoint: { x: x, y: startY - 5000 },
+                            endPoint: { x: x, y: endY + 5000 },
+                            strokeWidth: 1,
+                            strokeColor: `rgba(0,0,0,${backgroundState.textureOpacity})`,
+                          }}
+                        />
+                      );
+                    }
+                    return lines;
+                  })()}
+                </Group>
+              )}
+
+            <Group
+              transform={[
+                {
+                  translate: [
+                    elementsOffset.x +
+                      (tool === Tools.PAN ? currentElementOffset.x : 0),
+                    elementsOffset.y +
+                      (tool === Tools.PAN ? currentElementOffset.y : 0),
+                  ],
+                },
+              ]}
+            >
+              {useMemo(
+                () => elements.map(element => getElement(element)),
+                [elements, getElement]
+              )}
+
+              {currentElement && getElement(currentElement)}
+
+              {selection && selection.width !== 0 && selection.height !== 0 && (
+                <>
                   <Rect
-                    key={`selection-handle-${i}`}
                     rectData={{
                       point: {
-                        x: point.x - 4,
-                        y: point.y - 4,
+                        x: selection.x,
+                        y: selection.y,
                       },
-                      width: 8,
-                      height: 8,
-                      round: 2,
-                      strokeWidth: 1,
-                      strokeColor: 'rgba(0, 134, 223, 1)',
-                      fillColor: 'white',
+                      width: selection.width,
+                      height: selection.height,
+                      strokeWidth: 1.5,
+                      strokeColor: 'rgba(0, 134, 223, 0.8)',
+                      fillColor: 'rgba(0, 134, 223, 0.1)',
                     }}
                   />
-                ))}
-              </>
-            )}
-
-            {hoverPoint && (
-              <>
-                {[Tools.PEN, Tools.ERASER].includes(tool) && (
-                  <Circle
-                    circleData={{
-                      center: hoverPoint,
-                      radius: strokeWidth / 2,
-                      strokeWidth: 1,
-                      strokeColor: 'black',
-                    }}
-                  />
-                )}
-                {tool === Tools.HIGHLIGHTER && (
-                  <Group
-                    transform={[
-                      { translateX: hoverPoint.x },
-                      { translateY: hoverPoint.y },
-                      { rotate: highlighterAngle },
-                      { translateX: -hoverPoint.x },
-                      { translateY: -hoverPoint.y },
-                    ]}
-                  >
+                  {[
+                    { x: selection.x, y: selection.y },
+                    { x: selection.x + selection.width, y: selection.y },
+                    { x: selection.x, y: selection.y + selection.height },
+                    {
+                      x: selection.x + selection.width,
+                      y: selection.y + selection.height,
+                    },
+                  ].map((point, i) => (
                     <Rect
+                      key={`selection-handle-${i}`}
                       rectData={{
                         point: {
-                          x:
-                            hoverPoint.x -
-                            ToolData[Tools.HIGHLIGHTER].sizeTransform(
-                              strokeWidth
-                            ) /
-                              2,
-                          y:
-                            hoverPoint.y -
-                            ToolData[Tools.HIGHLIGHTER].sizeTransform(
-                              strokeWidth
-                            ) /
-                              2,
+                          x: point.x - 4,
+                          y: point.y - 4,
                         },
-                        width:
-                          ToolData[Tools.HIGHLIGHTER].sizeTransform(
-                            strokeWidth
-                          ),
-                        height:
-                          ToolData[Tools.HIGHLIGHTER].sizeTransform(
-                            strokeWidth
-                          ),
+                        width: 8,
+                        height: 8,
+                        round: 2,
                         strokeWidth: 1,
-                        strokeColor: 'black',
-                        fillColor: 'transparent',
+                        strokeColor: 'rgba(0, 134, 223, 1)',
+                        fillColor: 'white',
                       }}
                     />
-                  </Group>
-                )}
-              </>
-            )}
-          </Group>
-        </Canvas>
-      </GestureDetector>
+                  ))}
+                </>
+              )}
+
+              {hoverPoint && (
+                <>
+                  {[Tools.PEN, Tools.ERASER].includes(tool) && (
+                    <Circle
+                      circleData={{
+                        center: hoverPoint,
+                        radius: strokeWidth / 2,
+                        strokeWidth: 1,
+                        strokeColor: 'black',
+                      }}
+                    />
+                  )}
+                  {tool === Tools.HIGHLIGHTER && (
+                    <Group
+                      transform={[
+                        { translateX: hoverPoint.x },
+                        { translateY: hoverPoint.y },
+                        { rotate: highlighterAngle },
+                        { translateX: -hoverPoint.x },
+                        { translateY: -hoverPoint.y },
+                      ]}
+                    >
+                      <Rect
+                        rectData={{
+                          point: {
+                            x:
+                              hoverPoint.x -
+                              ToolData[Tools.HIGHLIGHTER].sizeTransform(
+                                strokeWidth
+                              ) /
+                                2,
+                            y:
+                              hoverPoint.y -
+                              ToolData[Tools.HIGHLIGHTER].sizeTransform(
+                                strokeWidth
+                              ) /
+                                2,
+                          },
+                          width:
+                            ToolData[Tools.HIGHLIGHTER].sizeTransform(
+                              strokeWidth
+                            ),
+                          height:
+                            ToolData[Tools.HIGHLIGHTER].sizeTransform(
+                              strokeWidth
+                            ),
+                          strokeWidth: 1,
+                          strokeColor: 'black',
+                          fillColor: 'transparent',
+                        }}
+                      />
+                    </Group>
+                  )}
+                </>
+              )}
+            </Group>
+          </Canvas>
+        </GestureDetector>
+
+        {/* Selection Context Menu (Delete Button) */}
+        {selection &&
+          selection.width !== 0 &&
+          selection.height !== 0 &&
+          selection.selected && (
+            <SelectionContextMenu
+              top={selection.y + elementsOffset.y + currentElementOffset.y}
+              left={
+                selection.x +
+                selection.width / 2 +
+                elementsOffset.x +
+                currentElementOffset.x
+              }
+              onDelete={deleteSelection}
+            />
+          )}
+
+        {/* Properties Panel (Right Side) */}
+        {selection &&
+          selection.width !== 0 &&
+          selection.height !== 0 &&
+          selection.selected && (
+            <PropertiesPanel
+              selectedElements={selectedCanvasElements}
+              modifyElement={modifyElement}
+            />
+          )}
+      </>
     );
   }
 );

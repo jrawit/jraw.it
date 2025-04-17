@@ -9,9 +9,16 @@ export type HistoryActionType =
 
 export type HistoryAction = {
   type: HistoryActionType;
-  elementIds?: string[]; // Not used when adding elements
-  elements?: CanvasElement[];
+  // For multi-element operations like move or delete
+  elementIds?: string[];
+  elements?: CanvasElement[]; // Used for ADD/DELETE
+  // For single element property modifications
+  elementId?: string;
+  originalElement?: CanvasElement;
+  newElement?: CanvasElement;
+  // For move operations
   offset?: { x: number; y: number };
+  // Future use
   rotation?: number;
   scale?: { x: number; y: number };
 };
@@ -41,8 +48,8 @@ export const useCanvasHistory = (
         }
         break;
       case 'MODIFY_ELEMENT':
+        // Handle move undo
         if (action.elementIds && action.offset) {
-          // Restore the previous state of the modified elements
           const idsToModify = action.elementIds;
           const undoDeltaX = -action.offset.x;
           const undoDeltaY = -action.offset.y;
@@ -50,15 +57,21 @@ export const useCanvasHistory = (
           setElements(prev =>
             prev.map(el => {
               if (idsToModify.includes(el.id)) {
-                // Find the appropriate tool handler for the element
                 const handler = toolHandlers[el.tool];
                 if (handler && handler.moveElement) {
-                  // Apply the inverse delta
                   return handler.moveElement(el, undoDeltaX, undoDeltaY);
                 }
               }
               return el;
             })
+          );
+        }
+        // Handle property change undo
+        else if (action.elementId && action.originalElement) {
+          setElements(prev =>
+            prev.map(el =>
+              el.id === action.elementId ? action.originalElement! : el
+            )
           );
         }
         break;
@@ -78,10 +91,8 @@ export const useCanvasHistory = (
   const redo = useCallback(() => {
     if (redoStack.length === 0) return;
 
-    // Get the last action from the redo stack
     const action = redoStack[redoStack.length - 1];
 
-    // Process the action based on its type
     switch (action.type) {
       case 'ADD_ELEMENT':
         if (action.elements) {
@@ -90,8 +101,8 @@ export const useCanvasHistory = (
         }
         break;
       case 'MODIFY_ELEMENT':
+        // Handle move redo
         if (action.elementIds && action.offset) {
-          // Restore the modified elements to their new positions
           const idsToModify = action.elementIds;
           const redoDeltaX = action.offset.x;
           const redoDeltaY = action.offset.y;
@@ -99,15 +110,21 @@ export const useCanvasHistory = (
           setElements(prev =>
             prev.map(el => {
               if (idsToModify.includes(el.id)) {
-                // Find the appropriate tool handler for the element
                 const handler = toolHandlers[el.tool];
                 if (handler && handler.moveElement) {
-                  // Apply the delta
                   return handler.moveElement(el, redoDeltaX, redoDeltaY);
                 }
               }
               return el;
             })
+          );
+        }
+        // Handle property change redo
+        else if (action.elementId && action.newElement) {
+          setElements(prev =>
+            prev.map(el =>
+              el.id === action.elementId ? action.newElement! : el
+            )
           );
         }
         break;
