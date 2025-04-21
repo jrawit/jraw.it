@@ -1,27 +1,15 @@
 import { useCallback, useState } from 'react';
-import toolHandlers from './tool-handlers';
 import { CanvasElement } from './useCanvas';
 
-export type HistoryActionType =
-  | 'ADD_ELEMENT'
-  | 'MODIFY_ELEMENT'
-  | 'DELETE_ELEMENT';
-
-export type HistoryAction = {
-  type: HistoryActionType;
-  // For multi-element operations like move or delete
-  elementIds?: string[];
-  elements?: CanvasElement[]; // Used for ADD/DELETE
-  // For single element property modifications
-  elementId?: string;
-  originalElement?: CanvasElement;
-  newElement?: CanvasElement;
-  // For move operations
-  offset?: { x: number; y: number };
-  // Future use
-  rotation?: number;
-  scale?: { x: number; y: number };
-};
+export type HistoryAction =
+  | { type: 'ADD_ELEMENT'; elements: CanvasElement[] }
+  | { type: 'DELETE_ELEMENT'; elements: CanvasElement[] }
+  | {
+      type: 'MODIFY_ELEMENT';
+      elementIds: string[];
+      originalElements: CanvasElement[]; // Store original state for undo
+      newElements: CanvasElement[]; // Store new state for redo
+    };
 
 export const useCanvasHistory = (
   setElements: React.Dispatch<React.SetStateAction<CanvasElement[]>>,
@@ -48,30 +36,14 @@ export const useCanvasHistory = (
         }
         break;
       case 'MODIFY_ELEMENT':
-        // Handle move undo
-        if (action.elementIds && action.offset) {
+        if (action.elementIds && action.originalElements) {
           const idsToModify = action.elementIds;
-          const undoDeltaX = -action.offset.x;
-          const undoDeltaY = -action.offset.y;
 
           setElements(prev =>
             prev.map(el => {
-              if (idsToModify.includes(el.id)) {
-                const handler = toolHandlers[el.tool];
-                if (handler && handler.moveElement) {
-                  return handler.moveElement(el, undoDeltaX, undoDeltaY);
-                }
-              }
-              return el;
+              const index = idsToModify.indexOf(el.id);
+              return index !== -1 ? action.originalElements[index] : el;
             })
-          );
-        }
-        // Handle property change undo
-        else if (action.elementId && action.originalElement) {
-          setElements(prev =>
-            prev.map(el =>
-              el.id === action.elementId ? action.originalElement! : el
-            )
           );
         }
         break;
@@ -101,30 +73,14 @@ export const useCanvasHistory = (
         }
         break;
       case 'MODIFY_ELEMENT':
-        // Handle move redo
-        if (action.elementIds && action.offset) {
+        if (action.elementIds && action.newElements) {
           const idsToModify = action.elementIds;
-          const redoDeltaX = action.offset.x;
-          const redoDeltaY = action.offset.y;
 
           setElements(prev =>
             prev.map(el => {
-              if (idsToModify.includes(el.id)) {
-                const handler = toolHandlers[el.tool];
-                if (handler && handler.moveElement) {
-                  return handler.moveElement(el, redoDeltaX, redoDeltaY);
-                }
-              }
-              return el;
+              const index = idsToModify.indexOf(el.id);
+              return index !== -1 ? action.newElements[index] : el;
             })
-          );
-        }
-        // Handle property change redo
-        else if (action.elementId && action.newElement) {
-          setElements(prev =>
-            prev.map(el =>
-              el.id === action.elementId ? action.newElement! : el
-            )
           );
         }
         break;

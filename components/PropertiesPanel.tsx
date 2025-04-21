@@ -39,6 +39,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   style,
 }) => {
   if (selectedElements.length !== 1) return null;
+  if (selectedElements[0].tool === Tools.IMAGE) return null;
 
   const selectedElement = selectedElements[0];
   const element = selectedElement.element;
@@ -52,9 +53,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   );
   const [textContent, setTextContent] = useState<string>(
     (element && 'text' in element ? element.text : '') ?? ''
-  );
-  const [radius, setRadius] = useState<number>(
-    (element && 'radius' in element ? element.radius : 50) ?? 50
   );
   const [spikes, setSpikes] = useState<number>(
     (element && 'spikes' in element ? element.spikes : 5) ?? 5
@@ -100,7 +98,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       (element && 'fontSize' in element ? element.fontSize : 20) ?? 20
     );
     setTextContent((element && 'text' in element ? element.text : '') ?? '');
-    setRadius((element && 'radius' in element ? element.radius : 50) ?? 50);
     setSpikes((element && 'spikes' in element ? element.spikes : 5) ?? 5);
 
     // Update base colors and animations if picker is closed
@@ -361,27 +358,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 handlePropertyChange('text', textContent);
               }}
               multiline
-            />
-          </View>
-        )}
-
-        {/* --- Radius --- */}
-        {hasRadius && (
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle} type="defaultSemiBold">
-              Radius: {radius.toFixed(0)}
-            </ThemedText>
-            <Slider
-              style={styles.slider}
-              minimumValue={5}
-              maximumValue={200}
-              step={1}
-              value={radius}
-              onValueChange={setRadius}
-              onSlidingComplete={value => handlePropertyChange('radius', value)}
-              minimumTrackTintColor="#007AFF"
-              thumbTintColor="#007AFF"
-              maximumTrackTintColor="#D3D3D3"
             />
           </View>
         )}

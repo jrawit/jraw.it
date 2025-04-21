@@ -1,5 +1,6 @@
 import PropertiesPanel from '@/components/PropertiesPanel';
 import SelectionContextMenu from '@/components/SelectionContextMenu';
+import SelectionOverlay from '@/components/SelectionOverlay';
 import { Circle } from '@/components/tools/Circle';
 import { Image } from '@/components/tools/Image';
 import { Line } from '@/components/tools/Line';
@@ -380,49 +381,6 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
 
               {currentElement && getElement(currentElement)}
 
-              {selection && selection.width !== 0 && selection.height !== 0 && (
-                <>
-                  <Rect
-                    rectData={{
-                      point: {
-                        x: selection.x,
-                        y: selection.y,
-                      },
-                      width: selection.width,
-                      height: selection.height,
-                      strokeWidth: 1.5,
-                      strokeColor: 'rgba(0, 134, 223, 0.8)',
-                      fillColor: 'rgba(0, 134, 223, 0.1)',
-                    }}
-                  />
-                  {[
-                    { x: selection.x, y: selection.y },
-                    { x: selection.x + selection.width, y: selection.y },
-                    { x: selection.x, y: selection.y + selection.height },
-                    {
-                      x: selection.x + selection.width,
-                      y: selection.y + selection.height,
-                    },
-                  ].map((point, i) => (
-                    <Rect
-                      key={`selection-handle-${i}`}
-                      rectData={{
-                        point: {
-                          x: point.x - 4,
-                          y: point.y - 4,
-                        },
-                        width: 8,
-                        height: 8,
-                        round: 2,
-                        strokeWidth: 1,
-                        strokeColor: 'rgba(0, 134, 223, 1)',
-                        fillColor: 'white',
-                      }}
-                    />
-                  ))}
-                </>
-              )}
-
               {hoverPoint && (
                 <>
                   {[Tools.PEN, Tools.ERASER].includes(tool) && (
@@ -481,6 +439,14 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
             </Group>
           </Canvas>
         </GestureDetector>
+
+        {/* Selection Overlay */}
+        <SelectionOverlay
+          selection={selection}
+          elementsOffset={elementsOffset}
+          currentElementOffset={currentElementOffset}
+          tool={tool}
+        />
 
         {/* Selection Context Menu (Delete Button) */}
         {selection &&

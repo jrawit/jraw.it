@@ -1,9 +1,24 @@
 import { CanvasElements } from '@/constants/CanvasElement';
+import { ToolData, Tools } from '@/constants/Tools';
+import { CanvasElement } from '@/hooks/useCanvas';
 import { cloneDeep } from 'lodash';
-import { ToolData, Tools } from '../constants/Tools';
-import { CanvasElement } from './useCanvas';
 
-type ToolHandler = {
+type Point = { x: number; y: number };
+
+// Helper function to scale a point relative to an origin
+const scalePoint = (
+  point: Point,
+  origin: Point,
+  scaleX: number,
+  scaleY: number
+): Point => {
+  return {
+    x: origin.x + (point.x - origin.x) * scaleX,
+    y: origin.y + (point.y - origin.y) * scaleY,
+  };
+};
+
+interface ToolHandler {
   initElement?: (
     x: number,
     y: number,
@@ -21,24 +36,24 @@ type ToolHandler = {
     deltaX: number,
     deltaY: number
   ) => CanvasElement;
-  rotateElement?: (element: CanvasElement, angle: number) => CanvasElement;
   scaleElement?: (
     element: CanvasElement,
     scaleX: number,
-    scaleY: number
+    scaleY: number,
+    origin: Point
   ) => CanvasElement;
-};
+}
 
-const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
+const toolHandlers: Record<Tools, ToolHandler> = {
   [Tools.PEN]: {
     initElement: (x, y, strokeWidth, color, generateId) => ({
       id: generateId(),
       element: {
         points: [{ x, y }],
-        strokeWidth: ToolData[Tools.PEN].sizeTransform(strokeWidth),
-        strokeColor: ToolData[Tools.PEN].colorTransform(color),
-        capStyle: ToolData[Tools.PEN].cap,
-        blendMode: ToolData[Tools.PEN].blendMode,
+        strokeWidth,
+        strokeColor: color,
+        capStyle: 'round',
+        blendMode: 'srcOver',
       } as CanvasElements.Path,
       tool: Tools.PEN,
     }),
@@ -51,25 +66,34 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
-      path.points = path.points.map(point => ({
-        x: point.x + deltaX,
-        y: point.y + deltaY,
+      path.points = path.points.map(p => ({
+        x: p.x + deltaX,
+        y: p.y + deltaY,
       }));
+      return newElement;
+    },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const path = newElement.element as CanvasElements.Path;
+      path.points = path.points.map(p => scalePoint(p, origin, scaleX, scaleY));
       return newElement;
     },
   },
   [Tools.HIGHLIGHTER]: {
-    initElement: (x, y, strokeWidth, color, generateId) => ({
-      id: generateId(),
-      element: {
-        points: [{ x, y }],
-        strokeWidth: ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth),
-        strokeColor: ToolData[Tools.HIGHLIGHTER].colorTransform(color),
-        capStyle: ToolData[Tools.HIGHLIGHTER].cap,
-        blendMode: ToolData[Tools.HIGHLIGHTER].blendMode,
-      } as CanvasElements.Path,
-      tool: Tools.HIGHLIGHTER,
-    }),
+    initElement: (x, y, strokeWidth, color, generateId) => {
+      const toolData = ToolData[Tools.HIGHLIGHTER];
+      return {
+        id: generateId(),
+        element: {
+          points: [{ x, y }],
+          strokeWidth: toolData.sizeTransform(strokeWidth),
+          strokeColor: toolData.colorTransform(color),
+          capStyle: toolData.cap,
+          blendMode: toolData.blendMode, // Use blendMode from ToolData
+        } as CanvasElements.Path,
+        tool: Tools.HIGHLIGHTER,
+      };
+    },
     updateElement: (element, x, y) => {
       const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
@@ -79,25 +103,34 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
-      path.points = path.points.map(point => ({
-        x: point.x + deltaX,
-        y: point.y + deltaY,
+      path.points = path.points.map(p => ({
+        x: p.x + deltaX,
+        y: p.y + deltaY,
       }));
+      return newElement;
+    },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const path = newElement.element as CanvasElements.Path;
+      path.points = path.points.map(p => scalePoint(p, origin, scaleX, scaleY));
       return newElement;
     },
   },
   [Tools.ERASER]: {
-    initElement: (x, y, strokeWidth, color, generateId) => ({
-      id: generateId(),
-      element: {
-        points: [{ x, y }],
-        strokeWidth: ToolData[Tools.ERASER].sizeTransform(strokeWidth),
-        strokeColor: ToolData[Tools.ERASER].colorTransform(color),
-        capStyle: ToolData[Tools.ERASER].cap,
-        blendMode: ToolData[Tools.ERASER].blendMode,
-      } as CanvasElements.Path,
-      tool: Tools.ERASER,
-    }),
+    initElement: (x, y, strokeWidth, color, generateId) => {
+      const toolData = ToolData[Tools.ERASER];
+      return {
+        id: generateId(),
+        element: {
+          points: [{ x, y }],
+          strokeWidth: toolData.sizeTransform(strokeWidth),
+          strokeColor: toolData.colorTransform(color),
+          capStyle: toolData.cap,
+          blendMode: toolData.blendMode,
+        } as CanvasElements.Path,
+        tool: Tools.ERASER,
+      };
+    },
     updateElement: (element, x, y) => {
       const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
@@ -105,8 +138,19 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
-      // We should not move the eraser path
-      return element;
+      const newElement = cloneDeep(element);
+      const path = newElement.element as CanvasElements.Path;
+      path.points = path.points.map(p => ({
+        x: p.x + deltaX,
+        y: p.y + deltaY,
+      }));
+      return newElement;
+    },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const path = newElement.element as CanvasElements.Path;
+      path.points = path.points.map(p => scalePoint(p, origin, scaleX, scaleY));
+      return newElement;
     },
   },
   [Tools.LINE]: {
@@ -139,6 +183,62 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       };
       return newElement;
     },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const line = newElement.element as CanvasElements.Line;
+      line.startPoint = scalePoint(line.startPoint, origin, scaleX, scaleY);
+      line.endPoint = scalePoint(line.endPoint, origin, scaleX, scaleY);
+      return newElement;
+    },
+  },
+  [Tools.RECTANGLE]: {
+    initElement: (x, y, strokeWidth, color, generateId) => ({
+      id: generateId(),
+      element: {
+        point: { x, y },
+        width: 0,
+        height: 0,
+        strokeWidth,
+        strokeColor: color,
+      } as CanvasElements.Rectangle,
+      tool: Tools.RECTANGLE,
+    }),
+    updateElement: (element, x, y) => {
+      const newElement = cloneDeep(element);
+      const rect = newElement.element as CanvasElements.Rectangle;
+      rect.width = x - rect.point.x;
+      rect.height = y - rect.point.y;
+      return newElement;
+    },
+    moveElement: (element, deltaX, deltaY) => {
+      const newElement = cloneDeep(element);
+      const rect = newElement.element as CanvasElements.Rectangle;
+      rect.point = { x: rect.point.x + deltaX, y: rect.point.y + deltaY };
+      return newElement;
+    },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const rect = newElement.element as CanvasElements.Rectangle;
+      const initialTopLeft = { x: rect.point.x, y: rect.point.y };
+      const initialBottomRight = {
+        x: rect.point.x + rect.width,
+        y: rect.point.y + rect.height,
+      };
+
+      const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
+      const newBottomRight = scalePoint(
+        initialBottomRight,
+        origin,
+        scaleX,
+        scaleY
+      );
+
+      rect.point.x = Math.min(newTopLeft.x, newBottomRight.x);
+      rect.point.y = Math.min(newTopLeft.y, newBottomRight.y);
+      rect.width = Math.abs(newTopLeft.x - newBottomRight.x);
+      rect.height = Math.abs(newTopLeft.y - newBottomRight.y);
+      return newElement;
+    },
   },
   [Tools.CIRCLE]: {
     initElement: (x, y, strokeWidth, color, generateId) => ({
@@ -168,33 +268,11 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       };
       return newElement;
     },
-  },
-  [Tools.RECTANGLE]: {
-    initElement: (x, y, strokeWidth, color, generateId) => ({
-      id: generateId(),
-      element: {
-        point: { x, y },
-        width: 0,
-        height: 0,
-        strokeWidth,
-        strokeColor: color,
-      } as CanvasElements.Rectangle,
-      tool: Tools.RECTANGLE,
-    }),
-    updateElement: (element, x, y) => {
+    scaleElement: (element, scaleX, scaleY, origin) => {
       const newElement = cloneDeep(element);
-      const rect = newElement.element as CanvasElements.Rectangle;
-      rect.width = x - rect.point.x;
-      rect.height = y - rect.point.y;
-      return newElement;
-    },
-    moveElement: (element, deltaX, deltaY) => {
-      const newElement = cloneDeep(element);
-      const rect = newElement.element as CanvasElements.Rectangle;
-      rect.point = {
-        x: rect.point.x + deltaX,
-        y: rect.point.y + deltaY,
-      };
+      const circle = newElement.element as CanvasElements.Circle;
+      circle.center = scalePoint(circle.center, origin, scaleX, scaleY);
+      circle.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
       return newElement;
     },
   },
@@ -239,6 +317,14 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
       };
       return newElement;
     },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const triangle = newElement.element as CanvasElements.Triangle;
+      triangle.point1 = scalePoint(triangle.point1, origin, scaleX, scaleY);
+      triangle.point2 = scalePoint(triangle.point2, origin, scaleX, scaleY);
+      triangle.point3 = scalePoint(triangle.point3, origin, scaleX, scaleY);
+      return newElement;
+    },
   },
   [Tools.STAR]: {
     initElement: (x, y, strokeWidth, color, generateId) => ({
@@ -263,10 +349,14 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const star = newElement.element as CanvasElements.Star;
-      star.point = {
-        x: star.point.x + deltaX,
-        y: star.point.y + deltaY,
-      };
+      star.point = { x: star.point.x + deltaX, y: star.point.y + deltaY };
+      return newElement;
+    },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const star = newElement.element as CanvasElements.Star;
+      star.point = scalePoint(star.point, origin, scaleX, scaleY);
+      star.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
       return newElement;
     },
   },
@@ -274,24 +364,50 @@ const toolHandlers: Partial<Record<Tools, ToolHandler>> = {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const text = newElement.element as CanvasElements.Text;
-      text.point = {
-        x: text.point.x + deltaX,
-        y: text.point.y + deltaY,
-      };
+      text.point = { x: text.point.x + deltaX, y: text.point.y + deltaY };
+      return newElement;
+    },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const text = newElement.element as CanvasElements.Text;
+      text.point = scalePoint(text.point, origin, scaleX, scaleY);
+      text.fontSize *= Math.sqrt(Math.abs(scaleX * scaleY));
       return newElement;
     },
   },
   [Tools.IMAGE]: {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
-      const image = newElement.element as CanvasElements.Image;
-      image.point = {
-        x: image.point.x + deltaX,
-        y: image.point.y + deltaY,
+      const img = newElement.element as CanvasElements.Image;
+      img.point = { x: img.point.x + deltaX, y: img.point.y + deltaY };
+      return newElement;
+    },
+    scaleElement: (element, scaleX, scaleY, origin) => {
+      const newElement = cloneDeep(element);
+      const img = newElement.element as CanvasElements.Image;
+      const initialTopLeft = { x: img.point.x, y: img.point.y };
+      const initialBottomRight = {
+        x: img.point.x + img.width,
+        y: img.point.y + img.height,
       };
+
+      const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
+      const newBottomRight = scalePoint(
+        initialBottomRight,
+        origin,
+        scaleX,
+        scaleY
+      );
+
+      img.point.x = Math.min(newTopLeft.x, newBottomRight.x);
+      img.point.y = Math.min(newTopLeft.y, newBottomRight.y);
+      img.width = Math.abs(newTopLeft.x - newBottomRight.x);
+      img.height = Math.abs(newTopLeft.y - newBottomRight.y);
       return newElement;
     },
   },
+  [Tools.SELECT]: {},
+  [Tools.PAN]: {},
 };
 
 // Helper for processing and scaling images
