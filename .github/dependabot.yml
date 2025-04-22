@@ -5,7 +5,19 @@
 
 version: 2
 updates:
-  - package-ecosystem: "npm" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: 'npm' # See documentation for possible values
+    directory: '/' # Location of package manifests
     schedule:
-      interval: "daily"
+      interval: 'daily'
+    open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: '@react-native-community/slider'
+      - dependency-name: '@shopify/react-native-skia'
+      - dependency-name: 'react-native'
+      - dependency-name: 'react-native-gesture-handler'
+      - dependency-name: 'react-native-reanimated'
+      - dependency-name: 'react-native-safe-area-context'
+      - dependency-name: 'react-native-web'
+      - dependency-name: 'react-native-webview'
+      - dependency-name: '@react-navigation/native'
+      - dependency-name: 'react-native-screens'
