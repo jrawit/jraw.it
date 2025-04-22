@@ -242,7 +242,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {hasStrokeWidth && (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle} type="defaultSemiBold">
-              Stroke
+              Stroke Color
             </ThemedText>
             <Pressable onPress={() => openColorPicker('strokeColor')}>
               <Animated.View style={[styles.colorButton, strokeAnimatedStyle]}>
@@ -262,7 +262,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {hasFillColor && (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle} type="defaultSemiBold">
-              Fill
+              Fill Color
             </ThemedText>
             <Pressable onPress={() => openColorPicker('fillColor')}>
               <Animated.View style={[styles.colorButton, fillAnimatedStyle]}>
