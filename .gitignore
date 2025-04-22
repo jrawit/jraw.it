@@ -40,5 +40,5 @@ yarn-error.*
 jraw.it.code-workspace
 
 # prebuild
-/android
-/ios
+android/
+ios/
