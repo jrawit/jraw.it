@@ -71,7 +71,7 @@
     "prettier-plugin-organize-imports": "^4.1.0",
     "react-test-renderer": "18.3.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.8.3"
   },
   "private": true,
   "lint-staged": {
