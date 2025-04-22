@@ -43,8 +43,8 @@ export const Rect: React.FC<RectProps> = React.memo(
         height={height}
         style="stroke"
       >
-        <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
         {fillColor && <Paint color={fillColor} />}
+        <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
       </SkRect>
     );
   }

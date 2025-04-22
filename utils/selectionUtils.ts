@@ -14,13 +14,13 @@ interface BoundingBox {
   height: number;
 }
 
-// Selection object type (copied from useCanvas to avoid circular dependency)
 export type Selection = {
   ids: string[];
   x: number;
   y: number;
   width: number;
   height: number;
+  selected: boolean;
 };
 
 export const calculateBoundingBox = (
@@ -293,4 +293,23 @@ export const calculateCombinedBoundingBox = (
     width: maxX - minX + margin * 2,
     height: maxY - minY + margin * 2,
   };
+};
+
+export const calculateElementBoundingBox = (
+  element: CanvasElement,
+  margin: number = 10,
+  fontManager?: any
+): BoundingBox | null => {
+  if (!element) return null;
+  const boundingBox = calculateBoundingBox(
+    element.tool,
+    element.element,
+    fontManager
+  );
+  if (!boundingBox) return null;
+  boundingBox.x -= margin;
+  boundingBox.y -= margin;
+  boundingBox.width += margin * 2;
+  boundingBox.height += margin * 2;
+  return boundingBox;
 };

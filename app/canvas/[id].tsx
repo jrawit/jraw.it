@@ -98,7 +98,7 @@ export default function CanvasScreen() {
   }, [keyEvent, setTool, canvasComponentRef]);
 
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
-  const [color, setSelectedColor] = useState<string>('black');
+  const [color, setSelectedColor] = useState<string>('#000000');
 
   const [textModalVisible, setTextModalVisible] = useState<boolean>(false);
   const [textPosition, setTextPosition] = useState<{ x: number; y: number }>({

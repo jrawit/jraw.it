@@ -47,6 +47,7 @@ export const Image: React.FC<ImageProps> = React.memo(({ imageData }) => {
       y={point.y}
       width={width}
       height={height}
+      fit="fill"
     />
   );
 });

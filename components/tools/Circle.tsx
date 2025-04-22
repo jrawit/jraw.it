@@ -18,8 +18,8 @@ export const Circle: React.FC<CircleProps> = React.memo(({ circleData }) => {
 
   return (
     <SkCircle cx={center.x} cy={center.y} r={radius} style="stroke">
-      <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
       {fillColor && <Paint color={fillColor} />}
+      <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
     </SkCircle>
   );
 });
