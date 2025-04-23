@@ -45,6 +45,7 @@ interface Background {
 export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
   const [tool, setTool] = useState<Tools>(Tools.PEN);
+  const [isDrawing, setIsDrawing] = useState<boolean>(false);
 
   // Keybinds
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
@@ -295,6 +296,7 @@ export default function CanvasScreen() {
           setTextPosition({ x, y });
           setTextModalVisible(true);
         }}
+        onDrawingStateChange={setIsDrawing}
       />
 
       <View style={styles.controlsContainer}>
@@ -345,6 +347,7 @@ export default function CanvasScreen() {
           }}
           onStrokeWidthChange={setStrokeWidth}
           onColorChange={setSelectedColor}
+          isDrawing={isDrawing}
         />
       </View>
 

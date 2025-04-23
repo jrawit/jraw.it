@@ -52,6 +52,7 @@ interface CanvasComponentProps {
     React.SetStateAction<{ x: number; y: number }>
   >;
   onTapText: (x: number, y: number) => void;
+  onDrawingStateChange: (isDrawing: boolean) => void;
 }
 
 const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
@@ -65,6 +66,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       elementsOffset,
       setElementsOffset,
       onTapText,
+      onDrawingStateChange,
     },
     ref
   ) => {
@@ -131,6 +133,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         if (tool === Tools.TEXT) {
           onTapText(adjustedX, adjustedY);
         } else {
+          onDrawingStateChange(true);
           onStartInput(adjustedX, adjustedY);
         }
       })
@@ -139,6 +142,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
           const adjustedX = e.x - elementsOffset.x;
           const adjustedY = e.y - elementsOffset.y;
           onEndInput(adjustedX, adjustedY);
+          onDrawingStateChange(false);
         }
       });
 
@@ -150,6 +154,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         if (tool !== Tools.PAN) {
           const adjustedX = e.x - elementsOffset.x;
           const adjustedY = e.y - elementsOffset.y;
+          onDrawingStateChange(true); 
           onStartInput(adjustedX, adjustedY);
         }
       })
@@ -170,6 +175,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         if (tool !== Tools.PAN) {
           const adjustedX = e.x - elementsOffset.x;
           const adjustedY = e.y - elementsOffset.y;
+          onDrawingStateChange(false);
           onEndInput(adjustedX, adjustedY);
         } else {
           setElementsOffset(prev => ({

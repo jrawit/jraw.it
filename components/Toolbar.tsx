@@ -1,5 +1,5 @@
 import Slider from '@react-native-community/slider';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -26,6 +26,7 @@ type ToolbarProps = {
   onToolChange: (tool: Tools) => void;
   onStrokeWidthChange: (strokeWidth: number) => void;
   onColorChange: (color: string) => void;
+  isDrawing?: boolean; // Add this prop to detect drawing state
 };
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -33,16 +34,24 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onToolChange,
   onStrokeWidthChange,
   onColorChange,
+  isDrawing = false,
 }) => {
+  
   const colorScheme = useColorScheme();
   const [colorPickerVisible, setColorPickerVisible] = useState(false);
-
   // React state for initial color
   const [initialColor, setInitialColor] = useState('#000000');
   const [strokeWidth, setStrokeWidth] = useState(3);
 
   // Shared value for animations
   const selectedColor = useSharedValue(initialColor);
+
+  // Effect to hide color picker when drawing starts
+  useEffect(() => {
+    if (isDrawing && colorPickerVisible) {
+      setColorPickerVisible(false);
+    }
+  }, [isDrawing, colorPickerVisible]);
 
   const colorButtonStyle = useAnimatedStyle(() => {
     return {
