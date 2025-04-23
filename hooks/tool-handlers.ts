@@ -1,6 +1,6 @@
 import { CanvasElements } from '@/constants/CanvasElement';
 import { ToolData, Tools } from '@/constants/Tools';
-import { CanvasElement } from '@/hooks/useCanvas';
+import { CanvasElement } from '@/hooks/useCanvas'; // Assuming useCanvas exports this type
 import { cloneDeep } from 'lodash';
 
 type Point = { x: number; y: number };
@@ -42,6 +42,9 @@ interface ToolHandler {
     scaleY: number,
     origin: Point
   ) => CanvasElement;
+  // Optional method to finalize an element after drawing/modification
+  // Can return null to indicate the element should be discarded (e.g., zero size)
+  finalizeElement?: (element: CanvasElement) => CanvasElement | null;
 }
 
 const toolHandlers: Record<Tools, ToolHandler> = {
@@ -52,8 +55,8 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         points: [{ x, y }],
         strokeWidth,
         strokeColor: color,
-        capStyle: 'round',
-        blendMode: 'srcOver',
+        capStyle: 'round', // Default for pen
+        blendMode: 'srcOver', // Default blend mode
       } as CanvasElements.Path,
       tool: Tools.PEN,
     }),
@@ -76,7 +79,18 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
       path.points = path.points.map(p => scalePoint(p, origin, scaleX, scaleY));
+      // Optionally scale strokeWidth? Depends on desired behavior.
+      // path.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY));
       return newElement;
+    },
+    finalizeElement: (element) => {
+      const path = element.element as CanvasElements.Path;
+      // Discard paths with less than 2 points (just a dot)
+      if (path.points.length < 2) {
+        return null;
+      }
+      // Add path simplification logic here if desired (e.g., Ramer-Douglas-Peucker)
+      return element;
     },
   },
   [Tools.HIGHLIGHTER]: {
@@ -89,7 +103,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
           strokeWidth: toolData.sizeTransform(strokeWidth),
           strokeColor: toolData.colorTransform(color),
           capStyle: toolData.cap,
-          blendMode: toolData.blendMode, // Use blendMode from ToolData
+          blendMode: toolData.blendMode,
         } as CanvasElements.Path,
         tool: Tools.HIGHLIGHTER,
       };
@@ -113,20 +127,32 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
       path.points = path.points.map(p => scalePoint(p, origin, scaleX, scaleY));
+      // path.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
+    },
+    finalizeElement: (element) => {
+      const path = element.element as CanvasElements.Path;
+      if (path.points.length < 2) {
+        return null;
+      }
+      return element;
     },
   },
   [Tools.ERASER]: {
+    // Eraser might not create visual elements itself, but could be represented
+    // as a path for history/redo purposes if needed.
+    // If it only modifies state directly, these might not be used.
     initElement: (x, y, strokeWidth, color, generateId) => {
       const toolData = ToolData[Tools.ERASER];
       return {
-        id: generateId(),
+        id: generateId(), // ID might be useful for tracking the erase operation
         element: {
           points: [{ x, y }],
           strokeWidth: toolData.sizeTransform(strokeWidth),
-          strokeColor: toolData.colorTransform(color),
+          // Color/blendMode might not be relevant for the eraser path itself
+          strokeColor: 'rgba(0,0,0,0)', // Invisible
           capStyle: toolData.cap,
-          blendMode: toolData.blendMode,
+          blendMode: toolData.blendMode, // Usually 'destination-out'
         } as CanvasElements.Path,
         tool: Tools.ERASER,
       };
@@ -137,20 +163,16 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       path.points.push({ x, y });
       return newElement;
     },
-    moveElement: (element, deltaX, deltaY) => {
-      const newElement = cloneDeep(element);
-      const path = newElement.element as CanvasElements.Path;
-      path.points = path.points.map(p => ({
-        x: p.x + deltaX,
-        y: p.y + deltaY,
-      }));
-      return newElement;
-    },
-    scaleElement: (element, scaleX, scaleY, origin) => {
-      const newElement = cloneDeep(element);
-      const path = newElement.element as CanvasElements.Path;
-      path.points = path.points.map(p => scalePoint(p, origin, scaleX, scaleY));
-      return newElement;
+    // Moving/Scaling an eraser path doesn't make sense in typical usage
+    moveElement: (element) => element,
+    scaleElement: (element) => element,
+    finalizeElement: (element) => {
+      // An eraser path itself might always be considered valid if > 1 point
+      const path = element.element as CanvasElements.Path;
+      if (path.points.length < 2) {
+        return null;
+      }
+      return element; // Or return null if eraser paths shouldn't persist
     },
   },
   [Tools.LINE]: {
@@ -173,14 +195,8 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const line = newElement.element as CanvasElements.Line;
-      line.startPoint = {
-        x: line.startPoint.x + deltaX,
-        y: line.startPoint.y + deltaY,
-      };
-      line.endPoint = {
-        x: line.endPoint.x + deltaX,
-        y: line.endPoint.y + deltaY,
-      };
+      line.startPoint = { x: line.startPoint.x + deltaX, y: line.startPoint.y + deltaY };
+      line.endPoint = { x: line.endPoint.x + deltaX, y: line.endPoint.y + deltaY };
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
@@ -188,24 +204,36 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const line = newElement.element as CanvasElements.Line;
       line.startPoint = scalePoint(line.startPoint, origin, scaleX, scaleY);
       line.endPoint = scalePoint(line.endPoint, origin, scaleX, scaleY);
+      // line.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
+    },
+    finalizeElement: (element) => {
+      // Discard zero-length lines
+      const line = element.element as CanvasElements.Line;
+      if (line.startPoint.x === line.endPoint.x && line.startPoint.y === line.endPoint.y) {
+        return null;
+      }
+      return element;
     },
   },
   [Tools.RECTANGLE]: {
     initElement: (x, y, strokeWidth, color, generateId) => ({
       id: generateId(),
       element: {
-        point: { x, y },
+        point: { x, y }, // Top-left corner
         width: 0,
         height: 0,
         strokeWidth,
         strokeColor: color,
+        // Add fill properties if needed
+        // fillColor: 'rgba(0,0,0,0)',
       } as CanvasElements.Rectangle,
       tool: Tools.RECTANGLE,
     }),
     updateElement: (element, x, y) => {
       const newElement = cloneDeep(element);
       const rect = newElement.element as CanvasElements.Rectangle;
+      // Update width/height based on current point relative to start point
       rect.width = x - rect.point.x;
       rect.height = y - rect.point.y;
       return newElement;
@@ -219,25 +247,35 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     scaleElement: (element, scaleX, scaleY, origin) => {
       const newElement = cloneDeep(element);
       const rect = newElement.element as CanvasElements.Rectangle;
+      // Scale top-left and bottom-right corners relative to origin
       const initialTopLeft = { x: rect.point.x, y: rect.point.y };
-      const initialBottomRight = {
-        x: rect.point.x + rect.width,
-        y: rect.point.y + rect.height,
-      };
-
+      const initialBottomRight = { x: rect.point.x + rect.width, y: rect.point.y + rect.height };
       const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
-      const newBottomRight = scalePoint(
-        initialBottomRight,
-        origin,
-        scaleX,
-        scaleY
-      );
-
+      const newBottomRight = scalePoint(initialBottomRight, origin, scaleX, scaleY);
+      // Recalculate top-left, width, and height based on scaled corners
       rect.point.x = Math.min(newTopLeft.x, newBottomRight.x);
       rect.point.y = Math.min(newTopLeft.y, newBottomRight.y);
       rect.width = Math.abs(newTopLeft.x - newBottomRight.x);
       rect.height = Math.abs(newTopLeft.y - newBottomRight.y);
+      // rect.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
+    },
+    finalizeElement: (element) => {
+      const rect = element.element as CanvasElements.Rectangle;
+      // Discard zero-size rectangles
+      if (Math.abs(rect.width) < 1 && Math.abs(rect.height) < 1) {
+        return null;
+      }
+      // Normalize rectangle (positive width/height, adjust point)
+      if (rect.width < 0) {
+        rect.point.x += rect.width;
+        rect.width = Math.abs(rect.width);
+      }
+      if (rect.height < 0) {
+        rect.point.y += rect.height;
+        rect.height = Math.abs(rect.height);
+      }
+      return element;
     },
   },
   [Tools.CIRCLE]: {
@@ -248,12 +286,14 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         radius: 0,
         strokeWidth,
         strokeColor: color,
+        // fillColor: 'rgba(0,0,0,0)',
       } as CanvasElements.Circle,
       tool: Tools.CIRCLE,
     }),
     updateElement: (element, x, y) => {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
+      // Calculate radius based on distance from center to current point
       circle.radius = Math.sqrt(
         Math.pow(x - circle.center.x, 2) + Math.pow(y - circle.center.y, 2)
       );
@@ -262,59 +302,57 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
-      circle.center = {
-        x: circle.center.x + deltaX,
-        y: circle.center.y + deltaY,
-      };
+      circle.center = { x: circle.center.x + deltaX, y: circle.center.y + deltaY };
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
       circle.center = scalePoint(circle.center, origin, scaleX, scaleY);
+      // Scale radius - use geometric mean for non-uniform scaling
       circle.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
+      // circle.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
+    },
+    finalizeElement: (element) => {
+      const circle = element.element as CanvasElements.Circle;
+      // Discard tiny circles
+      if (circle.radius < 1) {
+        return null;
+      }
+      return element;
     },
   },
   [Tools.TRIANGLE]: {
     initElement: (x, y, strokeWidth, color, generateId) => ({
       id: generateId(),
       element: {
-        point1: { x, y },
-        point2: { x, y },
-        point3: { x, y },
+        point1: { x, y }, // Anchor point
+        point2: { x, y }, // Second point (defines base width)
+        point3: { x, y }, // Third point (defines height/apex)
         strokeWidth,
         strokeColor: color,
+        // fillColor: 'rgba(0,0,0,0)',
       } as CanvasElements.Triangle,
       tool: Tools.TRIANGLE,
     }),
     updateElement: (element, x, y) => {
+      // Define how drawing a triangle works (e.g., isosceles from base)
       const newElement = cloneDeep(element);
       const triangle = newElement.element as CanvasElements.Triangle;
-
-      triangle.point2 = { x, y: triangle.point1.y };
-      triangle.point3 = {
-        x: Math.min(triangle.point1.x, x) + Math.abs(triangle.point1.x - x) / 2,
-        y,
-      };
-
+      const startX = triangle.point1.x;
+      const startY = triangle.point1.y;
+      // Example: Isosceles triangle where drag defines base width and height
+      triangle.point2 = { x: x, y: startY }; // Point 2 defines base width
+      triangle.point3 = { x: startX + (x - startX) / 2, y: y }; // Point 3 defines apex/height
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const triangle = newElement.element as CanvasElements.Triangle;
-      triangle.point1 = {
-        x: triangle.point1.x + deltaX,
-        y: triangle.point1.y + deltaY,
-      };
-      triangle.point2 = {
-        x: triangle.point2.x + deltaX,
-        y: triangle.point2.y + deltaY,
-      };
-      triangle.point3 = {
-        x: triangle.point3.x + deltaX,
-        y: triangle.point3.y + deltaY,
-      };
+      triangle.point1 = { x: triangle.point1.x + deltaX, y: triangle.point1.y + deltaY };
+      triangle.point2 = { x: triangle.point2.x + deltaX, y: triangle.point2.y + deltaY };
+      triangle.point3 = { x: triangle.point3.x + deltaX, y: triangle.point3.y + deltaY };
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
@@ -323,24 +361,31 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       triangle.point1 = scalePoint(triangle.point1, origin, scaleX, scaleY);
       triangle.point2 = scalePoint(triangle.point2, origin, scaleX, scaleY);
       triangle.point3 = scalePoint(triangle.point3, origin, scaleX, scaleY);
+      // triangle.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
+    },
+    finalizeElement: (element) => {
+      // Add validation if needed (e.g., check if points are collinear)
+      return element;
     },
   },
   [Tools.STAR]: {
     initElement: (x, y, strokeWidth, color, generateId) => ({
       id: generateId(),
       element: {
-        point: { x, y },
+        point: { x, y }, // Center point
         radius: 0,
-        spikes: 5,
+        spikes: 5, // Default number of spikes
         strokeWidth,
         strokeColor: color,
+        // fillColor: 'rgba(0,0,0,0)',
       } as CanvasElements.Star,
       tool: Tools.STAR,
     }),
     updateElement: (element, x, y) => {
       const newElement = cloneDeep(element);
       const star = newElement.element as CanvasElements.Star;
+      // Radius based on distance from center
       star.radius = Math.sqrt(
         Math.pow(x - star.point.x, 2) + Math.pow(y - star.point.y, 2)
       );
@@ -357,10 +402,21 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const star = newElement.element as CanvasElements.Star;
       star.point = scalePoint(star.point, origin, scaleX, scaleY);
       star.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
+      // star.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
+    },
+    finalizeElement: (element) => {
+      const star = element.element as CanvasElements.Star;
+      // Discard tiny stars
+      if (star.radius < 1) {
+        return null;
+      }
+      return element;
     },
   },
   [Tools.TEXT]: {
+    // Text creation might happen via a modal or separate input
+    // initElement might not be used directly from canvas drag
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const text = newElement.element as CanvasElements.Text;
@@ -368,14 +424,19 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
+      // Scaling text involves scaling the position and font size
       const newElement = cloneDeep(element);
       const text = newElement.element as CanvasElements.Text;
       text.point = scalePoint(text.point, origin, scaleX, scaleY);
+      // Scale font size based on geometric mean of scale factors
       text.fontSize *= Math.sqrt(Math.abs(scaleX * scaleY));
       return newElement;
     },
+    finalizeElement: (element) => element, // No finalization typically needed
   },
   [Tools.IMAGE]: {
+    // Image creation likely happens via file selection, not canvas drag
+    // initElement might not be used directly
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const img = newElement.element as CanvasElements.Image;
@@ -383,70 +444,59 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
+      // Scaling an image scales its position and dimensions
       const newElement = cloneDeep(element);
       const img = newElement.element as CanvasElements.Image;
       const initialTopLeft = { x: img.point.x, y: img.point.y };
-      const initialBottomRight = {
-        x: img.point.x + img.width,
-        y: img.point.y + img.height,
-      };
-
+      const initialBottomRight = { x: img.point.x + img.width, y: img.point.y + img.height };
       const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
-      const newBottomRight = scalePoint(
-        initialBottomRight,
-        origin,
-        scaleX,
-        scaleY
-      );
-
+      const newBottomRight = scalePoint(initialBottomRight, origin, scaleX, scaleY);
       img.point.x = Math.min(newTopLeft.x, newBottomRight.x);
       img.point.y = Math.min(newTopLeft.y, newBottomRight.y);
       img.width = Math.abs(newTopLeft.x - newBottomRight.x);
       img.height = Math.abs(newTopLeft.y - newBottomRight.y);
       return newElement;
     },
+    finalizeElement: (element) => element, // No finalization typically needed
   },
+  // Tools that don't create persistent elements
   [Tools.SELECT]: {},
   [Tools.PAN]: {},
 };
 
-// Helper for processing and scaling images
+// Helper for processing and scaling images before adding to canvas
 export const processImageForCanvas = (
   imageWidth: number,
   imageHeight: number,
   canvasWidth: number,
   canvasHeight: number,
-  maxImageDimension: number = 1024
+  maxImageDimension: number = 1024 // Example max dimension constraint
 ): { width: number; height: number } => {
-  // Calculate resize dimensions while maintaining aspect ratio
   let resizeWidth = imageWidth;
   let resizeHeight = imageHeight;
 
-  // First, limit to max dimension if needed
-  if (imageWidth > maxImageDimension || imageHeight > maxImageDimension) {
-    if (imageWidth > imageHeight) {
+  // Limit to max dimension if needed, maintaining aspect ratio
+  if (resizeWidth > maxImageDimension || resizeHeight > maxImageDimension) {
+    if (resizeWidth > resizeHeight) {
+      resizeHeight = Math.floor(resizeHeight * (maxImageDimension / resizeWidth));
       resizeWidth = maxImageDimension;
-      resizeHeight = Math.floor(imageHeight * (maxImageDimension / imageWidth));
     } else {
+      resizeWidth = Math.floor(resizeWidth * (maxImageDimension / resizeHeight));
       resizeHeight = maxImageDimension;
-      resizeWidth = Math.floor(imageWidth * (maxImageDimension / imageHeight));
     }
   }
 
-  // Check if the image needs to be scaled down to fit canvas
-  const needsScaling = resizeWidth > canvasWidth || resizeHeight > canvasHeight;
-
-  if (needsScaling) {
-    // Scale to fit 90% of the canvas
-    const widthRatio = (canvasWidth * 0.9) / resizeWidth;
-    const heightRatio = (canvasHeight * 0.9) / resizeHeight;
+  // Scale down further if it still exceeds canvas dimensions (e.g., fit 90%)
+  const scaleToFit = 0.9;
+  if (resizeWidth > canvasWidth * scaleToFit || resizeHeight > canvasHeight * scaleToFit) {
+    const widthRatio = (canvasWidth * scaleToFit) / resizeWidth;
+    const heightRatio = (canvasHeight * scaleToFit) / resizeHeight;
     const scaleFactor = Math.min(widthRatio, heightRatio);
-
-    resizeWidth = resizeWidth * scaleFactor;
-    resizeHeight = resizeHeight * scaleFactor;
+    resizeWidth *= scaleFactor;
+    resizeHeight *= scaleFactor;
   }
 
-  return { width: resizeWidth, height: resizeHeight };
+  return { width: Math.round(resizeWidth), height: Math.round(resizeHeight) };
 };
 
 export default toolHandlers;
