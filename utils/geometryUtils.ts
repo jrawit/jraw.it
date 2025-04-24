@@ -17,26 +17,6 @@ export function distanceSqFromPointToSegment(
     return dx * dx + dy * dy;
   }
   
-  export function isPointNearPolyline(
-    point: { x: number; y: number },
-    pathPoints: Array<{ x: number; y: number }>,
-    strokeWidth: number
-  ): boolean {
-    if (!pathPoints || pathPoints.length === 0) return false;
-    const touchRadiusSq = (strokeWidth / 2 + 2) ** 2;
-    if (pathPoints.length === 1) {
-      const dx = point.x - pathPoints[0].x;
-      const dy = point.y - pathPoints[0].y;
-      return dx * dx + dy * dy <= touchRadiusSq;
-    }
-    for (let i = 0; i < pathPoints.length - 1; i++) {
-      const p1 = pathPoints[i];
-      const p2 = pathPoints[i + 1];
-      const distSq = distanceSqFromPointToSegment(point.x, point.y, p1.x, p1.y, p2.x, p2.y);
-      if (distSq <= touchRadiusSq) return true;
-    }
-    return false;
-  }
   
   function sign(p1: { x: number; y: number }, p2: { x: number; y: number }, p3: { x: number; y: number }): number {
     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
@@ -142,4 +122,98 @@ export function distanceSqFromPointToSegment(
     }
     return smoothedPoints;
   }
+
+ 
   
+  export function isPointNearPolygonOutline(
+    point: { x: number; y: number },
+    vertices: Array<{ x: number; y: number }>,
+    checkRadius: number
+  ): boolean {
+    if (!vertices || vertices.length === 0 || checkRadius < 0) return false;
+    const checkRadiusSq = checkRadius ** 2;
+    
+    // Adjust radii for better detection precision
+    const vertexCheckRadiusMultiplier = 1.2; // Reduce from 1.5 to 1.2
+    const vertexCheckRadiusSq = checkRadiusSq * vertexCheckRadiusMultiplier;
+  
+    // 1. Check vertices first (optimized)
+    for (const vertex of vertices) {
+      const dx = point.x - vertex.x;
+      const dy = point.y - vertex.y;
+      const distSqVertex = dx * dx + dy * dy;
+      if (distSqVertex <= vertexCheckRadiusSq) {
+        return true;
+      }
+    }
+  
+    // 2. Check edges
+    if (vertices.length >= 2) {
+      for (let i = 0; i < vertices.length; i++) {
+        const p1 = vertices[i];
+        const p2 = vertices[(i + 1) % vertices.length];
+        const distSqSegment = distanceSqFromPointToSegment(point.x, point.y, p1.x, p1.y, p2.x, p2.y);
+        if (distSqSegment <= checkRadiusSq) {
+          return true;
+        }
+      }
+    }
+  
+    // 3. Check if point is inside polygon (for filled shapes)
+    // This is important for shapes that might be filled
+    if (vertices.length >= 3 && isPointInsidePolygon(point, vertices)) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // --- Apply similar logic to isPointNearPolyline ---
+  
+  export function isPointNearPolyline(
+    point: { x: number; y: number },
+    pathPoints: Array<{ x: number; y: number }>,
+    checkRadius: number // Single combined radius
+  ): boolean {
+    if (!pathPoints || pathPoints.length === 0 || checkRadius < 0) return false;
+    const checkRadiusSq = checkRadius ** 2;
+  
+    // Reduce vertex multiplier for more precision (was 1.5)
+    const vertexCheckRadiusMultiplier = 1.5; // Increase from 1.2 to 1.5 for better vertex detection  
+    const vertexCheckRadiusSq = checkRadiusSq * vertexCheckRadiusMultiplier;
+  
+    // --- DEBUG LOG ---
+    // console.log(`[isPointNearPolyline] Point=(${point.x.toFixed(1)}, ${point.y.toFixed(1)})`);
+    // console.log(`  BaseRadius=${checkRadius.toFixed(2)} (Sq=${checkRadiusSq.toFixed(2)})`);
+    // console.log(`  VertexCheckRadiusSq=${vertexCheckRadiusSq.toFixed(2)} (Multiplier=${vertexCheckRadiusMultiplier})`);
+    // --- END DEBUG LOG ---
+  
+    // 1. Check distance to vertices using the *enlarged* vertexCheckRadiusSq
+    for (const vertex of pathPoints) {
+      const dx = point.x - vertex.x;
+      const dy = point.y - vertex.y;
+      const distSqVertex = dx * dx + dy * dy;
+      // console.log(`  Polyline Vertex Check: V=(${vertex.x.toFixed(1)}, ${vertex.y.toFixed(1)}), distSq=${distSqVertex.toFixed(2)}, checkSq=${vertexCheckRadiusSq.toFixed(2)}, hit=${distSqVertex <= vertexCheckRadiusSq}`); // DEBUG
+      if (distSqVertex <= vertexCheckRadiusSq) { // Use enlarged radius
+        // console.log("  => Polyline Vertex Hit!"); // DEBUG
+        return true;
+      }
+    }
+  
+    // 2. Check distance to segments using the *original* checkRadiusSq
+    if (pathPoints.length >= 2) {
+      for (let i = 0; i < pathPoints.length - 1; i++) {
+        const p1 = pathPoints[i];
+        const p2 = pathPoints[i + 1];
+        const distSq = distanceSqFromPointToSegment(point.x, point.y, p1.x, p1.y, p2.x, p2.y);
+        // console.log(`  Polyline Segment Check ${i}: distSq=${distSq.toFixed(2)}, checkSq=${checkRadiusSq.toFixed(2)}, hit=${distSq <= checkRadiusSq}`); // DEBUG
+        if (distSq <= checkRadiusSq) { // Use original radius
+          // console.log("  => Polyline Segment Hit!"); // DEBUG
+          return true;
+        }
+      }
+    }
+  
+    // console.log("  => Polyline No Hit"); // DEBUG
+    return false;
+  }
