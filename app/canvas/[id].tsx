@@ -340,17 +340,16 @@ export default function CanvasScreen() {
             <FontAwesome name="trash" size={24} color="black" />
           </TouchableOpacity>
         </View>
-        <Toolbar
-          tool={tool}
-          onToolChange={(newTool: Tools) => {
-            setTool(newTool);
-          }}
-          onStrokeWidthChange={setStrokeWidth}
-          onColorChange={setSelectedColor}
-          isDrawing={isDrawing}
-        />
       </View>
-
+      <Toolbar
+        tool={tool}
+        onToolChange={(newTool: Tools) => {
+          setTool(newTool);
+        }}
+        onStrokeWidthChange={setStrokeWidth}
+        onColorChange={setSelectedColor}
+        isDrawing={isDrawing}
+      />
       <TextModal
         visible={textModalVisible}
         position={textPosition}
