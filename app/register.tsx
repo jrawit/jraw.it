@@ -1,36 +1,82 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useAuthStore } from '@/utils/auth.store';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Link, router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
-  ScrollView,
 } from 'react-native';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
-  const handleRegister = () => {
-    
-    router.replace('/login');
+
+  // Auth store state and actions
+  const { register, user, token, isLoading, error, clearError } =
+    useAuthStore();
+
+  // Handle successful registration
+  useEffect(() => {
+    if (user && token) {
+      router.replace('/');
+    }
+  }, [user, token]);
+
+  // Show error alert
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Registration Failed', error, [
+        { text: 'OK', onPress: clearError },
+      ]);
+    }
+  }, [error, clearError]);
+
+  const handleRegister = async () => {
+    // Input validation
+    if (!username.trim()) {
+      Alert.alert('Error', 'Username is required');
+      return;
+    }
+    if (!email.trim()) {
+      Alert.alert('Error', 'Email is required');
+      return;
+    }
+    if (!password.trim()) {
+      Alert.alert('Error', 'Password is required');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    // Register the user
+    await register(username, email, password);
   };
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen 
+      <Stack.Screen
         options={{
           title: 'Create Account',
           headerStyle: {
@@ -40,26 +86,30 @@ export default function RegisterScreen() {
         }}
       />
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.formContainer}>
-          <ThemedText type="title" style={styles.title}>Create an Account</ThemedText>
+          <ThemedText type="title" style={styles.title}>
+            Create an Account
+          </ThemedText>
           <ThemedText style={styles.subtitle}>
             Join JrawIt and start collaborating
           </ThemedText>
 
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Full Name</ThemedText>
+            <ThemedText style={styles.inputLabel}>
+              Full Name (Optional)
+            </ThemedText>
             <TextInput
               style={[
                 styles.input,
-                { 
+                {
                   backgroundColor: isDark ? '#333' : 'white',
                   borderColor: isDark ? '#555' : '#ddd',
                   color: isDark ? 'white' : 'black',
-                }
+                },
               ]}
               value={name}
               onChangeText={setName}
@@ -70,15 +120,34 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>Username</ThemedText>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: isDark ? '#333' : 'white',
+                  borderColor: isDark ? '#555' : '#ddd',
+                  color: isDark ? 'white' : 'black',
+                },
+              ]}
+              value={username}
+              onChangeText={setUsername}
+              placeholder="Choose a username"
+              placeholderTextColor={isDark ? '#999' : '#999'}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
             <ThemedText style={styles.inputLabel}>Email</ThemedText>
             <TextInput
               style={[
                 styles.input,
-                { 
+                {
                   backgroundColor: isDark ? '#333' : 'white',
                   borderColor: isDark ? '#555' : '#ddd',
                   color: isDark ? 'white' : 'black',
-                }
+                },
               ]}
               value={email}
               onChangeText={setEmail}
@@ -91,17 +160,19 @@ export default function RegisterScreen() {
 
           <View style={styles.inputGroup}>
             <ThemedText style={styles.inputLabel}>Password</ThemedText>
-            <View style={[
-              styles.passwordInputContainer,
-              { borderColor: isDark ? '#555' : '#ddd' }
-            ]}>
+            <View
+              style={[
+                styles.passwordInputContainer,
+                { borderColor: isDark ? '#555' : '#ddd' },
+              ]}
+            >
               <TextInput
                 style={[
                   styles.passwordInput,
-                  { 
+                  {
                     backgroundColor: isDark ? '#333' : 'white',
                     color: isDark ? 'white' : 'black',
-                  }
+                  },
                 ]}
                 value={password}
                 onChangeText={setPassword}
@@ -110,12 +181,12 @@ export default function RegisterScreen() {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeIcon}
               >
                 <MaterialIcons
-                  name={showPassword ? "visibility" : "visibility-off"}
+                  name={showPassword ? 'visibility' : 'visibility-off'}
                   size={24}
                   color={isDark ? '#999' : '#666'}
                 />
@@ -125,17 +196,19 @@ export default function RegisterScreen() {
 
           <View style={styles.inputGroup}>
             <ThemedText style={styles.inputLabel}>Confirm Password</ThemedText>
-            <View style={[
-              styles.passwordInputContainer,
-              { borderColor: isDark ? '#555' : '#ddd' }
-            ]}>
+            <View
+              style={[
+                styles.passwordInputContainer,
+                { borderColor: isDark ? '#555' : '#ddd' },
+              ]}
+            >
               <TextInput
                 style={[
                   styles.passwordInput,
-                  { 
+                  {
                     backgroundColor: isDark ? '#333' : 'white',
                     color: isDark ? 'white' : 'black',
-                  }
+                  },
                 ]}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -144,12 +217,12 @@ export default function RegisterScreen() {
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 style={styles.eyeIcon}
               >
                 <MaterialIcons
-                  name={showConfirmPassword ? "visibility" : "visibility-off"}
+                  name={showConfirmPassword ? 'visibility' : 'visibility-off'}
                   size={24}
                   color={isDark ? '#999' : '#666'}
                 />
@@ -160,10 +233,15 @@ export default function RegisterScreen() {
           <TouchableOpacity
             style={[styles.button, styles.registerButton]}
             onPress={handleRegister}
+            disabled={isLoading}
           >
-            <ThemedText style={styles.buttonText}>Create Account</ThemedText>
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <ThemedText style={styles.buttonText}>Create Account</ThemedText>
+            )}
           </TouchableOpacity>
-          
+
           <View style={styles.loginContainer}>
             <ThemedText>Already have an account? </ThemedText>
             <Link href="/login" asChild>

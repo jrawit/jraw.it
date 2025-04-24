@@ -1,10 +1,13 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useAuthStore } from '@/utils/auth.store';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Link, router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
   useColorScheme,
@@ -12,20 +15,47 @@ import {
 } from 'react-native';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const handleLogin = () => {
+  // Auth store state and actions
+  const { login, user, token, isLoading, error, clearError } = useAuthStore();
 
-    router.replace('/');
+  // Handle successful login
+  useEffect(() => {
+    if (user && token) {
+      router.replace('/');
+    }
+  }, [user, token]);
+
+  // Handle backend errors
+  useEffect(() => {
+    if (error) {
+      setErrorMessage('Username/email or password is incorrect');
+      clearError();
+    }
+  }, [error, clearError]);
+
+  const handleLogin = async () => {
+    // Clear previous error
+    setErrorMessage(null);
+
+    // Basic validation
+    if (!username.trim() || !password.trim()) {
+      setErrorMessage('Please enter both username/email and password');
+      return;
+    }
+
+    await login(username, password);
   };
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen 
+      <Stack.Screen
         options={{
           title: 'Login',
           headerStyle: {
@@ -36,55 +66,78 @@ export default function LoginScreen() {
       />
 
       <View style={styles.formContainer}>
-        <ThemedText type="title" style={styles.title}>Welcome back!</ThemedText>
+        <ThemedText type="title" style={styles.title}>
+          Welcome back!
+        </ThemedText>
         <ThemedText style={styles.subtitle}>
           Sign in to continue using JrawIt
         </ThemedText>
 
+        {errorMessage && (
+          <Text
+            style={[
+              styles.errorMessage,
+              { color: isDark ? '#ff9999' : '#e74c3c' },
+            ]}
+          >
+            {errorMessage}
+          </Text>
+        )}
+
         <View style={styles.inputGroup}>
-          <ThemedText style={styles.inputLabel}>Email</ThemedText>
+          <ThemedText style={styles.inputLabel}>Username or Email</ThemedText>
           <TextInput
             style={[
               styles.input,
-              { 
+              {
                 backgroundColor: isDark ? '#333' : 'white',
                 borderColor: isDark ? '#555' : '#ddd',
                 color: isDark ? 'white' : 'black',
-              }
+              },
             ]}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Enter your email"
+            value={username}
+            onChangeText={text => {
+              setUsername(text);
+              if (errorMessage) setErrorMessage(null);
+            }}
+            placeholder="Enter your username or email"
             placeholderTextColor={isDark ? '#999' : '#999'}
-            keyboardType="email-address"
             autoCapitalize="none"
           />
         </View>
 
         <View style={styles.inputGroup}>
           <ThemedText style={styles.inputLabel}>Password</ThemedText>
-          <View style={styles.passwordInputContainer}>
+          <View
+            style={[
+              styles.passwordInputContainer,
+              { borderColor: isDark ? '#555' : '#ddd' },
+            ]}
+          >
             <TextInput
               style={[
                 styles.passwordInput,
-                { 
+                {
                   backgroundColor: isDark ? '#333' : 'white',
                   color: isDark ? 'white' : 'black',
-                }
+                },
               ]}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={text => {
+                setPassword(text);
+                if (errorMessage) setErrorMessage(null);
+              }}
               placeholder="Enter your password"
               placeholderTextColor={isDark ? '#999' : '#999'}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
               style={styles.eyeIcon}
             >
               <MaterialIcons
-                name={showPassword ? "visibility" : "visibility-off"}
+                name={showPassword ? 'visibility' : 'visibility-off'}
                 size={24}
                 color={isDark ? '#999' : '#666'}
               />
@@ -96,16 +149,27 @@ export default function LoginScreen() {
           style={styles.forgotPassword}
           onPress={() => console.log('Forgot password')}
         >
-          <ThemedText style={styles.forgotPasswordText}>Forgot Password?</ThemedText>
+          <ThemedText style={styles.forgotPasswordText}>
+            Forgot Password?
+          </ThemedText>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, styles.loginButton]}
+          style={[
+            styles.button,
+            styles.loginButton,
+            isLoading && styles.disabledButton,
+          ]}
           onPress={handleLogin}
+          disabled={isLoading}
         >
-          <ThemedText style={styles.buttonText}>Login</ThemedText>
+          {isLoading ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <ThemedText style={styles.buttonText}>Login</ThemedText>
+          )}
         </TouchableOpacity>
-        
+
         <View style={styles.registerContainer}>
           <ThemedText>Don't have an account? </ThemedText>
           <Link href="/register" asChild>
@@ -205,5 +269,13 @@ const styles = StyleSheet.create({
   registerLink: {
     color: '#007BFF',
     fontWeight: '600',
+  },
+  errorMessage: {
+    textAlign: 'center',
+    marginBottom: 20,
+    fontSize: 14,
+  },
+  disabledButton: {
+    backgroundColor: '#74b4f5',
   },
 });
