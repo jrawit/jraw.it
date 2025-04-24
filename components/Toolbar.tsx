@@ -40,13 +40,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
   isDrawing = false,
 }) => {
   const colorScheme = useColorScheme();
-  // Add this with your existing shared values
   const collapsed = useSharedValue(false);
 
   // Toggle handler
   const toggleCollapse = () => {
     collapsed.value = !collapsed.value;
-    setIsCollapsed(!isCollapsed); // <- This updates the icon
+    setIsCollapsed(!isCollapsed);
   };
 
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -62,6 +61,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
           }),
         },
       ],
+      height: withTiming(collapsed.value ? 0 : 100, {
+        duration: 300,
+        easing: Easing.out(Easing.quad),
+      }),
       opacity: withTiming(collapsed.value ? 0 : 1, {
         duration: 300,
       }),
