@@ -10,14 +10,10 @@ export type ModifyAction = {
   originalElements: CanvasElement[]; // Partial list of elements before modification
   newElements: CanvasElement[]; // Partial list of elements after modification
 };
-export type EraseAction = {
-  type: 'ERASE_ACTION';
-  originalState: CanvasElement[]; // Full state before erase
-  finalState: CanvasElement[]; // Full state after erase
-};
+
 
 // Define the Union Type for all possible actions
-export type HistoryAction = AddAction | DeleteAction | ModifyAction | EraseAction;
+export type HistoryAction = AddAction | DeleteAction | ModifyAction;
 
 export const useCanvasHistory = (
   setElements: React.Dispatch<React.SetStateAction<CanvasElement[]>>,
@@ -59,10 +55,6 @@ export const useCanvasHistory = (
           return prev.map(currentEl => originalMap.get(currentEl.id) || currentEl);
         });
         break;
-      case 'ERASE_ACTION':
-        // Restore the complete state from before the erase
-        setElements(lastAction.originalState);
-        break;
     }
 
     // Add the undone action to the redo stack and update the undo stack
@@ -97,10 +89,6 @@ export const useCanvasHistory = (
           // Map over previous state, replacing elements found in the newMap
           return prev.map(currentEl => newMap.get(currentEl.id) || currentEl);
         });
-        break;
-      case 'ERASE_ACTION':
-        // Restore the complete state from after the erase
-        setElements(nextAction.finalState);
         break;
     }
 

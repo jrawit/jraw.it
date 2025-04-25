@@ -229,7 +229,7 @@ export const useCanvas = ({
                 );
               }
             }
-
+            
             // Only test if we have vertices
             if (
               vertices.length > 0 &&
@@ -239,7 +239,10 @@ export const useCanvas = ({
             }
             break;
           }
-          // ... (TEXT, IMAGE cases) ...
+          case Tools.IMAGE: 
+          case Tools.TEXT:
+              return element.id; 
+
         }
       }
       return null;
@@ -256,22 +259,29 @@ export const useCanvas = ({
       // --- Eraser Start ---
       if (tool === Tools.ERASER) {
         elementsToEraseRef.current.clear();
-        // Store the complete state *before* erasing starts
-        originalElementsBeforeEraseRef.current = cloneDeep(elements); // Deep clone for safety
+        // Store the complete state *before* erasing starts (we'll keep this for reference)
+        originalElementsBeforeEraseRef.current = cloneDeep(elements);
+        
         // Check for initial touch intersection
-        const touchedElementId = findElementAtPoint(
-          x,
-          y,
-          elements,
-          fontManager
-        );
+        const touchedElementId = findElementAtPoint(x, y, elements, fontManager);
         if (touchedElementId) {
+          // Find the original element before erasing it
+          const elementToErase = elements.find(el => el.id === touchedElementId);
+          if (elementToErase) {
+            // Create a history action for this specific element
+            const action: HistoryAction = {
+              type: 'DELETE_ELEMENT',
+              elements: [cloneDeep(elementToErase)],
+            };
+            addToHistory(action);
+          }
+          
           // Immediately remove the element visually
           setElements(prev => prev.filter(el => el.id !== touchedElementId));
           // Track the ID of the erased element
           elementsToEraseRef.current.add(touchedElementId);
         }
-        return; // Eraser handles its own start logic
+        return;
       }
 
       // --- Selection Interaction Start ---
@@ -375,16 +385,19 @@ export const useCanvas = ({
     (x: number, y: number) => {
       // --- Eraser Move ---
       if (tool === Tools.ERASER) {
-        const touchedElementId = findElementAtPoint(
-          x,
-          y,
-          elements,
-          fontManager
-        );
-        if (
-          touchedElementId &&
-          !elementsToEraseRef.current.has(touchedElementId)
-        ) {
+        const touchedElementId = findElementAtPoint(x, y, elements, fontManager);
+        if (touchedElementId && !elementsToEraseRef.current.has(touchedElementId)) {
+          // Find the original element before erasing it
+          const elementToErase = elements.find(el => el.id === touchedElementId);
+          if (elementToErase) {
+            // Create a history action for this specific element
+            const action: HistoryAction = {
+              type: 'DELETE_ELEMENT',
+              elements: [cloneDeep(elementToErase)],
+            };
+            addToHistory(action);
+          }
+  
           elementsToEraseRef.current.add(touchedElementId);
           setElements(prev => prev.filter(el => el.id !== touchedElementId));
           if (selection?.ids.includes(touchedElementId)) {
@@ -538,27 +551,9 @@ export const useCanvas = ({
 
   const onEndInput = useCallback(
     (x: number, y: number) => {
-      // --- Eraser End Logic ---
-      if (tool === Tools.ERASER) {
-        // Only add history if elements were actually erased and we have the original state
-        if (
-          elementsToEraseRef.current.size > 0 &&
-          originalElementsBeforeEraseRef.current
-        ) {
-          const originalState = originalElementsBeforeEraseRef.current;
-          // The 'elements' state variable already holds the final state after visual removals
-          const finalState = elements; // Current state IS the final state
 
-          // Create a dedicated ERASE action with full state snapshots
-          const action: HistoryAction = {
-            // Ensure HistoryAction includes EraseAction type
-            type: 'ERASE_ACTION',
-            originalState: originalState, // Complete state BEFORE erase
-            finalState: finalState, // Complete state AFTER erase
-          };
-          addToHistory(action);
-        }
-        // Clear the tracking refs for the next operation
+      if (tool === Tools.ERASER) {
+
         elementsToEraseRef.current.clear();
         originalElementsBeforeEraseRef.current = null;
         initialPointRef.current = null;
