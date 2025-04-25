@@ -1,10 +1,18 @@
-import { HANDLE_TOUCH_AREA } from '@/components/SelectionOverlay'; // Added HANDLE_SIZE
+import { HANDLE_TOUCH_AREA } from '@/components/SelectionOverlay';
 import { CanvasElements } from '@/constants/CanvasElement';
+import {
+  calculateStarVertices,
+  distanceSqFromPointToSegment,
+  getPointsOnSmoothedPathQuadratic,
+  isPointNearPolygonOutline,
+  isPointNearPolyline,
+} from '@/utils/geometryUtils';
 import {
   Selection,
   calculateCombinedBoundingBox,
   calculateElementBoundingBox,
   findElementsInSelection,
+  isPointInsideBox,
 } from '@/utils/selectionUtils';
 import { cloneDeep } from 'lodash';
 import { useCallback, useRef, useState } from 'react';
@@ -12,6 +20,7 @@ import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { Tools } from '../constants/Tools';
 import toolHandlers from './tool-handlers';
+// Import the action types and the hook itself
 import { HistoryAction, useCanvasHistory } from './useCanvasHistory';
 
 export type CanvasElement = {
@@ -39,13 +48,24 @@ export const useCanvas = ({
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(
     null
   );
+  // --- Eraser Refs ---
+  const elementsToEraseRef = useRef<Set<string>>(new Set());
+  // Stores the full element state *before* the erase operation started
+  const originalElementsBeforeEraseRef = useRef<CanvasElement[] | null>(null);
 
+  // --- Selection and Interaction Refs ---
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectionStateRef = useRef<SelectionState>(null);
   const initialPointRef = useRef<{ x: number; y: number } | null>(null);
   const initialSelectionRef = useRef<Selection | null>(null);
-  const initialCanvasElementsRef = useRef<CanvasElement[]>([]);
+  const initialCanvasElementsRef = useRef<CanvasElement[]>([]); // For move/scale original state
+  const scalingHandleIndexRef = useRef<number | null>(null);
+  const scalingOriginRef = useRef<{ x: number; y: number } | null>(null);
 
+  // --- Utility Functions ---
+  const generateId = () => uuidv4();
+
+  // Define clearSelection *before* passing it to useCanvasHistory
   const clearSelection = useCallback(() => {
     setSelection(null);
     selectionStateRef.current = null;
@@ -55,28 +75,222 @@ export const useCanvas = ({
     scalingHandleIndexRef.current = null;
     scalingOriginRef.current = null;
   }, []);
+
+  // --- History Hook ---
+  // Pass setElements and clearSelection to the history hook
   const { addToHistory, undo, redo } = useCanvasHistory(
     setElements,
     clearSelection
-  ); // Removed history, currentHistoryIndex
+  );
 
-  const scalingHandleIndexRef = useRef<number | null>(null);
-  const scalingOriginRef = useRef<{ x: number; y: number } | null>(null);
+  // --- Hit Detection ---
+  const findElementAtPoint = useCallback(
+    (
+      x: number,
+      y: number,
+      elementsToCheck: CanvasElement[],
+      fm?: any
+    ): string | null => {
+      const point = { x, y };
+      // Start with a moderate tolerance, adjust if needed after confirming base functionality
 
-  const generateId = () => uuidv4();
+      for (let i = elementsToCheck.length - 1; i >= 0; i--) {
+        const element = elementsToCheck[i];
+        if (!element) continue;
+
+        const elementData = element.element;
+        const elementTool = element.tool;
+        const elementStrokeWidth = (elementData as any).strokeWidth;
+        const actualElementStrokeWidth =
+          elementStrokeWidth === undefined || elementStrokeWidth === null
+            ? 3
+            : elementStrokeWidth;
+
+        const touchTolerance = tool === Tools.ERASER ? 0 : 1;
+        const eraserRadius = tool === Tools.ERASER ? strokeWidth / 2 : 0;
+
+        // Calculate Single Effective Radius - important to match visual size
+        const effectiveCheckRadius =
+          actualElementStrokeWidth / 2 + eraserRadius;
+        const effectiveCheckRadiusSq = effectiveCheckRadius ** 2;
+
+        // --- DEBUG LOG (Optional) ---
+        // if (tool === Tools.ERASER && [Tools.RECTANGLE, Tools.TRIANGLE, Tools.STAR, Tools.PEN, Tools.HIGHLIGHTER, Tools.LINE, Tools.CIRCLE].includes(elementTool)) {
+        //   console.log(`[findElementAtPoint] Element ${element.id} (${elementTool}):`);
+        //   console.log(`  EraserRadius=${eraserRadius.toFixed(2)}, ElemStroke=${actualElementStrokeWidth.toFixed(2)}, TouchTol=${touchTolerance}`);
+        //   console.log(`  => effectiveCheckRadius=${effectiveCheckRadius.toFixed(2)} (Sq=${effectiveCheckRadiusSq.toFixed(2)})`);
+        // }
+        // --- END DEBUG LOG ---
+
+        // Broad phase check
+        const bboxPadding =
+          tool === Tools.ERASER ? effectiveCheckRadius : effectiveCheckRadius;
+        const bbox = calculateElementBoundingBox(element, bboxPadding, fm);
+        if (!bbox || !isPointInsideBox(point, bbox)) {
+          continue;
+        }
+
+        // Precise phase: Use the single effectiveCheckRadius or its square
+        switch (elementTool) {
+          // Around line 126-139
+
+          case Tools.PEN:
+          case Tools.HIGHLIGHTER: {
+            const pathData = elementData as CanvasElements.Path;
+            if (!pathData?.points || pathData.points.length < 1) break;
+
+            // Calculate a more precise radius specifically for pen/highlighter
+            // Remove the extra tolerance by reducing the effective radius
+            const penPrecisionFactor = tool === Tools.ERASER ? 0.75 : 1.0;
+            const penCheckRadius = effectiveCheckRadius * penPrecisionFactor;
+
+            const smoothedPoints = getPointsOnSmoothedPathQuadratic(
+              pathData.points,
+              10
+            );
+            // Use the reduced radius for more precise detection
+            if (isPointNearPolyline(point, smoothedPoints, penCheckRadius)) {
+              return element.id;
+            }
+            break;
+          }
+          case Tools.CIRCLE: {
+            const circleData = elementData as CanvasElements.Circle;
+            if (!circleData?.center) break;
+            const radius = circleData.radius;
+            const dx = x - circleData.center.x;
+            const dy = y - circleData.center.y;
+            const distSq = dx * dx + dy * dy;
+            // Use the single effective radius
+            const outerEffectiveRadiusSq = (radius + effectiveCheckRadius) ** 2;
+            const innerEffectiveRadiusSq =
+              Math.max(0, radius - effectiveCheckRadius) ** 2;
+            if (
+              distSq <= outerEffectiveRadiusSq &&
+              distSq >= innerEffectiveRadiusSq
+            ) {
+              return element.id;
+            }
+            break;
+          }
+          case Tools.LINE: {
+            const lineData = elementData as CanvasElements.Line;
+            if (!lineData?.startPoint || !lineData?.endPoint) break;
+            const lineDistSq = distanceSqFromPointToSegment(
+              x,
+              y,
+              lineData.startPoint.x,
+              lineData.startPoint.y,
+              lineData.endPoint.x,
+              lineData.endPoint.y
+            );
+            // Use the single effective radius squared
+            if (lineDistSq <= effectiveCheckRadiusSq) {
+              return element.id;
+            }
+            break;
+          }
+          case Tools.RECTANGLE:
+          case Tools.TRIANGLE:
+          case Tools.STAR: {
+            let vertices: Array<{ x: number; y: number }> = [];
+
+            if (elementTool === Tools.RECTANGLE) {
+              const rectData = elementData as CanvasElements.Rectangle;
+              if (rectData?.point) {
+                const x = rectData.point.x;
+                const y = rectData.point.y;
+                const w = rectData.width;
+                const h = rectData.height;
+
+                // Rectangle corners
+                vertices = [
+                  { x, y }, // top-left
+                  { x: x + w, y }, // top-right
+                  { x: x + w, y: y + h }, // bottom-right
+                  { x, y: y + h }, // bottom-left
+                ];
+              }
+            } else if (elementTool === Tools.TRIANGLE) {
+              const triData = elementData as CanvasElements.Triangle;
+              if (triData?.point1 && triData?.point2 && triData?.point3) {
+                // Use the three points of the triangle
+                vertices = [triData.point1, triData.point2, triData.point3];
+              }
+            } else if (elementTool === Tools.STAR) {
+              const starData = elementData as CanvasElements.Star;
+              if (starData?.point && starData?.radius && starData?.spikes) {
+                // Calculate star vertices using the existing utility function
+                vertices = calculateStarVertices(
+                  starData.point,
+                  starData.radius,
+                  0.5, // innerRadiusRatio (default)
+                  starData.spikes
+                );
+              }
+            }
+            
+            // Only test if we have vertices
+            if (
+              vertices.length > 0 &&
+              isPointNearPolygonOutline(point, vertices, effectiveCheckRadius)
+            ) {
+              return element.id;
+            }
+            break;
+          }
+          case Tools.IMAGE: 
+          case Tools.TEXT:
+              return element.id; 
+
+        }
+      }
+      return null;
+    },
+    [tool, strokeWidth, fontManager]
+  );
+
+  // --- Input Handlers ---
 
   const onStartInput = useCallback(
     (x: number, y: number) => {
       initialPointRef.current = { x, y };
 
+      // --- Eraser Start ---
+      if (tool === Tools.ERASER) {
+        elementsToEraseRef.current.clear();
+        // Store the complete state *before* erasing starts (we'll keep this for reference)
+        originalElementsBeforeEraseRef.current = cloneDeep(elements);
+        
+        // Check for initial touch intersection
+        const touchedElementId = findElementAtPoint(x, y, elements, fontManager);
+        if (touchedElementId) {
+          // Find the original element before erasing it
+          const elementToErase = elements.find(el => el.id === touchedElementId);
+          if (elementToErase) {
+            // Create a history action for this specific element
+            const action: HistoryAction = {
+              type: 'DELETE_ELEMENT',
+              elements: [cloneDeep(elementToErase)],
+            };
+            addToHistory(action);
+          }
+          
+          // Immediately remove the element visually
+          setElements(prev => prev.filter(el => el.id !== touchedElementId));
+          // Track the ID of the erased element
+          elementsToEraseRef.current.add(touchedElementId);
+        }
+        return;
+      }
+
+      // --- Selection Interaction Start ---
       if (selection && selectionStateRef.current === 'selected') {
         const { x: selX, y: selY, width: selW, height: selH } = selection;
-
         const normX = selW < 0 ? selX + selW : selX;
         const normY = selH < 0 ? selY + selH : selY;
         const normW = Math.abs(selW);
         const normH = Math.abs(selH);
-
         const halfW = normW / 2;
         const halfH = normH / 2;
         const handles = [
@@ -89,7 +303,6 @@ export const useCanvas = ({
           { x: normX, y: normY + normH },
           { x: normX, y: normY + halfH },
         ];
-
         const touchRadiusSq = (HANDLE_TOUCH_AREA / 2) ** 2;
         let touchedHandleIndex: number | null = null;
         for (let i = 0; i < handles.length; i++) {
@@ -102,6 +315,7 @@ export const useCanvas = ({
         }
 
         if (touchedHandleIndex !== null) {
+          // Start Scaling
           selectionStateRef.current = 'scaling';
           scalingHandleIndexRef.current = touchedHandleIndex;
           const oppositeHandleIndex = (touchedHandleIndex + 4) % 8;
@@ -119,6 +333,7 @@ export const useCanvas = ({
           y >= normY &&
           y <= normY + normH
         ) {
+          // Start Moving
           selectionStateRef.current = 'moving';
           initialSelectionRef.current = cloneDeep(selection);
           initialCanvasElementsRef.current = cloneDeep(
@@ -126,28 +341,23 @@ export const useCanvas = ({
           );
           return;
         } else {
-          clearSelection();
+          clearSelection(); // Clicked outside
         }
       }
 
+      // --- Select Tool Start ---
       if (tool === Tools.SELECT) {
-        setSelection({
-          ids: [],
-          x,
-          y,
-          width: 0,
-          height: 0,
-          selected: false,
-        });
+        setSelection({ ids: [], x, y, width: 0, height: 0, selected: false });
         selectionStateRef.current = 'selecting';
         return;
       }
 
+      // --- Drawing Tool Start ---
       if (selectionStateRef.current !== 'selected') {
+        // Clear selection if not interacting with it
         clearSelection();
       }
-
-      if (toolHandlers[tool] && toolHandlers[tool].initElement) {
+      if (toolHandlers[tool]?.initElement) {
         const newElement = toolHandlers[tool].initElement(
           x,
           y,
@@ -158,12 +368,48 @@ export const useCanvas = ({
         setCurrentElement(newElement);
       }
     },
-    [tool, strokeWidth, color, generateId, selection, elements, clearSelection]
+    [
+      tool,
+      strokeWidth,
+      color,
+      generateId,
+      selection,
+      elements,
+      clearSelection,
+      findElementAtPoint,
+      fontManager,
+    ]
   );
 
   const onMoveInput = useCallback(
     (x: number, y: number) => {
+      // --- Eraser Move ---
+      if (tool === Tools.ERASER) {
+        const touchedElementId = findElementAtPoint(x, y, elements, fontManager);
+        if (touchedElementId && !elementsToEraseRef.current.has(touchedElementId)) {
+          // Find the original element before erasing it
+          const elementToErase = elements.find(el => el.id === touchedElementId);
+          if (elementToErase) {
+            // Create a history action for this specific element
+            const action: HistoryAction = {
+              type: 'DELETE_ELEMENT',
+              elements: [cloneDeep(elementToErase)],
+            };
+            addToHistory(action);
+          }
+  
+          elementsToEraseRef.current.add(touchedElementId);
+          setElements(prev => prev.filter(el => el.id !== touchedElementId));
+          if (selection?.ids.includes(touchedElementId)) {
+            clearSelection(); // Clear selection if erased element was selected
+          }
+        }
+        return;
+      }
+
+      // --- Selection Interaction Move ---
       if (selection && selectionStateRef.current) {
+        // --- Selecting Move ---
         if (selectionStateRef.current === 'selecting') {
           setSelection(prev => {
             if (!prev || !initialPointRef.current) return null;
@@ -173,42 +419,40 @@ export const useCanvas = ({
               height: y - initialPointRef.current.y,
             };
           });
-        } else if (selectionStateRef.current === 'moving') {
+          return;
+        }
+        // --- Moving Move ---
+        else if (selectionStateRef.current === 'moving') {
           if (
             !initialPointRef.current ||
             !initialSelectionRef.current ||
             !initialCanvasElementsRef.current
           )
             return;
-
           const deltaX = x - initialPointRef.current.x;
           const deltaY = y - initialPointRef.current.y;
-
           setSelection({
             ...initialSelectionRef.current,
             x: initialSelectionRef.current.x + deltaX,
             y: initialSelectionRef.current.y + deltaY,
           });
-
           const movedElements = initialCanvasElementsRef.current.map(
             initialElement => {
               const handler = toolHandlers[initialElement.tool];
-              if (handler?.moveElement) {
-                return handler.moveElement(initialElement, deltaX, deltaY);
-              }
-              return initialElement;
+              return handler?.moveElement
+                ? handler.moveElement(initialElement, deltaX, deltaY)
+                : initialElement;
             }
           );
-
           setElements(prevElements =>
-            prevElements.map(el => {
-              const movedVersion = movedElements.find(
-                movedEl => movedEl.id === el.id
-              );
-              return movedVersion || el;
-            })
+            prevElements.map(
+              el => movedElements.find(movedEl => movedEl.id === el.id) || el
+            )
           );
-        } else if (selectionStateRef.current === 'scaling') {
+          return;
+        }
+        // --- Scaling Move ---
+        else if (selectionStateRef.current === 'scaling') {
           if (
             !initialPointRef.current ||
             !initialSelectionRef.current ||
@@ -217,10 +461,8 @@ export const useCanvas = ({
             !scalingOriginRef.current
           )
             return;
-
           const origin = scalingOriginRef.current;
           const handleIndex = scalingHandleIndexRef.current;
-
           const {
             x: iSelX,
             y: iSelY,
@@ -244,48 +486,32 @@ export const useCanvas = ({
             { x: iNormX, y: iNormY + iHalfH },
           ];
           const initialHandlePos = iHandles[handleIndex];
-
           const initialDeltaX = initialHandlePos.x - origin.x;
           const initialDeltaY = initialHandlePos.y - origin.y;
           const currentDeltaX = x - origin.x;
           const currentDeltaY = y - origin.y;
-
           let scaleX = initialDeltaX === 0 ? 1 : currentDeltaX / initialDeltaX;
           let scaleY = initialDeltaY === 0 ? 1 : currentDeltaY / initialDeltaY;
-
           if ([1, 5].includes(handleIndex)) scaleX = 1;
           if ([3, 7].includes(handleIndex)) scaleY = 1;
-
           const MIN_SCALE = 0.01;
           if (Math.abs(scaleX) < MIN_SCALE)
-            scaleX = Math.sign(scaleX) * MIN_SCALE;
+            scaleX = Math.sign(scaleX || 1) * MIN_SCALE;
           if (Math.abs(scaleY) < MIN_SCALE)
-            scaleY = Math.sign(scaleY) * MIN_SCALE;
-
+            scaleY = Math.sign(scaleY || 1) * MIN_SCALE;
           const scaledElements = initialCanvasElementsRef.current.map(
             initialElement => {
               const handler = toolHandlers[initialElement.tool];
-              if (handler?.scaleElement) {
-                return handler.scaleElement(
-                  initialElement,
-                  scaleX,
-                  scaleY,
-                  origin
-                );
-              }
-              return initialElement;
+              return handler?.scaleElement
+                ? handler.scaleElement(initialElement, scaleX, scaleY, origin)
+                : initialElement;
             }
           );
-
           setElements(prevElements =>
-            prevElements.map(el => {
-              const scaledVersion = scaledElements.find(
-                scaledEl => scaledEl.id === el.id
-              );
-              return scaledVersion || el;
-            })
+            prevElements.map(
+              el => scaledElements.find(scaledEl => scaledEl.id === el.id) || el
+            )
           );
-
           const newCombinedBox = calculateCombinedBoundingBox(
             scaledElements,
             10,
@@ -298,12 +524,12 @@ export const useCanvas = ({
               selected: true,
             });
           }
+          return;
         }
-      } else if (
-        currentElement &&
-        toolHandlers[tool] &&
-        toolHandlers[tool].updateElement
-      ) {
+      }
+
+      // --- Drawing Tool Move ---
+      if (currentElement && toolHandlers[tool]?.updateElement) {
         const updatedElement = toolHandlers[tool].updateElement(
           currentElement,
           x,
@@ -312,24 +538,44 @@ export const useCanvas = ({
         setCurrentElement(updatedElement);
       }
     },
-    [currentElement, tool, selection, elements, fontManager]
+    [
+      currentElement,
+      tool,
+      selection,
+      elements,
+      clearSelection,
+      fontManager,
+      findElementAtPoint,
+    ]
   );
 
   const onEndInput = useCallback(
     (x: number, y: number) => {
+
+      if (tool === Tools.ERASER) {
+
+        elementsToEraseRef.current.clear();
+        originalElementsBeforeEraseRef.current = null;
+        initialPointRef.current = null;
+        return; // Eraser action finished
+      }
+
+      // --- Selection Interaction End ---
       if (selection && selectionStateRef.current) {
+        // --- Moving End ---
         if (selectionStateRef.current === 'moving') {
           if (
             !initialPointRef.current ||
             !initialCanvasElementsRef.current ||
             !initialSelectionRef.current
-          )
+          ) {
+            selectionStateRef.current = selection.selected ? 'selected' : null;
             return;
-
+          }
           const finalElements = elements.filter(el =>
             initialSelectionRef.current!.ids.includes(el.id)
           );
-
+          // Add history only if elements actually changed
           if (
             initialCanvasElementsRef.current.length > 0 &&
             finalElements.length > 0 &&
@@ -339,25 +585,30 @@ export const useCanvas = ({
             const action: HistoryAction = {
               type: 'MODIFY_ELEMENT',
               elementIds: initialSelectionRef.current.ids,
-              originalElements: initialCanvasElementsRef.current,
-              newElements: finalElements,
+              originalElements: initialCanvasElementsRef.current, // Original state of moved elements
+              newElements: finalElements, // Final state of moved elements
             };
             addToHistory(action);
           }
-
           selectionStateRef.current = 'selected';
           initialPointRef.current = null;
           initialSelectionRef.current = null;
           initialCanvasElementsRef.current = [];
           return;
-        } else if (selectionStateRef.current === 'scaling') {
-          if (!initialCanvasElementsRef.current || !initialSelectionRef.current)
+        }
+        // --- Scaling End ---
+        else if (selectionStateRef.current === 'scaling') {
+          if (
+            !initialCanvasElementsRef.current ||
+            !initialSelectionRef.current
+          ) {
+            selectionStateRef.current = selection.selected ? 'selected' : null;
             return;
-
+          }
           const finalElements = elements.filter(el =>
             initialSelectionRef.current!.ids.includes(el.id)
           );
-
+          // Add history only if elements actually changed
           if (
             initialCanvasElementsRef.current.length > 0 &&
             finalElements.length > 0 &&
@@ -367,12 +618,11 @@ export const useCanvas = ({
             const action: HistoryAction = {
               type: 'MODIFY_ELEMENT',
               elementIds: initialSelectionRef.current.ids,
-              originalElements: initialCanvasElementsRef.current,
-              newElements: finalElements,
+              originalElements: initialCanvasElementsRef.current, // Original state of scaled elements
+              newElements: finalElements, // Final state of scaled elements
             };
             addToHistory(action);
           }
-
           selectionStateRef.current = 'selected';
           initialPointRef.current = null;
           initialSelectionRef.current = null;
@@ -380,7 +630,9 @@ export const useCanvas = ({
           scalingHandleIndexRef.current = null;
           scalingOriginRef.current = null;
           return;
-        } else if (selectionStateRef.current === 'selecting') {
+        }
+        // --- Selecting End ---
+        else if (selectionStateRef.current === 'selecting') {
           const finalSelection = calculateSelectionBounds(
             selection,
             elements,
@@ -389,33 +641,58 @@ export const useCanvas = ({
           setSelection(finalSelection);
           selectionStateRef.current = finalSelection ? 'selected' : null;
           initialPointRef.current = null;
-          return;
+          return; // No history action for selection itself
         }
       }
 
+      // --- Drawing Tool End ---
       if (currentElement) {
-        const action: HistoryAction = {
-          type: 'ADD_ELEMENT',
-          elements: [currentElement],
-        };
+        const handler = toolHandlers[tool];
+        // Finalize element (e.g., remove redundant points) before adding
+        const finalElement = handler?.finalizeElement
+          ? handler.finalizeElement(currentElement)
+          : currentElement;
+        const isValid = finalElement !== null; // Check if finalizeElement returned null (invalid)
 
-        setElements(prev => [...prev, currentElement]);
-        addToHistory(action);
-        setCurrentElement(null);
+        if (isValid && finalElement) {
+          // Check finalElement exists
+          // Add the completed element to the main state
+          setElements(prev => [...prev, finalElement]);
+          // Add to history
+          const action: HistoryAction = {
+            type: 'ADD_ELEMENT',
+            elements: [finalElement], // History only needs the added element
+          };
+          addToHistory(action);
+        }
+        setCurrentElement(null); // Clear the temporary drawing element
       }
-      initialPointRef.current = null;
+      initialPointRef.current = null; // Reset initial point ref for all tools
     },
-    [currentElement, tool, elements, selection, addToHistory, fontManager]
+    [
+      currentElement,
+      tool,
+      elements,
+      selection,
+      addToHistory,
+      fontManager,
+      clearSelection,
+    ]
   );
 
+  // --- External Element Modification Functions ---
+
   const addExternalElement = useCallback(
-    (element: CanvasElements.Any, tool: Tools, propagateToHistory = true) => {
+    (
+      element: CanvasElements.Any,
+      toolType: Tools,
+      propagateToHistory = true
+    ) => {
       const newElementData: CanvasElement = {
         id: generateId(),
         element,
-        tool,
+        tool: toolType,
       };
-
       setElements(prev => [...prev, newElementData]);
       if (propagateToHistory) {
         const action: HistoryAction = {
@@ -441,41 +718,19 @@ export const useCanvas = ({
         prev.map(el => {
           if (el.id === id) {
             originalElement = cloneDeep(el);
-            newElementData = {
-              ...el,
-              element: { ...el.element, ...updates },
-            };
+            newElementData = { ...el, element: { ...el.element, ...updates } };
             return newElementData;
           }
           return el;
         })
       );
 
-      if (
-        selection &&
-        selection.ids.length === 1 &&
-        selection.ids[0] === id &&
-        newElementData
-      ) {
-        const newBoundingBox = calculateElementBoundingBox(
-          newElementData,
-          10,
-          fontManager
-        );
-        if (newBoundingBox) {
-          setSelection({
-            ...selection,
-            ...newBoundingBox,
-          });
-        } else {
-          clearSelection();
-        }
-      } else if (selection && selection.ids.includes(id)) {
+      if (selection && selection.ids.includes(id) && newElementData) {
         const selectedElements = elements.filter(el =>
           selection.ids.includes(el.id)
         );
         const updatedSelectedElements = selectedElements.map(el =>
-          el.id === id && newElementData ? newElementData : el
+          el.id === id ? newElementData! : el
         );
         const newCombinedBox = calculateCombinedBoundingBox(
           updatedSelectedElements,
@@ -483,10 +738,7 @@ export const useCanvas = ({
           fontManager
         );
         if (newCombinedBox) {
-          setSelection({
-            ...selection,
-            ...newCombinedBox,
-          });
+          setSelection({ ...selection, ...newCombinedBox });
         } else {
           clearSelection();
         }
@@ -496,8 +748,8 @@ export const useCanvas = ({
         const action: HistoryAction = {
           type: 'MODIFY_ELEMENT',
           elementIds: [id],
-          originalElements: [originalElement],
-          newElements: [newElementData],
+          originalElements: [originalElement], // Original state of the single modified element
+          newElements: [newElementData], // Final state of the single modified element
         };
         addToHistory(action);
       }
@@ -513,21 +765,20 @@ export const useCanvas = ({
   );
 
   const deleteSelection = useCallback(() => {
-    if (selection) {
+    if (selection && selection.ids.length > 0) {
       const elementsToDelete = elements.filter(element =>
-        selection?.ids.includes(element.id)
+        selection.ids.includes(element.id)
       );
-
-      const action: HistoryAction = {
-        type: 'DELETE_ELEMENT',
-        elements: [...elementsToDelete],
-      };
-
-      addToHistory(action);
-      const newElements = elements.filter(
-        element => !selection?.ids.includes(element.id)
-      );
-      setElements(newElements);
+      if (elementsToDelete.length > 0) {
+        const action: HistoryAction = {
+          type: 'DELETE_ELEMENT',
+          elements: cloneDeep(elementsToDelete),
+        };
+        addToHistory(action);
+        setElements(prev =>
+          prev.filter(element => !selection.ids.includes(element.id))
+        );
+      }
       clearSelection();
     }
   }, [selection, elements, addToHistory, clearSelection]);
@@ -536,17 +787,16 @@ export const useCanvas = ({
     if (elements.length > 0) {
       const action: HistoryAction = {
         type: 'DELETE_ELEMENT',
-        elements: [...elements],
+        elements: cloneDeep(elements),
       };
-
       addToHistory(action);
     }
-
     setElements([]);
     setCurrentElement(null);
     clearSelection();
   }, [elements, addToHistory, clearSelection]);
 
+  // --- Return Values ---
   return {
     elements,
     currentElement,
@@ -563,22 +813,20 @@ export const useCanvas = ({
   };
 };
 
+// --- Helper Function (Outside Hook) ---
 function calculateSelectionBounds(
   selection: Selection | null,
   elements: CanvasElement[],
   fontManager?: any
 ): Selection | null {
   if (!selection) return null;
-
   const MINIMUM_SELECTION_SIZE = 5;
-
   if (
     Math.abs(selection.width) < MINIMUM_SELECTION_SIZE &&
     Math.abs(selection.height) < MINIMUM_SELECTION_SIZE
   ) {
     return null;
   }
-
   const normalizedSelection = {
     ...selection,
     x: selection.width < 0 ? selection.x + selection.width : selection.x,
@@ -586,31 +834,22 @@ function calculateSelectionBounds(
     width: Math.abs(selection.width),
     height: Math.abs(selection.height),
   };
-
   const selectedElements = findElementsInSelection(
     elements,
     normalizedSelection,
     fontManager
   );
-
   if (selectedElements.length === 0) {
     return null;
   }
-
   const selectedIds = selectedElements.map(element => element.id);
   const combinedBox = calculateCombinedBoundingBox(
     selectedElements,
     10,
     fontManager
   );
-
   if (!combinedBox) {
     return null;
   }
-
-  return {
-    ids: selectedIds,
-    ...combinedBox,
-    selected: true,
-  };
+  return { ids: selectedIds, ...combinedBox, selected: true };
 }
