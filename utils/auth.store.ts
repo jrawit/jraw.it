@@ -13,22 +13,31 @@ interface User {
   email: string;
 }
 
+// Define validation error type from Zod
+interface ValidationError {
+  path: string;
+  message: string;
+}
+
 // Auth store state interface
 interface AuthState {
   token: string | null;
   user: User | null;
   isLoading: boolean;
   error: string | null;
+  validationErrors: ValidationError[];
 
   // Actions
   login: (username: string, password: string) => Promise<void>;
   register: (
     username: string,
     email: string,
-    password: string
+    password: string,
+    name?: string
   ) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
+  clearValidationErrors: () => void;
 }
 
 // Create the auth store with persistence
@@ -39,10 +48,11 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isLoading: false,
       error: null,
+      validationErrors: [],
 
       // Login action
       login: async (username: string, password: string) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null, validationErrors: [] });
 
         try {
           const response = await axios.post(`${API_URL}/auth/login`, {
@@ -61,22 +71,41 @@ export const useAuthStore = create<AuthState>()(
             `Bearer ${response.data.token}`;
         } catch (error) {
           let errorMessage = 'Login failed. Please check your credentials.';
-          if (axios.isAxiosError(error) && error.response?.data?.message) {
-            errorMessage = error.response.data.message;
+          let validationErrors: ValidationError[] = [];
+
+          if (axios.isAxiosError(error) && error.response) {
+            // Check for specific validation errors from Zod
+            if (error.response.data?.errors) {
+              validationErrors = error.response.data.errors;
+              errorMessage = 'Please correct the validation errors.';
+            } else if (error.response.data?.message) {
+              errorMessage = error.response.data.message;
+            }
           }
-          set({ error: errorMessage, isLoading: false });
+
+          set({
+            error: errorMessage,
+            validationErrors,
+            isLoading: false,
+          });
         }
       },
 
       // Register action
-      register: async (username: string, email: string, password: string) => {
-        set({ isLoading: true, error: null });
+      register: async (
+        username: string,
+        email: string,
+        password: string,
+        name?: string
+      ) => {
+        set({ isLoading: true, error: null, validationErrors: [] });
 
         try {
           const response = await axios.post(`${API_URL}/auth/register`, {
             username,
             email,
             password,
+            ...(name ? { name } : {}),
           });
 
           set({
@@ -90,10 +119,23 @@ export const useAuthStore = create<AuthState>()(
             `Bearer ${response.data.token}`;
         } catch (error) {
           let errorMessage = 'Registration failed. Please try again.';
-          if (axios.isAxiosError(error) && error.response?.data?.message) {
-            errorMessage = error.response.data.message;
+          let validationErrors: ValidationError[] = [];
+
+          if (axios.isAxiosError(error) && error.response) {
+            // Check for specific validation errors from Zod
+            if (error.response.data?.errors) {
+              validationErrors = error.response.data.errors;
+              errorMessage = 'Please correct the validation errors.';
+            } else if (error.response.data?.message) {
+              errorMessage = error.response.data.message;
+            }
           }
-          set({ error: errorMessage, isLoading: false });
+
+          set({
+            error: errorMessage,
+            validationErrors,
+            isLoading: false,
+          });
         }
       },
 
@@ -115,6 +157,11 @@ export const useAuthStore = create<AuthState>()(
       // Clear error message
       clearError: () => {
         set({ error: null });
+      },
+
+      // Clear validation errors
+      clearValidationErrors: () => {
+        set({ validationErrors: [] });
       },
     }),
     {

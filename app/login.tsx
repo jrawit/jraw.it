@@ -18,12 +18,28 @@ export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Field-specific error messages
+  const [errors, setErrors] = useState({
+    username: '',
+    password: '',
+    general: '',
+  });
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   // Auth store state and actions
-  const { login, user, token, isLoading, error, clearError } = useAuthStore();
+  const {
+    login,
+    user,
+    token,
+    isLoading,
+    error,
+    clearError,
+    validationErrors,
+    clearValidationErrors,
+  } = useAuthStore();
 
   // Handle successful login
   useEffect(() => {
@@ -34,19 +50,70 @@ export default function LoginScreen() {
 
   // Handle backend errors
   useEffect(() => {
-    if (error) {
-      setErrorMessage('Username/email or password is incorrect');
-      clearError();
+    if (error || validationErrors.length > 0) {
+      // Map validation errors to form fields
+      if (validationErrors.length > 0) {
+        const newErrors = { ...errors };
+
+        validationErrors.forEach(({ path, message }) => {
+          if (path === 'username') {
+            newErrors.username = message;
+          } else if (path === 'password') {
+            newErrors.password = message;
+          }
+        });
+
+        setErrors(newErrors);
+        clearValidationErrors();
+      } else if (error) {
+        // Parse general error message to determine what kind of error it is
+        if (error.includes('Invalid credentials')) {
+          setErrors(prev => ({
+            ...prev,
+            password: 'Incorrect username or password',
+          }));
+        } else {
+          setErrors(prev => ({ ...prev, general: error }));
+        }
+        clearError();
+      }
     }
-  }, [error, clearError]);
+  }, [error, validationErrors, clearError, clearValidationErrors]);
+
+  // Clear specific field error
+  const clearFieldError = (field: keyof typeof errors) => {
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
 
   const handleLogin = async () => {
-    // Clear previous error
-    setErrorMessage(null);
+    // Reset errors
+    setErrors({
+      username: '',
+      password: '',
+      general: '',
+    });
 
-    // Basic validation
-    if (!username.trim() || !password.trim()) {
-      setErrorMessage('Please enter both username/email and password');
+    // Client-side validation is minimal since we're relying on the server's Zod validation
+    let hasErrors = false;
+
+    // Validate username/email
+    if (!username.trim()) {
+      setErrors(prev => ({
+        ...prev,
+        username: 'Username or email is required',
+      }));
+      hasErrors = true;
+    }
+
+    // Validate password
+    if (!password.trim()) {
+      setErrors(prev => ({ ...prev, password: 'Password is required' }));
+      hasErrors = true;
+    }
+
+    if (hasErrors) {
       return;
     }
 
@@ -73,14 +140,14 @@ export default function LoginScreen() {
           Sign in to continue using JrawIt
         </ThemedText>
 
-        {errorMessage && (
+        {errors.general && (
           <Text
             style={[
               styles.errorMessage,
               { color: isDark ? '#ff9999' : '#e74c3c' },
             ]}
           >
-            {errorMessage}
+            {errors.general}
           </Text>
         )}
 
@@ -91,19 +158,26 @@ export default function LoginScreen() {
               styles.input,
               {
                 backgroundColor: isDark ? '#333' : 'white',
-                borderColor: isDark ? '#555' : '#ddd',
+                borderColor: errors.username
+                  ? '#e74c3c'
+                  : isDark
+                    ? '#555'
+                    : '#ddd',
                 color: isDark ? 'white' : 'black',
               },
             ]}
             value={username}
             onChangeText={text => {
               setUsername(text);
-              if (errorMessage) setErrorMessage(null);
+              clearFieldError('username');
             }}
             placeholder="Enter your username or email"
             placeholderTextColor={isDark ? '#999' : '#999'}
             autoCapitalize="none"
           />
+          {errors.username && (
+            <Text style={styles.fieldError}>{errors.username}</Text>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -111,7 +185,13 @@ export default function LoginScreen() {
           <View
             style={[
               styles.passwordInputContainer,
-              { borderColor: isDark ? '#555' : '#ddd' },
+              {
+                borderColor: errors.password
+                  ? '#e74c3c'
+                  : isDark
+                    ? '#555'
+                    : '#ddd',
+              },
             ]}
           >
             <TextInput
@@ -125,7 +205,7 @@ export default function LoginScreen() {
               value={password}
               onChangeText={text => {
                 setPassword(text);
-                if (errorMessage) setErrorMessage(null);
+                clearFieldError('password');
               }}
               placeholder="Enter your password"
               placeholderTextColor={isDark ? '#999' : '#999'}
@@ -143,6 +223,9 @@ export default function LoginScreen() {
               />
             </TouchableOpacity>
           </View>
+          {errors.password && (
+            <Text style={styles.fieldError}>{errors.password}</Text>
+          )}
         </View>
 
         <TouchableOpacity
@@ -274,6 +357,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     fontSize: 14,
+  },
+  fieldError: {
+    color: '#e74c3c',
+    fontSize: 12,
+    marginTop: 5,
+    marginLeft: 2,
   },
   disabledButton: {
     backgroundColor: '#74b4f5',

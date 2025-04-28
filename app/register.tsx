@@ -6,9 +6,9 @@ import { Link, router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
   useColorScheme,
@@ -24,12 +24,29 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Field-specific error states
+  const [errors, setErrors] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    general: '',
+  });
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   // Auth store state and actions
-  const { register, user, token, isLoading, error, clearError } =
-    useAuthStore();
+  const {
+    register,
+    user,
+    token,
+    isLoading,
+    error,
+    clearError,
+    validationErrors,
+    clearValidationErrors,
+  } = useAuthStore();
 
   // Handle successful registration
   useEffect(() => {
@@ -38,40 +55,81 @@ export default function RegisterScreen() {
     }
   }, [user, token]);
 
-  // Show error alert
+  // Handle backend errors
   useEffect(() => {
-    if (error) {
-      Alert.alert('Registration Failed', error, [
-        { text: 'OK', onPress: clearError },
-      ]);
+    if (error || validationErrors.length > 0) {
+      // Map validation errors to form fields
+      if (validationErrors.length > 0) {
+        const newErrors = { ...errors };
+
+        validationErrors.forEach(({ path, message }) => {
+          if (path === 'username') {
+            newErrors.username = message;
+          } else if (path === 'email') {
+            newErrors.email = message;
+          } else if (path === 'password') {
+            newErrors.password = message;
+          }
+        });
+
+        setErrors(newErrors);
+        clearValidationErrors();
+      } else if (error) {
+        // Check if error contains specific field information
+        if (error.includes('Username already taken')) {
+          setErrors(prev => ({ ...prev, username: 'Username already taken' }));
+        } else if (error.includes('Email already registered')) {
+          setErrors(prev => ({ ...prev, email: 'Email already registered' }));
+        } else {
+          setErrors(prev => ({ ...prev, general: error }));
+        }
+        clearError();
+      }
     }
-  }, [error, clearError]);
+  }, [error, validationErrors, clearError, clearValidationErrors]);
+
+  // Helper function to clear a specific error
+  const clearFieldError = (field: keyof typeof errors) => {
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  // Validate email format
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleRegister = async () => {
-    // Input validation
-    if (!username.trim()) {
-      Alert.alert('Error', 'Username is required');
-      return;
-    }
-    if (!email.trim()) {
-      Alert.alert('Error', 'Email is required');
-      return;
-    }
-    if (!password.trim()) {
-      Alert.alert('Error', 'Password is required');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return;
-    }
+    // Reset all errors
+    setErrors({
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      general: '',
+    });
+
+    let hasErrors = false;
+
+    // Client-side validation
+    // Only validate what's absolutely necessary before sending to server
+    // For confirmPassword which is not validated by the server
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      setErrors(prev => ({
+        ...prev,
+        confirmPassword: 'Passwords do not match',
+      }));
+      hasErrors = true;
+    }
+
+    if (hasErrors) {
       return;
     }
 
-    // Register the user
-    await register(username, email, password);
+    // Register the user - let the server's Zod validation handle most validations
+    await register(username, email, password, name || undefined);
   };
 
   return (
@@ -126,16 +184,26 @@ export default function RegisterScreen() {
                 styles.input,
                 {
                   backgroundColor: isDark ? '#333' : 'white',
-                  borderColor: isDark ? '#555' : '#ddd',
+                  borderColor: errors.username
+                    ? '#e74c3c'
+                    : isDark
+                      ? '#555'
+                      : '#ddd',
                   color: isDark ? 'white' : 'black',
                 },
               ]}
               value={username}
-              onChangeText={setUsername}
+              onChangeText={text => {
+                setUsername(text);
+                clearFieldError('username');
+              }}
               placeholder="Choose a username"
               placeholderTextColor={isDark ? '#999' : '#999'}
               autoCapitalize="none"
             />
+            {errors.username ? (
+              <Text style={styles.fieldError}>{errors.username}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputGroup}>
@@ -145,17 +213,27 @@ export default function RegisterScreen() {
                 styles.input,
                 {
                   backgroundColor: isDark ? '#333' : 'white',
-                  borderColor: isDark ? '#555' : '#ddd',
+                  borderColor: errors.email
+                    ? '#e74c3c'
+                    : isDark
+                      ? '#555'
+                      : '#ddd',
                   color: isDark ? 'white' : 'black',
                 },
               ]}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={text => {
+                setEmail(text);
+                clearFieldError('email');
+              }}
               placeholder="Enter your email"
               placeholderTextColor={isDark ? '#999' : '#999'}
               keyboardType="email-address"
               autoCapitalize="none"
             />
+            {errors.email ? (
+              <Text style={styles.fieldError}>{errors.email}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputGroup}>
@@ -163,7 +241,13 @@ export default function RegisterScreen() {
             <View
               style={[
                 styles.passwordInputContainer,
-                { borderColor: isDark ? '#555' : '#ddd' },
+                {
+                  borderColor: errors.password
+                    ? '#e74c3c'
+                    : isDark
+                      ? '#555'
+                      : '#ddd',
+                },
               ]}
             >
               <TextInput
@@ -175,7 +259,10 @@ export default function RegisterScreen() {
                   },
                 ]}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={text => {
+                  setPassword(text);
+                  clearFieldError('password');
+                }}
                 placeholder="Create a password"
                 placeholderTextColor={isDark ? '#999' : '#999'}
                 secureTextEntry={!showPassword}
@@ -192,6 +279,9 @@ export default function RegisterScreen() {
                 />
               </TouchableOpacity>
             </View>
+            {errors.password ? (
+              <Text style={styles.fieldError}>{errors.password}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputGroup}>
@@ -199,7 +289,13 @@ export default function RegisterScreen() {
             <View
               style={[
                 styles.passwordInputContainer,
-                { borderColor: isDark ? '#555' : '#ddd' },
+                {
+                  borderColor: errors.confirmPassword
+                    ? '#e74c3c'
+                    : isDark
+                      ? '#555'
+                      : '#ddd',
+                },
               ]}
             >
               <TextInput
@@ -211,7 +307,10 @@ export default function RegisterScreen() {
                   },
                 ]}
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                onChangeText={text => {
+                  setConfirmPassword(text);
+                  clearFieldError('confirmPassword');
+                }}
                 placeholder="Confirm your password"
                 placeholderTextColor={isDark ? '#999' : '#999'}
                 secureTextEntry={!showConfirmPassword}
@@ -228,10 +327,17 @@ export default function RegisterScreen() {
                 />
               </TouchableOpacity>
             </View>
+            {errors.confirmPassword ? (
+              <Text style={styles.fieldError}>{errors.confirmPassword}</Text>
+            ) : null}
           </View>
 
           <TouchableOpacity
-            style={[styles.button, styles.registerButton]}
+            style={[
+              styles.button,
+              styles.registerButton,
+              isLoading && styles.disabledButton,
+            ]}
             onPress={handleRegister}
             disabled={isLoading}
           >
@@ -338,5 +444,19 @@ const styles = StyleSheet.create({
   loginLink: {
     color: '#007BFF',
     fontWeight: '600',
+  },
+  errorMessage: {
+    textAlign: 'center',
+    marginBottom: 20,
+    fontSize: 14,
+  },
+  fieldError: {
+    color: '#e74c3c',
+    fontSize: 12,
+    marginTop: 5,
+    marginLeft: 2,
+  },
+  disabledButton: {
+    backgroundColor: '#74b4f5',
   },
 });
