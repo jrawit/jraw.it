@@ -101,6 +101,11 @@ export default function RegisterScreen() {
     return emailRegex.test(email);
   };
 
+  // Check if username exceeds max length
+  const isUsernameValid = (username: string): boolean => {
+    return username.length <= 30;
+  };
+
   const handleRegister = async () => {
     // Reset all errors
     setErrors({
@@ -114,7 +119,14 @@ export default function RegisterScreen() {
     let hasErrors = false;
 
     // Client-side validation
-    // Only validate what's absolutely necessary before sending to server
+    if (username.length > 30) {
+      setErrors(prev => ({
+        ...prev,
+        username: 'Username cannot exceed 30 characters',
+      }));
+      hasErrors = true;
+    }
+
     // For confirmPassword which is not validated by the server
     if (password !== confirmPassword) {
       setErrors(prev => ({
