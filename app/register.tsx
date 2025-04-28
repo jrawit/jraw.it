@@ -1,36 +1,152 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useAuthStore } from '@/utils/auth.store';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Link, router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
-  ScrollView,
 } from 'react-native';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
+  // Field-specific error states
+  const [errors, setErrors] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    general: '',
+  });
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
-  const handleRegister = () => {
-    
-    router.replace('/login');
+
+  // Auth store state and actions
+  const {
+    register,
+    user,
+    token,
+    isLoading,
+    error,
+    clearError,
+    validationErrors,
+    clearValidationErrors,
+  } = useAuthStore();
+
+  // Handle successful registration
+  useEffect(() => {
+    if (user && token) {
+      router.replace('/');
+    }
+  }, [user, token]);
+
+  // Handle backend errors
+  useEffect(() => {
+    if (error || validationErrors.length > 0) {
+      // Map validation errors to form fields
+      if (validationErrors.length > 0) {
+        const newErrors = { ...errors };
+
+        validationErrors.forEach(({ path, message }) => {
+          if (path === 'username') {
+            newErrors.username = message;
+          } else if (path === 'email') {
+            newErrors.email = message;
+          } else if (path === 'password') {
+            newErrors.password = message;
+          }
+        });
+
+        setErrors(newErrors);
+        clearValidationErrors();
+      } else if (error) {
+        // Check if error contains specific field information
+        if (error.includes('Username already taken')) {
+          setErrors(prev => ({ ...prev, username: 'Username already taken' }));
+        } else if (error.includes('Email already registered')) {
+          setErrors(prev => ({ ...prev, email: 'Email already registered' }));
+        } else {
+          setErrors(prev => ({ ...prev, general: error }));
+        }
+        clearError();
+      }
+    }
+  }, [error, validationErrors, clearError, clearValidationErrors]);
+
+  // Helper function to clear a specific error
+  const clearFieldError = (field: keyof typeof errors) => {
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  // Validate email format
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Check if username exceeds max length
+  const isUsernameValid = (username: string): boolean => {
+    return username.length <= 30;
+  };
+
+  const handleRegister = async () => {
+    // Reset all errors
+    setErrors({
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      general: '',
+    });
+
+    let hasErrors = false;
+
+    // Client-side validation
+    if (username.length > 30) {
+      setErrors(prev => ({
+        ...prev,
+        username: 'Username cannot exceed 30 characters',
+      }));
+      hasErrors = true;
+    }
+
+    // For confirmPassword which is not validated by the server
+    if (password !== confirmPassword) {
+      setErrors(prev => ({
+        ...prev,
+        confirmPassword: 'Passwords do not match',
+      }));
+      hasErrors = true;
+    }
+
+    if (hasErrors) {
+      return;
+    }
+
+    // Register the user - let the server's Zod validation handle most validations
+    await register(username, email, password, name || undefined);
   };
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen 
+      <Stack.Screen
         options={{
           title: 'Create Account',
           headerStyle: {
@@ -40,26 +156,30 @@ export default function RegisterScreen() {
         }}
       />
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.formContainer}>
-          <ThemedText type="title" style={styles.title}>Create an Account</ThemedText>
+          <ThemedText type="title" style={styles.title}>
+            Create an Account
+          </ThemedText>
           <ThemedText style={styles.subtitle}>
             Join JrawIt and start collaborating
           </ThemedText>
 
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Full Name</ThemedText>
+            <ThemedText style={styles.inputLabel}>
+              Full Name (Optional)
+            </ThemedText>
             <TextInput
               style={[
                 styles.input,
-                { 
+                {
                   backgroundColor: isDark ? '#333' : 'white',
                   borderColor: isDark ? '#555' : '#ddd',
                   color: isDark ? 'white' : 'black',
-                }
+                },
               ]}
               value={name}
               onChangeText={setName}
@@ -70,100 +190,176 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>Username</ThemedText>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: isDark ? '#333' : 'white',
+                  borderColor: errors.username
+                    ? '#e74c3c'
+                    : isDark
+                      ? '#555'
+                      : '#ddd',
+                  color: isDark ? 'white' : 'black',
+                },
+              ]}
+              value={username}
+              onChangeText={text => {
+                setUsername(text);
+                clearFieldError('username');
+              }}
+              placeholder="Choose a username"
+              placeholderTextColor={isDark ? '#999' : '#999'}
+              autoCapitalize="none"
+            />
+            {errors.username ? (
+              <Text style={styles.fieldError}>{errors.username}</Text>
+            ) : null}
+          </View>
+
+          <View style={styles.inputGroup}>
             <ThemedText style={styles.inputLabel}>Email</ThemedText>
             <TextInput
               style={[
                 styles.input,
-                { 
+                {
                   backgroundColor: isDark ? '#333' : 'white',
-                  borderColor: isDark ? '#555' : '#ddd',
+                  borderColor: errors.email
+                    ? '#e74c3c'
+                    : isDark
+                      ? '#555'
+                      : '#ddd',
                   color: isDark ? 'white' : 'black',
-                }
+                },
               ]}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={text => {
+                setEmail(text);
+                clearFieldError('email');
+              }}
               placeholder="Enter your email"
               placeholderTextColor={isDark ? '#999' : '#999'}
               keyboardType="email-address"
               autoCapitalize="none"
             />
+            {errors.email ? (
+              <Text style={styles.fieldError}>{errors.email}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputGroup}>
             <ThemedText style={styles.inputLabel}>Password</ThemedText>
-            <View style={[
-              styles.passwordInputContainer,
-              { borderColor: isDark ? '#555' : '#ddd' }
-            ]}>
+            <View
+              style={[
+                styles.passwordInputContainer,
+                {
+                  borderColor: errors.password
+                    ? '#e74c3c'
+                    : isDark
+                      ? '#555'
+                      : '#ddd',
+                },
+              ]}
+            >
               <TextInput
                 style={[
                   styles.passwordInput,
-                  { 
+                  {
                     backgroundColor: isDark ? '#333' : 'white',
                     color: isDark ? 'white' : 'black',
-                  }
+                  },
                 ]}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={text => {
+                  setPassword(text);
+                  clearFieldError('password');
+                }}
                 placeholder="Create a password"
                 placeholderTextColor={isDark ? '#999' : '#999'}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeIcon}
               >
                 <MaterialIcons
-                  name={showPassword ? "visibility" : "visibility-off"}
+                  name={showPassword ? 'visibility' : 'visibility-off'}
                   size={24}
                   color={isDark ? '#999' : '#666'}
                 />
               </TouchableOpacity>
             </View>
+            {errors.password ? (
+              <Text style={styles.fieldError}>{errors.password}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputGroup}>
             <ThemedText style={styles.inputLabel}>Confirm Password</ThemedText>
-            <View style={[
-              styles.passwordInputContainer,
-              { borderColor: isDark ? '#555' : '#ddd' }
-            ]}>
+            <View
+              style={[
+                styles.passwordInputContainer,
+                {
+                  borderColor: errors.confirmPassword
+                    ? '#e74c3c'
+                    : isDark
+                      ? '#555'
+                      : '#ddd',
+                },
+              ]}
+            >
               <TextInput
                 style={[
                   styles.passwordInput,
-                  { 
+                  {
                     backgroundColor: isDark ? '#333' : 'white',
                     color: isDark ? 'white' : 'black',
-                  }
+                  },
                 ]}
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                onChangeText={text => {
+                  setConfirmPassword(text);
+                  clearFieldError('confirmPassword');
+                }}
                 placeholder="Confirm your password"
                 placeholderTextColor={isDark ? '#999' : '#999'}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 style={styles.eyeIcon}
               >
                 <MaterialIcons
-                  name={showConfirmPassword ? "visibility" : "visibility-off"}
+                  name={showConfirmPassword ? 'visibility' : 'visibility-off'}
                   size={24}
                   color={isDark ? '#999' : '#666'}
                 />
               </TouchableOpacity>
             </View>
+            {errors.confirmPassword ? (
+              <Text style={styles.fieldError}>{errors.confirmPassword}</Text>
+            ) : null}
           </View>
 
           <TouchableOpacity
-            style={[styles.button, styles.registerButton]}
+            style={[
+              styles.button,
+              styles.registerButton,
+              isLoading && styles.disabledButton,
+            ]}
             onPress={handleRegister}
+            disabled={isLoading}
           >
-            <ThemedText style={styles.buttonText}>Create Account</ThemedText>
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <ThemedText style={styles.buttonText}>Create Account</ThemedText>
+            )}
           </TouchableOpacity>
-          
+
           <View style={styles.loginContainer}>
             <ThemedText>Already have an account? </ThemedText>
             <Link href="/login" asChild>
@@ -260,5 +456,19 @@ const styles = StyleSheet.create({
   loginLink: {
     color: '#007BFF',
     fontWeight: '600',
+  },
+  errorMessage: {
+    textAlign: 'center',
+    marginBottom: 20,
+    fontSize: 14,
+  },
+  fieldError: {
+    color: '#e74c3c',
+    fontSize: 12,
+    marginTop: 5,
+    marginLeft: 2,
+  },
+  disabledButton: {
+    backgroundColor: '#74b4f5',
   },
 });

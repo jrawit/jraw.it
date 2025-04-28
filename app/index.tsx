@@ -2,6 +2,8 @@ import { CreateRoomPanel } from '@/components/CreateRoomPanel';
 import { RoomCard } from '@/components/RoomCard';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { UserAuthHeader } from '@/components/UserAuthHeader';
+import { useAuthStore } from '@/utils/auth.store';
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -14,11 +16,6 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { io } from 'socket.io-client';
-
-interface UserState {
-  isLoggedIn: boolean;
-  username?: string;
-}
 
 interface CreateRoomResponse {
   success: boolean;
@@ -34,13 +31,9 @@ export default function HomeScreen() {
     Math.max(1, Math.floor(width / 220))
   );
 
-  const [user, setUser] = useState<UserState>({
-    isLoggedIn: false
-  });
-  
-  const handleLogout = () => {
-    setUser({ isLoggedIn: false });
-  };
+  // Get user from auth store
+  const { user, token } = useAuthStore();
+  const isLoggedIn = !!user && !!token;
 
   useEffect(() => {
     // Ensure we have at least 1 column and account for proper padding
@@ -114,14 +107,10 @@ export default function HomeScreen() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
-          headerRight: () => 
-            user.isLoggedIn ? (
-              <TouchableOpacity onPress={handleLogout} style={styles.headerButton}>
-                <ThemedText>Logout</ThemedText>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                onPress={() => router.push('/login')} 
+          headerRight: () =>
+            isLoggedIn ? null : (
+              <TouchableOpacity
+                onPress={() => router.push('/login')}
                 style={styles.headerButton}
               >
                 <ThemedText>Login</ThemedText>
@@ -129,6 +118,8 @@ export default function HomeScreen() {
             ),
         }}
       />
+
+      {isLoggedIn && <UserAuthHeader showFullInfo={false} />}
 
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
@@ -143,18 +134,18 @@ export default function HomeScreen() {
         >
           <ThemedText type="title" style={styles.welcomeTitle}>
             Welcome to JrawIt
-            {user.isLoggedIn ? `, ${user.username}` : ''}
+            {isLoggedIn && user ? `, ${user.username}` : ''}
           </ThemedText>
           <Button
-        title="Go to test canvas"
-        onPress={() => router.push('/canvas/test')}
-      />
-          {!user.isLoggedIn && (
+            title="Go to test canvas"
+            onPress={() => router.push('/canvas/test')}
+          />
+          {!isLoggedIn && (
             <ThemedView style={styles.authBanner}>
               <ThemedText style={styles.authText}>
                 Create an account to save your canvases
               </ThemedText>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.authButton}
                 onPress={() => router.push('/register')}
               >
