@@ -362,23 +362,71 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       } as CanvasElements.Triangle,
       tool: Tools.TRIANGLE,
     }),
-    updateElement: (element, x, y) => {
-      // Define how drawing a triangle works (e.g., isosceles from base)
+    updateElement: (element, x, y, isShiftDown) => { // Add isShiftDown
       const newElement = cloneDeep(element);
       const triangle = newElement.element as CanvasElements.Triangle;
-      const startX = triangle.point1.x;
-      const startY = triangle.point1.y;
-      // Example: Isosceles triangle where drag defines base width and height
-      triangle.point2 = { x: x, y: startY }; // Point 2 defines base width
-      triangle.point3 = { x: startX + (x - startX) / 2, y: y }; // Point 3 defines apex/height
-      return newElement;
-    },
-    moveElement: (element, deltaX, deltaY) => {
-      const newElement = cloneDeep(element);
-      const triangle = newElement.element as CanvasElements.Triangle;
-      triangle.point1 = { x: triangle.point1.x + deltaX, y: triangle.point1.y + deltaY };
-      triangle.point2 = { x: triangle.point2.x + deltaX, y: triangle.point2.y + deltaY };
-      triangle.point3 = { x: triangle.point3.x + deltaX, y: triangle.point3.y + deltaY };
+      const startPoint = triangle.point1; // Alias for clarity
+
+      let currentX = x; // Use temporary variables for potential snapping
+      let currentY = y;
+
+      if (isShiftDown) {
+        // --- Axis Snapping Logic ---
+        let dx = currentX - startPoint.x;
+        let dy = currentY - startPoint.y;
+        let angle = Math.atan2(dy, dx);
+        const snapThreshold = Math.PI / 36; // ~5 degrees threshold for snapping
+
+        // Normalize angle to be between 0 and 2*PI for easier comparison
+        if (angle < 0) {
+            angle += 2 * Math.PI;
+        }
+
+        // Check for snapping near horizontal axis (0 or PI)
+        if (Math.abs(angle) < snapThreshold || Math.abs(angle - Math.PI) < snapThreshold || Math.abs(angle - 2 * Math.PI) < snapThreshold) {
+            currentY = startPoint.y; // Snap vertically
+        }
+        // Check for snapping near vertical axis (PI/2 or 3*PI/2)
+        else if (Math.abs(angle - Math.PI / 2) < snapThreshold || Math.abs(angle - 3 * Math.PI / 2) < snapThreshold) {
+            currentX = startPoint.x; // Snap horizontally
+        }
+
+        // Recalculate dx, dy, and angle after potential snapping
+        dx = currentX - startPoint.x;
+        dy = currentY - startPoint.y;
+        angle = Math.atan2(dy, dx); // Recalculate angle based on snapped coordinates
+        // --- End Axis Snapping ---
+
+
+        // Calculate points for an equilateral triangle based on (potentially snapped) currentX, currentY
+        const sideLength = Math.sqrt(dx * dx + dy * dy);
+
+        if (sideLength === 0) {
+          // Avoid division by zero if start and end points are the same
+          triangle.point2 = { ...startPoint };
+          triangle.point3 = { ...startPoint };
+          return newElement;
+        }
+
+        // Point 2 is the (potentially snapped) current cursor position
+        triangle.point2 = { x: currentX, y: currentY };
+
+        // Calculate Point 3 for equilateral triangle
+        const height = sideLength * (Math.sqrt(3) / 2);
+        const midX = (startPoint.x + currentX) / 2;
+        const midY = (startPoint.y + currentY) / 2;
+        const perpendicularAngle = angle - Math.PI / 2;
+
+        triangle.point3 = {
+          x: midX + height * Math.cos(perpendicularAngle),
+          y: midY + height * Math.sin(perpendicularAngle),
+        };
+
+      } else {
+        // Original logic: Isosceles triangle
+        triangle.point2 = { x: currentX, y: startPoint.y };
+        triangle.point3 = { x: startPoint.x + (currentX - startPoint.x) / 2, y: currentY };
+      }
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
