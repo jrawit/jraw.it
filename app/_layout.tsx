@@ -18,28 +18,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     // Skip protection logic until the app is ready
     if (!navigationState?.key) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
+    const firstSegment = segments[0] || '';
 
     // Check if the user is authenticated
     const isAuthenticated = !!token && !!user;
 
-    // If user is not authenticated and not in auth group, redirect to login
-    if (
-      !isAuthenticated &&
-      !inAuthGroup &&
-      segments[0] !== 'login' &&
-      segments[0] !== 'register'
-    ) {
-      // Redirect to the login page
+    // Define which routes are public (don't require authentication)
+    const isAuthRoute = firstSegment === 'login' || firstSegment === 'register';
 
+    if (!isAuthenticated && !isAuthRoute) {
+      // If not authenticated and not on a public route, redirect to login
       router.replace('/login');
-    }
-
-    // If user is authenticated and in auth group, redirect to home
-    if (
-      isAuthenticated &&
-      (segments[0] === 'login' || segments[0] === 'register')
-    ) {
+    } else if (isAuthenticated && isAuthRoute) {
+      // If authenticated and on an auth route, redirect to home
       router.replace('/');
     }
   }, [segments, navigationState?.key, token, user]);
