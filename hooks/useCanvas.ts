@@ -33,6 +33,7 @@ export type CanvasProps = {
   tool: Tools;
   strokeWidth: number;
   color: string;
+  isShiftDown: boolean;
   fontManager?: any;
 };
 
@@ -43,6 +44,7 @@ export const useCanvas = ({
   strokeWidth,
   color,
   fontManager,
+  isShiftDown,
 }: CanvasProps) => {
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(
@@ -229,7 +231,7 @@ export const useCanvas = ({
                 );
               }
             }
-            
+
             // Only test if we have vertices
             if (
               vertices.length > 0 &&
@@ -239,10 +241,9 @@ export const useCanvas = ({
             }
             break;
           }
-          case Tools.IMAGE: 
+          case Tools.IMAGE:
           case Tools.TEXT:
-              return element.id; 
-
+            return element.id;
         }
       }
       return null;
@@ -261,12 +262,19 @@ export const useCanvas = ({
         elementsToEraseRef.current.clear();
         // Store the complete state *before* erasing starts (we'll keep this for reference)
         originalElementsBeforeEraseRef.current = cloneDeep(elements);
-        
+
         // Check for initial touch intersection
-        const touchedElementId = findElementAtPoint(x, y, elements, fontManager);
+        const touchedElementId = findElementAtPoint(
+          x,
+          y,
+          elements,
+          fontManager
+        );
         if (touchedElementId) {
           // Find the original element before erasing it
-          const elementToErase = elements.find(el => el.id === touchedElementId);
+          const elementToErase = elements.find(
+            el => el.id === touchedElementId
+          );
           if (elementToErase) {
             // Create a history action for this specific element
             const action: HistoryAction = {
@@ -275,7 +283,7 @@ export const useCanvas = ({
             };
             addToHistory(action);
           }
-          
+
           // Immediately remove the element visually
           setElements(prev => prev.filter(el => el.id !== touchedElementId));
           // Track the ID of the erased element
@@ -385,10 +393,20 @@ export const useCanvas = ({
     (x: number, y: number) => {
       // --- Eraser Move ---
       if (tool === Tools.ERASER) {
-        const touchedElementId = findElementAtPoint(x, y, elements, fontManager);
-        if (touchedElementId && !elementsToEraseRef.current.has(touchedElementId)) {
+        const touchedElementId = findElementAtPoint(
+          x,
+          y,
+          elements,
+          fontManager
+        );
+        if (
+          touchedElementId &&
+          !elementsToEraseRef.current.has(touchedElementId)
+        ) {
           // Find the original element before erasing it
-          const elementToErase = elements.find(el => el.id === touchedElementId);
+          const elementToErase = elements.find(
+            el => el.id === touchedElementId
+          );
           if (elementToErase) {
             // Create a history action for this specific element
             const action: HistoryAction = {
@@ -397,7 +415,7 @@ export const useCanvas = ({
             };
             addToHistory(action);
           }
-  
+
           elementsToEraseRef.current.add(touchedElementId);
           setElements(prev => prev.filter(el => el.id !== touchedElementId));
           if (selection?.ids.includes(touchedElementId)) {
@@ -533,7 +551,8 @@ export const useCanvas = ({
         const updatedElement = toolHandlers[tool].updateElement(
           currentElement,
           x,
-          y
+          y,
+          isShiftDown
         );
         setCurrentElement(updatedElement);
       }
@@ -546,14 +565,13 @@ export const useCanvas = ({
       clearSelection,
       fontManager,
       findElementAtPoint,
+      isShiftDown,
     ]
   );
 
   const onEndInput = useCallback(
     (x: number, y: number) => {
-
       if (tool === Tools.ERASER) {
-
         elementsToEraseRef.current.clear();
         originalElementsBeforeEraseRef.current = null;
         initialPointRef.current = null;
@@ -763,6 +781,157 @@ export const useCanvas = ({
       clearSelection,
     ]
   );
+  function isPath(element: CanvasElements.Any): element is CanvasElements.Path {
+    return (element as CanvasElements.Path).points !== undefined;
+  }
+  function isLine(element: CanvasElements.Any): element is CanvasElements.Line {
+    return (
+      (element as CanvasElements.Line).startPoint !== undefined &&
+      (element as CanvasElements.Line).endPoint !== undefined
+    );
+  }
+
+  function isRectangle(
+    element: CanvasElements.Any
+  ): element is CanvasElements.Rectangle {
+    return (
+      (element as CanvasElements.Rectangle).point !== undefined &&
+      (element as CanvasElements.Rectangle).width !== undefined &&
+      (element as CanvasElements.Rectangle).height !== undefined
+    );
+  }
+
+  function isTriangle(
+    element: CanvasElements.Any
+  ): element is CanvasElements.Triangle {
+    return (
+      (element as CanvasElements.Triangle).point1 !== undefined &&
+      (element as CanvasElements.Triangle).point2 !== undefined &&
+      (element as CanvasElements.Triangle).point3 !== undefined
+    );
+  }
+
+  function isCircle(
+    element: CanvasElements.Any
+  ): element is CanvasElements.Circle {
+    return (
+      (element as CanvasElements.Circle).center !== undefined &&
+      (element as CanvasElements.Circle).radius !== undefined
+    );
+  }
+
+  function isStar(element: CanvasElements.Any): element is CanvasElements.Star {
+    return (
+      (element as CanvasElements.Star).point !== undefined &&
+      (element as CanvasElements.Star).radius !== undefined &&
+      (element as CanvasElements.Star).spikes !== undefined
+    );
+  }
+
+  function isText(element: CanvasElements.Any): element is CanvasElements.Text {
+    return (
+      (element as CanvasElements.Text).point !== undefined &&
+      (element as CanvasElements.Text).text !== undefined &&
+      (element as CanvasElements.Text).fontFamily !== undefined
+    );
+  }
+
+  function isImage(
+    element: CanvasElements.Any
+  ): element is CanvasElements.Image {
+    return (
+      (element as CanvasElements.Image).point !== undefined &&
+      (element as CanvasElements.Image).width !== undefined &&
+      (element as CanvasElements.Image).height !== undefined &&
+      (element as CanvasElements.Image).uri !== undefined
+    );
+  }
+  const duplicateSelection = useCallback(() => {
+    if (selection && selection.ids.length > 0) {
+      const elementsToDupe = elements.filter(element =>
+        selection.ids.includes(element.id)
+      );
+      if (elementsToDupe.length > 0) {
+        const OFFSET = 40; // Offset for duplicated elements
+        const newElements = elementsToDupe.map(element => {
+          const newElement = cloneDeep(element);
+          newElement.id = generateId(); // Generate a new ID for the duplicate
+
+          // Check if the element is a Path and handle accordingly
+          if (isPath(newElement.element)) {
+            newElement.element.points = newElement.element.points.map(
+              point => ({
+                x: point.x + OFFSET,
+                y: point.y + OFFSET,
+              })
+            );
+          } else if (isLine(newElement.element)) {
+            newElement.element.startPoint = {
+              x: newElement.element.startPoint.x + OFFSET,
+              y: newElement.element.startPoint.y + OFFSET,
+            };
+            newElement.element.endPoint = {
+              x: newElement.element.endPoint.x + OFFSET,
+              y: newElement.element.endPoint.y + OFFSET,
+            };
+          } else if (isRectangle(newElement.element)) {
+            newElement.element.point = {
+              x: newElement.element.point.x + OFFSET,
+              y: newElement.element.point.y + OFFSET,
+            };
+          } else if (isTriangle(newElement.element)) {
+            newElement.element.point1 = {
+              x: newElement.element.point1.x + OFFSET,
+              y: newElement.element.point1.y + OFFSET,
+            };
+            newElement.element.point2 = {
+              x: newElement.element.point2.x + OFFSET,
+              y: newElement.element.point2.y + OFFSET,
+            };
+            newElement.element.point3 = {
+              x: newElement.element.point3.x + OFFSET,
+              y: newElement.element.point3.y + OFFSET,
+            };
+          } else if (isCircle(newElement.element)) {
+            newElement.element.center = {
+              x: newElement.element.center.x + OFFSET,
+              y: newElement.element.center.y + OFFSET,
+            };
+          } else if (isStar(newElement.element)) {
+            newElement.element.point = {
+              x: newElement.element.point.x + OFFSET,
+              y: newElement.element.point.y + OFFSET,
+            };
+          } else if (isText(newElement.element)) {
+            newElement.element.point = {
+              x: newElement.element.point.x + OFFSET,
+              y: newElement.element.point.y + OFFSET,
+            };
+          } else if (isImage(newElement.element)) {
+            newElement.element.point = {
+              x: newElement.element.point.x + OFFSET,
+              y: newElement.element.point.y + OFFSET,
+            };
+          }
+          return newElement;
+        });
+        const action: HistoryAction = {
+          type: 'ADD_ELEMENT',
+          elements: newElements,
+        };
+        addToHistory(action);
+        setElements(prev => [...prev, ...newElements]);
+        setSelection({
+          ids: newElements.map(el => el.id),
+          selected: true,
+          x: selection.x + OFFSET,
+          y: selection.y + OFFSET,
+          width: selection.width,
+          height: selection.height,
+        });
+      }
+    }
+  }, [selection, elements, addToHistory, generateId, fontManager]);
 
   const deleteSelection = useCallback(() => {
     if (selection && selection.ids.length > 0) {
@@ -810,6 +979,7 @@ export const useCanvas = ({
     modifyElement,
     selection,
     deleteSelection,
+    duplicateSelection,
   };
 };
 

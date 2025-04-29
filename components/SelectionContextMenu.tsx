@@ -12,6 +12,7 @@ interface SelectionContextMenuProps {
   top: number;
   left: number;
   onDelete: () => void;
+  onDuplicate: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -19,6 +20,7 @@ const SelectionContextMenu: React.FC<SelectionContextMenuProps> = ({
   top,
   left,
   onDelete,
+  onDuplicate,
   style,
 }) => {
   return (
@@ -39,6 +41,13 @@ const SelectionContextMenu: React.FC<SelectionContextMenuProps> = ({
         activeOpacity={0.7}
       >
         <Feather name="trash-2" size={20} color="#DC2626" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={onDuplicate}
+        activeOpacity={0.7}
+      >
+        <Feather name="copy" size={24} color="black" />{' '}
       </TouchableOpacity>
     </View>
   );

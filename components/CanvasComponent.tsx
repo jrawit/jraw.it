@@ -53,6 +53,7 @@ interface CanvasComponentProps {
   >;
   onTapText: (x: number, y: number) => void;
   onDrawingStateChange: (isDrawing: boolean) => void;
+  isShiftDown: boolean;
 }
 
 const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
@@ -67,6 +68,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       setElementsOffset,
       onTapText,
       onDrawingStateChange,
+      isShiftDown,
     },
     ref
   ) => {
@@ -100,11 +102,13 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       addExternalElement,
       modifyElement,
       deleteSelection,
+      duplicateSelection,
     } = useCanvas({
       tool,
       strokeWidth,
       color,
       fontManager,
+      isShiftDown,
     });
 
     useImperativeHandle(ref, () => ({
@@ -154,7 +158,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         if (tool !== Tools.PAN) {
           const adjustedX = e.x - elementsOffset.x;
           const adjustedY = e.y - elementsOffset.y;
-          onDrawingStateChange(true); 
+          onDrawingStateChange(true);
           onStartInput(adjustedX, adjustedY);
         }
       })
@@ -468,6 +472,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
                 currentElementOffset.x
               }
               onDelete={deleteSelection}
+              onDuplicate={duplicateSelection}
             />
           )}
 
