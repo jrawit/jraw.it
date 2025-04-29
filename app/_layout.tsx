@@ -31,7 +31,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       segments[0] !== 'register'
     ) {
       // Redirect to the login page
-      router.replace('/login');
+ 
+      //router.replace('/canvas/test')
+        router.replace('/login');
     }
 
     // If user is authenticated and in auth group, redirect to home

@@ -1,7 +1,9 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'; // Import for shape icon
 import Slider from '@react-native-community/slider';
 import React, { useEffect, useState } from 'react';
 import {
+  Modal, // Import Modal
   Pressable,
   StyleSheet,
   TouchableOpacity,
@@ -9,8 +11,10 @@ import {
   View,
 } from 'react-native';
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
 import ColorPicker, {
   BrightnessSlider,
@@ -20,9 +24,17 @@ import ColorPicker, {
   Panel2,
 } from 'reanimated-color-picker';
 import { ToolData, Tools } from '../constants/Tools';
+import { ThemedText } from './ThemedText'; // Import ThemedText if needed for Modal title
 import { ThemedView } from './ThemedView';
 
-import { Easing, withTiming } from 'react-native-reanimated';
+// Define the shape tools
+const shapeTools = [
+  Tools.LINE,
+  Tools.CIRCLE,
+  Tools.RECTANGLE,
+  Tools.TRIANGLE,
+  Tools.STAR,
+];
 
 type ToolbarProps = {
   tool: Tools;
@@ -41,14 +53,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
 }) => {
   const colorScheme = useColorScheme();
   const collapsed = useSharedValue(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [colorPickerVisible, setColorPickerVisible] = useState(false);
+  const [shapeSelectorVisible, setShapeSelectorVisible] = useState(false); // State for shape selector modal
+  const [initialColor, setInitialColor] = useState('#000000');
+  const [strokeWidth, setStrokeWidth] = useState(3);
+  const selectedColor = useSharedValue(initialColor);
 
   // Toggle handler
   const toggleCollapse = () => {
     collapsed.value = !collapsed.value;
     setIsCollapsed(!isCollapsed);
   };
-
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Animation style
   const collapsibleStyle = useAnimatedStyle(() => {
@@ -71,20 +87,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
       overflow: 'hidden',
     };
   });
-  const [colorPickerVisible, setColorPickerVisible] = useState(false);
-  // React state for initial color
-  const [initialColor, setInitialColor] = useState('#000000');
-  const [strokeWidth, setStrokeWidth] = useState(3);
-
-  // Shared value for animations
-  const selectedColor = useSharedValue(initialColor);
 
   // Effect to hide color picker when drawing starts
   useEffect(() => {
-    if (isDrawing && colorPickerVisible) {
+    if (isDrawing && (colorPickerVisible || shapeSelectorVisible)) {
       setColorPickerVisible(false);
+      setShapeSelectorVisible(false); // Close shape selector too
     }
-  }, [isDrawing, colorPickerVisible]);
+  }, [isDrawing, colorPickerVisible, shapeSelectorVisible]);
 
   const colorButtonStyle = useAnimatedStyle(() => {
     return {
@@ -94,6 +104,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
       borderRadius: 50,
     };
   });
+
+  const handleShapeSelect = (selectedShapeTool: Tools) => {
+    onToolChange(selectedShapeTool);
+    setShapeSelectorVisible(false);
+  };
+
+  // Determine if the current tool is one of the shapes
+  const isShapeToolActive = shapeTools.includes(tool);
 
   return (
     <>
@@ -118,26 +136,49 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </TouchableOpacity>
         <Animated.View style={[styles.toolsContainer, collapsibleStyle]}>
           <View style={styles.toolsContainer}>
-            {Object.entries(ToolData).map(
-              ([toolType, { iconComponent: IconComponent, iconName }]) => {
+            {Object.entries(ToolData)
+              .filter(([toolType]) => !shapeTools.includes(toolType as Tools)) // Filter out shape tools
+              .map(([toolType, { iconComponent: IconComponent, iconName }]) => {
+                const currentToolType = toolType as Tools;
                 return (
                   <TouchableOpacity
                     key={toolType}
-                    onPress={() => onToolChange(toolType as Tools)}
+                    onPress={() => onToolChange(currentToolType)}
                     style={[
                       styles.button,
-                      tool === toolType && styles.activeButton,
+                      tool === currentToolType && styles.activeButton,
                     ]}
                   >
                     <IconComponent
                       name={iconName}
                       size={24}
-                      color={tool === toolType ? 'white' : 'black'}
+                      color={tool === currentToolType ? 'white' : 'black'}
                     />
                   </TouchableOpacity>
                 );
-              }
-            )}
+              })}
+
+            {/* Combined Shapes Button */}
+            <TouchableOpacity
+              onPress={() => setShapeSelectorVisible(true)}
+              style={[styles.button, isShapeToolActive && styles.activeButton]}
+            >
+              {/* Use the icon of the currently selected shape or a default */}
+              {isShapeToolActive && ToolData[tool] ? (
+                React.createElement(ToolData[tool].iconComponent, {
+                  name: ToolData[tool].iconName,
+                  size: 24,
+                  color: 'white',
+                })
+              ) : (
+                <MaterialCommunityIcons
+                  name="shape-outline"
+                  size={24}
+                  color={'black'}
+                />
+              )}
+            </TouchableOpacity>
+
             {colorPickerVisible ? (
               <ColorPicker
                 style={{
@@ -209,6 +250,45 @@ const Toolbar: React.FC<ToolbarProps> = ({
           </View>
         </Animated.View>
       </ThemedView>
+
+      {/* Shape Selector Modal */}
+      <Modal
+        transparent={true}
+        visible={shapeSelectorVisible}
+        animationType="fade"
+        onRequestClose={() => setShapeSelectorVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShapeSelectorVisible(false)} // Close on overlay press
+        >
+          <ThemedView style={styles.shapeSelectorModalContent}>
+            <ThemedText style={styles.modalTitle}>Select Shape</ThemedText>
+            <View style={styles.shapeSelectorGrid}>
+              {shapeTools.map(shapeToolType => {
+                const { iconComponent: IconComponent, iconName } =
+                  ToolData[shapeToolType];
+                return (
+                  <TouchableOpacity
+                    key={shapeToolType}
+                    onPress={() => handleShapeSelect(shapeToolType)}
+                    style={[
+                      styles.shapeButton,
+                      tool === shapeToolType && styles.activeShapeButton,
+                    ]}
+                  >
+                    <IconComponent
+                      name={iconName}
+                      size={28} // Slightly larger icons in modal
+                      color={tool === shapeToolType ? 'white' : 'black'}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ThemedView>
+        </Pressable>
+      </Modal>
     </>
   );
 };
@@ -220,7 +300,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: '2%',
     justifyContent: 'center',
-    backgroundColor: 'F0F0F0', // dont change this, important for the design
+    backgroundColor: 'transparent', // Make container transparent
   },
   toolsContainer: {
     padding: 15,
@@ -246,7 +326,11 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     marginVertical: 5,
     elevation: 3,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)',
+    // Use shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   activeButton: {
     backgroundColor: '#007AFF',
@@ -264,22 +348,34 @@ const styles = StyleSheet.create({
     width: 300,
     padding: 20,
     borderRadius: 20,
-    boxShadow: '0px 5px 6.27px rgba(0, 0, 0, 0.34)',
+    // Use shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.34,
+    shadowRadius: 6.27,
     elevation: 10,
     position: 'absolute',
-    bottom: 100,
+    bottom: 100, // Adjust position relative to toolbar
     right: 10,
     zIndex: 1,
   },
   panelStyle: {
     borderRadius: 16,
-    boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
+    // Use shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
     elevation: 5,
   },
   sliderStyle: {
     borderRadius: 20,
     marginTop: 20,
-    boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
+    // Use shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
     elevation: 5,
   },
   previewTxtContainer: {
@@ -287,6 +383,51 @@ const styles = StyleSheet.create({
     marginTop: 20,
     borderTopWidth: 1,
     borderColor: '#bebdbe',
+  },
+  // Styles for Shape Selector Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shapeSelectorModalContent: {
+    borderRadius: 10,
+    padding: 20,
+    width: 'auto', // Adjust width based on content
+    minWidth: 200,
+    maxWidth: '80%',
+    alignItems: 'center', // Center items horizontally
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  shapeSelectorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap', // Allow items to wrap
+    justifyContent: 'center', // Center items in the row
+    gap: 15, // Spacing between buttons
+  },
+  shapeButton: {
+    width: 60, // Slightly larger buttons for modal
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 10,
+    borderRadius: 10, // Less rounded for grid look
+    elevation: 2,
+    // Use shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  activeShapeButton: {
+    backgroundColor: '#007AFF',
   },
 });
 
