@@ -198,7 +198,7 @@ export default function CanvasScreen() {
     hidePermissionModal,
   } = useMediaLibraryPermissions();
 
-  const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
+  const [backgroundColorPickerVisible, setBackgroundColorPickerVisible] = useState<boolean>(false); 
 
   const [background, setBackground] = useState<Background>({
     color: '#F2F2F2',
@@ -397,7 +397,7 @@ export default function CanvasScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             // Open the color picker modal
-            onPress={() => setColorPickerVisible(true)}
+            onPress={() => setBackgroundColorPickerVisible(true)}
             style={styles.controlButton}
           >
             <MaterialCommunityIcons
@@ -483,13 +483,13 @@ export default function CanvasScreen() {
       </Modal>
 
       <ColorPickerModal
-        visible={colorPickerVisible}
+        visible={backgroundColorPickerVisible}
         initialBackground={background}
         onSelectBackground={(newBackground: Background) => {
           setBackground(newBackground);
-          setColorPickerVisible(false);
+          setBackgroundColorPickerVisible(false);
         }}
-        onCancel={() => setColorPickerVisible(false)}
+        onCancel={() => setBackgroundColorPickerVisible(false)}
       />
     </View>
   );
