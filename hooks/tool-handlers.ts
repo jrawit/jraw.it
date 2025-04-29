@@ -29,7 +29,8 @@ interface ToolHandler {
   updateElement?: (
     element: CanvasElement,
     x: number,
-    y: number
+    y: number,
+    isShiftDown: boolean
   ) => CanvasElement;
   moveElement?: (
     element: CanvasElement,
@@ -46,6 +47,11 @@ interface ToolHandler {
   // Can return null to indicate the element should be discarded (e.g., zero size)
   finalizeElement?: (element: CanvasElement) => CanvasElement | null;
 }
+
+const snapAngle = (angle: number): number => {
+  const snapIncrement = Math.PI / 4; // 45 degrees
+  return Math.round(angle / snapIncrement) * snapIncrement;
+};
 
 const toolHandlers: Record<Tools, ToolHandler> = {
   [Tools.PEN]: {
@@ -186,10 +192,25 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       } as CanvasElements.Line,
       tool: Tools.LINE,
     }),
-    updateElement: (element, x, y) => {
+    updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
       const line = newElement.element as CanvasElements.Line;
-      line.endPoint = { x, y };
+      // Access startPoint from the line object
+      const startPoint = line.startPoint;
+
+      if (isShiftDown) {
+        const dx = x - startPoint.x;
+        const dy = y - startPoint.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const originalAngle = Math.atan2(dy, dx);
+        const snappedAngle = snapAngle(originalAngle);
+        line.endPoint = {
+          x: startPoint.x + distance * Math.cos(snappedAngle),
+          y: startPoint.y + distance * Math.sin(snappedAngle),
+        };
+      } else {
+        line.endPoint = { x, y };
+      }
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
@@ -230,12 +251,21 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       } as CanvasElements.Rectangle,
       tool: Tools.RECTANGLE,
     }),
-    updateElement: (element, x, y) => {
+    updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
       const rect = newElement.element as CanvasElements.Rectangle;
-      // Update width/height based on current point relative to start point
-      rect.width = x - rect.point.x;
-      rect.height = y - rect.point.y;
+      const startPoint = rect.point;
+      const dx = x - startPoint.x;
+      const dy = y - startPoint.y;
+
+      if (isShiftDown) {
+        const maxDim = Math.max(Math.abs(dx), Math.abs(dy));
+        rect.width = Math.sign(dx || 1) * maxDim; // Use sign(dx || 1) to handle dx=0
+        rect.height = Math.sign(dy || 1) * maxDim; // Use sign(dy || 1) to handle dy=0
+      } else {
+        rect.width = dx;
+        rect.height = dy;
+      }
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
@@ -286,14 +316,12 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         radius: 0,
         strokeWidth,
         strokeColor: color,
-        // fillColor: 'rgba(0,0,0,0)',
       } as CanvasElements.Circle,
       tool: Tools.CIRCLE,
     }),
-    updateElement: (element, x, y) => {
+    updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
-      // Calculate radius based on distance from center to current point
       circle.radius = Math.sqrt(
         Math.pow(x - circle.center.x, 2) + Math.pow(y - circle.center.y, 2)
       );
@@ -309,9 +337,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
       circle.center = scalePoint(circle.center, origin, scaleX, scaleY);
-      // Scale radius - use geometric mean for non-uniform scaling
       circle.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
-      // circle.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
     },
     finalizeElement: (element) => {
@@ -336,23 +362,71 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       } as CanvasElements.Triangle,
       tool: Tools.TRIANGLE,
     }),
-    updateElement: (element, x, y) => {
-      // Define how drawing a triangle works (e.g., isosceles from base)
+    updateElement: (element, x, y, isShiftDown) => { // Add isShiftDown
       const newElement = cloneDeep(element);
       const triangle = newElement.element as CanvasElements.Triangle;
-      const startX = triangle.point1.x;
-      const startY = triangle.point1.y;
-      // Example: Isosceles triangle where drag defines base width and height
-      triangle.point2 = { x: x, y: startY }; // Point 2 defines base width
-      triangle.point3 = { x: startX + (x - startX) / 2, y: y }; // Point 3 defines apex/height
-      return newElement;
-    },
-    moveElement: (element, deltaX, deltaY) => {
-      const newElement = cloneDeep(element);
-      const triangle = newElement.element as CanvasElements.Triangle;
-      triangle.point1 = { x: triangle.point1.x + deltaX, y: triangle.point1.y + deltaY };
-      triangle.point2 = { x: triangle.point2.x + deltaX, y: triangle.point2.y + deltaY };
-      triangle.point3 = { x: triangle.point3.x + deltaX, y: triangle.point3.y + deltaY };
+      const startPoint = triangle.point1; // Alias for clarity
+
+      let currentX = x; // Use temporary variables for potential snapping
+      let currentY = y;
+
+      if (isShiftDown) {
+        // --- Axis Snapping Logic ---
+        let dx = currentX - startPoint.x;
+        let dy = currentY - startPoint.y;
+        let angle = Math.atan2(dy, dx);
+        const snapThreshold = Math.PI / 36; // ~5 degrees threshold for snapping
+
+        // Normalize angle to be between 0 and 2*PI for easier comparison
+        if (angle < 0) {
+            angle += 2 * Math.PI;
+        }
+
+        // Check for snapping near horizontal axis (0 or PI)
+        if (Math.abs(angle) < snapThreshold || Math.abs(angle - Math.PI) < snapThreshold || Math.abs(angle - 2 * Math.PI) < snapThreshold) {
+            currentY = startPoint.y; // Snap vertically
+        }
+        // Check for snapping near vertical axis (PI/2 or 3*PI/2)
+        else if (Math.abs(angle - Math.PI / 2) < snapThreshold || Math.abs(angle - 3 * Math.PI / 2) < snapThreshold) {
+            currentX = startPoint.x; // Snap horizontally
+        }
+
+        // Recalculate dx, dy, and angle after potential snapping
+        dx = currentX - startPoint.x;
+        dy = currentY - startPoint.y;
+        angle = Math.atan2(dy, dx); // Recalculate angle based on snapped coordinates
+        // --- End Axis Snapping ---
+
+
+        // Calculate points for an equilateral triangle based on (potentially snapped) currentX, currentY
+        const sideLength = Math.sqrt(dx * dx + dy * dy);
+
+        if (sideLength === 0) {
+          // Avoid division by zero if start and end points are the same
+          triangle.point2 = { ...startPoint };
+          triangle.point3 = { ...startPoint };
+          return newElement;
+        }
+
+        // Point 2 is the (potentially snapped) current cursor position
+        triangle.point2 = { x: currentX, y: currentY };
+
+        // Calculate Point 3 for equilateral triangle
+        const height = sideLength * (Math.sqrt(3) / 2);
+        const midX = (startPoint.x + currentX) / 2;
+        const midY = (startPoint.y + currentY) / 2;
+        const perpendicularAngle = angle - Math.PI / 2;
+
+        triangle.point3 = {
+          x: midX + height * Math.cos(perpendicularAngle),
+          y: midY + height * Math.sin(perpendicularAngle),
+        };
+
+      } else {
+        // Original logic: Isosceles triangle
+        triangle.point2 = { x: currentX, y: startPoint.y };
+        triangle.point3 = { x: startPoint.x + (currentX - startPoint.x) / 2, y: currentY };
+      }
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
@@ -463,6 +537,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
   [Tools.SELECT]: {},
   [Tools.PAN]: {},
 };
+
 
 // Helper for processing and scaling images before adding to canvas
 export const processImageForCanvas = (
