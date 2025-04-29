@@ -31,6 +31,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       segments[0] !== 'register'
     ) {
       // Redirect to the login page
+
       router.replace('/canvas/test');
       //router.replace('/login');
     }
