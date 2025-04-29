@@ -100,6 +100,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       addExternalElement,
       modifyElement,
       deleteSelection,
+      duplicateSelection,
     } = useCanvas({
       tool,
       strokeWidth,
@@ -154,7 +155,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         if (tool !== Tools.PAN) {
           const adjustedX = e.x - elementsOffset.x;
           const adjustedY = e.y - elementsOffset.y;
-          onDrawingStateChange(true); 
+          onDrawingStateChange(true);
           onStartInput(adjustedX, adjustedY);
         }
       })
@@ -468,6 +469,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
                 currentElementOffset.x
               }
               onDelete={deleteSelection}
+              onDuplicate={duplicateSelection}
             />
           )}
 
