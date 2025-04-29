@@ -46,7 +46,7 @@ export default function CanvasScreen() {
   const [socket, setSocket] = useState<any>(null);
   const [tool, setTool] = useState<Tools>(Tools.PEN);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
-
+  const [isShiftDown, setIsShiftDown] = useState<boolean>(false); // <-- Add state for Shift key
   // Keybinds
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
   useEffect(() => {
@@ -56,47 +56,119 @@ export default function CanvasScreen() {
 
   const skiaCanvasRef = useCanvasRef();
   const canvasComponentRef = useRef<CanvasComponentHandle>(null);
+  const previousKeyEventRef = useRef<typeof keyEvent>(null);
 
   useEffect(() => {
-    switch (keyEvent?.key) {
-      case 'KeyZ':
-        canvasComponentRef.current?.undo();
-        break;
-      case 'KeyY':
-        canvasComponentRef.current?.redo();
-        break;
-      case 'Digit1':
-        setTool(Tools.PEN);
-        break;
-      case 'Digit2':
-        setTool(Tools.LINE);
-        break;
-      case 'Digit3':
-        setTool(Tools.HIGHLIGHTER);
-        break;
-      case 'Digit4':
-        setTool(Tools.ERASER);
-        break;
-      case 'Digit6':
-        setTool(Tools.CIRCLE);
-        break;
-      case 'Digit7':
-        setTool(Tools.RECTANGLE);
-        break;
-      case 'Digit8':
-        setTool(Tools.TRIANGLE);
-        break;
-      case 'Digit9':
-        setTool(Tools.STAR);
-        break;
-      case 'KeyT':
-        setTool(Tools.TEXT);
-        break;
-      case 'Escape':
-        setTool(Tools.PAN);
-        break;
+    if (Platform.OS !== 'web') {
+      return;
     }
-  }, [keyEvent, setTool, canvasComponentRef]);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        setIsShiftDown(true);
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        setIsShiftDown(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      setIsShiftDown(false);
+    };
+  }, []); 
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+
+        setIsShiftDown(true);
+        // console.log('Web Shift Down');
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        setIsShiftDown(false);
+        // console.log('Web Shift Up');
+      }
+    };
+
+    // Add listeners
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    // Cleanup listeners on component unmount
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      // Reset shift state on cleanup just in case
+      setIsShiftDown(false);
+    };
+  }, []); 
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      const shiftIsCurrentlyPressed = !!(keyEvent && (keyEvent.key === 'ShiftLeft' || keyEvent.key === 'ShiftRight'));
+      if (shiftIsCurrentlyPressed !== isShiftDown) {
+         setIsShiftDown(shiftIsCurrentlyPressed);
+      }
+    }
+
+    if (keyEvent && keyEvent.key !== 'ShiftLeft' && keyEvent.key !== 'ShiftRight') {
+      switch (keyEvent.key) {
+        case 'KeyZ':
+          canvasComponentRef.current?.undo();
+          break;
+        case 'KeyY':
+          canvasComponentRef.current?.redo();
+          break;
+        case 'Digit1':
+          setTool(Tools.PEN);
+          break;
+        case 'Digit2':
+          setTool(Tools.LINE);
+          break;
+        case 'Digit3':
+          setTool(Tools.HIGHLIGHTER);
+          break;
+        case 'Digit4':
+          setTool(Tools.ERASER);
+          break;
+        case 'Digit6':
+          setTool(Tools.CIRCLE);
+          break;
+        case 'Digit7':
+          setTool(Tools.RECTANGLE);
+          break;
+        case 'Digit8':
+          setTool(Tools.TRIANGLE);
+          break;
+        case 'Digit9':
+          setTool(Tools.STAR);
+          break;
+        case 'KeyT':
+          setTool(Tools.TEXT);
+          break;
+        case 'Escape':
+          setTool(Tools.PAN);
+          break;
+
+      }
+    }
+
+  }, [keyEvent, setTool, canvasComponentRef, isShiftDown]);
 
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
   const [color, setSelectedColor] = useState<string>('#000000');
@@ -297,6 +369,7 @@ export default function CanvasScreen() {
           setTextModalVisible(true);
         }}
         onDrawingStateChange={setIsDrawing}
+        isShiftDown={isShiftDown}
       />
 
       <View style={styles.controlsContainer}>

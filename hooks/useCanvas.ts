@@ -33,6 +33,7 @@ export type CanvasProps = {
   tool: Tools;
   strokeWidth: number;
   color: string;
+  isShiftDown: boolean;
   fontManager?: any;
 };
 
@@ -43,6 +44,7 @@ export const useCanvas = ({
   strokeWidth,
   color,
   fontManager,
+  isShiftDown,
 }: CanvasProps) => {
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(
@@ -533,7 +535,8 @@ export const useCanvas = ({
         const updatedElement = toolHandlers[tool].updateElement(
           currentElement,
           x,
-          y
+          y,
+          isShiftDown
         );
         setCurrentElement(updatedElement);
       }
@@ -546,6 +549,7 @@ export const useCanvas = ({
       clearSelection,
       fontManager,
       findElementAtPoint,
+      isShiftDown,
     ]
   );
 

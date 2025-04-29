@@ -53,6 +53,7 @@ interface CanvasComponentProps {
   >;
   onTapText: (x: number, y: number) => void;
   onDrawingStateChange: (isDrawing: boolean) => void;
+  isShiftDown: boolean;
 }
 
 const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
@@ -67,6 +68,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       setElementsOffset,
       onTapText,
       onDrawingStateChange,
+      isShiftDown,
     },
     ref
   ) => {
@@ -105,6 +107,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       strokeWidth,
       color,
       fontManager,
+      isShiftDown,
     });
 
     useImperativeHandle(ref, () => ({

@@ -29,7 +29,8 @@ interface ToolHandler {
   updateElement?: (
     element: CanvasElement,
     x: number,
-    y: number
+    y: number,
+    isShiftDown: boolean
   ) => CanvasElement;
   moveElement?: (
     element: CanvasElement,
@@ -46,6 +47,11 @@ interface ToolHandler {
   // Can return null to indicate the element should be discarded (e.g., zero size)
   finalizeElement?: (element: CanvasElement) => CanvasElement | null;
 }
+
+const snapAngle = (angle: number): number => {
+  const snapIncrement = Math.PI / 4; // 45 degrees
+  return Math.round(angle / snapIncrement) * snapIncrement;
+};
 
 const toolHandlers: Record<Tools, ToolHandler> = {
   [Tools.PEN]: {
@@ -186,10 +192,25 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       } as CanvasElements.Line,
       tool: Tools.LINE,
     }),
-    updateElement: (element, x, y) => {
+    updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
       const line = newElement.element as CanvasElements.Line;
-      line.endPoint = { x, y };
+      // Access startPoint from the line object
+      const startPoint = line.startPoint;
+
+      if (isShiftDown) {
+        const dx = x - startPoint.x;
+        const dy = y - startPoint.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const originalAngle = Math.atan2(dy, dx);
+        const snappedAngle = snapAngle(originalAngle);
+        line.endPoint = {
+          x: startPoint.x + distance * Math.cos(snappedAngle),
+          y: startPoint.y + distance * Math.sin(snappedAngle),
+        };
+      } else {
+        line.endPoint = { x, y };
+      }
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
@@ -230,12 +251,21 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       } as CanvasElements.Rectangle,
       tool: Tools.RECTANGLE,
     }),
-    updateElement: (element, x, y) => {
+    updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
       const rect = newElement.element as CanvasElements.Rectangle;
-      // Update width/height based on current point relative to start point
-      rect.width = x - rect.point.x;
-      rect.height = y - rect.point.y;
+      const startPoint = rect.point;
+      const dx = x - startPoint.x;
+      const dy = y - startPoint.y;
+
+      if (isShiftDown) {
+        const maxDim = Math.max(Math.abs(dx), Math.abs(dy));
+        rect.width = Math.sign(dx || 1) * maxDim; // Use sign(dx || 1) to handle dx=0
+        rect.height = Math.sign(dy || 1) * maxDim; // Use sign(dy || 1) to handle dy=0
+      } else {
+        rect.width = dx;
+        rect.height = dy;
+      }
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
@@ -286,14 +316,12 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         radius: 0,
         strokeWidth,
         strokeColor: color,
-        // fillColor: 'rgba(0,0,0,0)',
       } as CanvasElements.Circle,
       tool: Tools.CIRCLE,
     }),
-    updateElement: (element, x, y) => {
+    updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
-      // Calculate radius based on distance from center to current point
       circle.radius = Math.sqrt(
         Math.pow(x - circle.center.x, 2) + Math.pow(y - circle.center.y, 2)
       );
@@ -309,9 +337,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
       circle.center = scalePoint(circle.center, origin, scaleX, scaleY);
-      // Scale radius - use geometric mean for non-uniform scaling
       circle.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
-      // circle.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
     },
     finalizeElement: (element) => {
@@ -463,6 +489,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
   [Tools.SELECT]: {},
   [Tools.PAN]: {},
 };
+
 
 // Helper for processing and scaling images before adding to canvas
 export const processImageForCanvas = (
