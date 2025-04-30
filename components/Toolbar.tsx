@@ -19,7 +19,6 @@ import Animated, {
 import ColorPicker, {
   BrightnessSlider,
   ColorFormatsObject,
-  InputWidget,
   OpacitySlider,
   Panel2,
 } from 'reanimated-color-picker';
@@ -78,7 +77,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
           }),
         },
       ],
-      height: withTiming(collapsed.value ? 0 : 'auto', { // Use 'auto' or a fixed height
+      height: withTiming(collapsed.value ? 0 : 'auto', {
+        // Use 'auto' or a fixed height
         duration: 300,
         easing: Easing.out(Easing.quad),
       }),
@@ -88,7 +88,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
       overflow: 'hidden', // This clips the absolutely positioned picker if it's inside
     };
   });
-
 
   useEffect(() => {
     if (isDrawing && (colorPickerVisible || shapeSelectorVisible)) {
@@ -187,7 +186,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
               onPress={() => {
                 console.log('Color Picker Button Pressed!');
                 setColorPickerVisible(prev => {
-                  console.log('Setting colorPickerVisible from', prev, 'to', !prev);
+                  console.log(
+                    'Setting colorPickerVisible from',
+                    prev,
+                    'to',
+                    !prev
+                  );
                   return !prev;
                 });
               }}
@@ -240,7 +244,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
             adaptSpectrum
             boundedThumb
           >
-            <Panel2 style={styles.panelStyle} thumbShape="ring" reverseVerticalChannel />
+            <Panel2
+              style={styles.panelStyle}
+              thumbShape="ring"
+              reverseVerticalChannel
+            />
             <BrightnessSlider style={styles.sliderStyle} />
             <OpacitySlider style={styles.sliderStyle} />
             {/* InputWidget might need adjustments or removal depending on need */}
@@ -253,7 +261,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
           </ColorPicker>
         ) : null}
         {/* --- END COLOR PICKER --- */}
-
       </ThemedView>
 
       {/* Shape Selector Modal (remains outside ThemedView) */}
@@ -301,7 +308,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    width: '100%',
+
+    width: 'auto',
+    left: '50%',
+    transform: [{ translateX: '-50%' }], // Center the toolbar horizontally
     position: 'absolute',
     bottom: '2%',
     justifyContent: 'center',
@@ -400,7 +410,8 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  previewTxtContainer: { // Style for the InputWidget container if used
+  previewTxtContainer: {
+    // Style for the InputWidget container if used
     paddingTop: 20,
     marginTop: 20,
     borderTopWidth: 1,
