@@ -47,7 +47,7 @@ const SelectionContextMenu: React.FC<SelectionContextMenuProps> = ({
         onPress={onDuplicate}
         activeOpacity={0.7}
       >
-        <Feather name="copy" size={24} color="black" />{' '}
+        <Feather name="copy" size={24} color="black" />
       </TouchableOpacity>
     </View>
   );

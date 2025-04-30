@@ -22,6 +22,14 @@ export enum Tools {
 // Get icons from https://icons.expo.fyi/
 
 export const ToolData = {
+  [Tools.PAN]: {
+    iconComponent: MaterialCommunityIcons,
+    iconName: 'hand-back-right-outline',
+  },
+  [Tools.SELECT]: {
+    iconComponent: MaterialCommunityIcons,
+    iconName: 'cursor-default-outline',
+  },
   [Tools.PEN]: {
     cap: 'round' as const,
     iconComponent: FontAwesome5,
@@ -37,10 +45,12 @@ export const ToolData = {
     blendMode: 'srcOver' as const,
     colorTransform: (hex: string) => {
       const alpha = 0.4;
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      // Convert alpha (0-1) to hex (00-FF)
+      const alphaHex = Math.round(alpha * 255)
+        .toString(16)
+        .padStart(2, '0');
+      // Append alpha hex to the original hex color (removing the '#')
+      return `${hex}${alphaHex}`;
     },
     sizeTransform: (size: number) => size + 10,
   },
@@ -51,6 +61,10 @@ export const ToolData = {
     blendMode: 'clear' as const,
     colorTransform: (hex: string) => hex, // No transformation
     sizeTransform: (size: number) => size, // No transformation
+  },
+  [Tools.TEXT]: {
+    iconComponent: MaterialIcons,
+    iconName: 'text-fields',
   },
   [Tools.LINE]: {
     iconComponent: MaterialCommunityIcons,
@@ -72,13 +86,4 @@ export const ToolData = {
     iconComponent: Feather,
     iconName: 'star',
   },
-  [Tools.SELECT]: {
-    iconComponent: MaterialCommunityIcons,
-    iconName: 'select',
-  },
-  [Tools.TEXT]: {
-    iconComponent: MaterialIcons,
-    iconName: 'text-fields',
-  },
-  
 };

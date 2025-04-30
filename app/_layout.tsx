@@ -6,6 +6,7 @@ import {
   useSegments,
 } from 'expo-router';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Auth component to protect routes
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -40,10 +41,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   return (
-    <AuthGuard>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-      </Stack>
-    </AuthGuard>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthGuard>
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+        </Stack>
+      </AuthGuard>
+    </GestureHandlerRootView>
   );
 }
