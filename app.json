@@ -61,7 +61,8 @@
           "savePhotosPermission": "The app accesses your photos to let you save canvas as an image.",
           "isAccessMediaLocationEnabled": true
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
