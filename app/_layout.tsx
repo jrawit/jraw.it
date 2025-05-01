@@ -1,40 +1,31 @@
-import { useAuthStore } from '@/utils/auth.store';
-import {
-  Stack,
-  useRootNavigationState,
-  useRouter,
-  useSegments,
-} from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useAuthStore } from '../utils/auth.store';
 
-// Auth component to protect routes
-function AuthGuard({ children }: { children: React.ReactNode }) {
+// Authentication protection component
+function AuthenticationGuard({ children }: { children: React.ReactNode }) {
+  const { token } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
-  const navigationState = useRootNavigationState();
-  const { token, user } = useAuthStore();
-
   useEffect(() => {
-    // Skip protection logic until the app is ready
-    if (!navigationState?.key) return;
+    try {
+      // Check if we're not already on the auth screens
+      const inAuthGroup = segments[0] === 'login' || segments[0] === 'register';
 
-    const firstSegment = segments[0] || '';
-
-    // Check if the user is authenticated
-    const isAuthenticated = !!token && !!user;
-
-    // Define which routes are public (don't require authentication)
-    const isAuthRoute = firstSegment === 'login' || firstSegment === 'register';
-
-    if (!isAuthenticated && !isAuthRoute) {
-      // If not authenticated and not on a public route, redirect to login
-      router.replace('/login');
-    } else if (isAuthenticated && isAuthRoute) {
-      // If authenticated and on an auth route, redirect to home
-      router.replace('/');
+      // If no token and not on auth screens, redirect to login
+      if (!token && !inAuthGroup) {
+        router.replace('/login');
+      } else if (token && inAuthGroup) {
+        // If authenticated and on auth screens, redirect to home
+        router.replace('/');
+      }
+    } catch (error) {
+      // Handle any errors that may occur during the redirect
+      // Ignore Attempted to navigate before mounting the Root Layout component - expo issue
+      console.log('Error during authentication guard:', error);
     }
-  }, [segments, navigationState?.key, token, user]);
+  }, [token, segments, router]);
 
   return <>{children}</>;
 }
@@ -42,11 +33,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthGuard>
+      <AuthenticationGuard>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="register" options={{ headerShown: false }} />
         </Stack>
-      </AuthGuard>
+      </AuthenticationGuard>
     </GestureHandlerRootView>
   );
 }

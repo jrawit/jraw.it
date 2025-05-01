@@ -2,7 +2,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { CanvasElements } from '@/constants/CanvasElement';
 import { Tools } from '@/constants/Tools';
 import { CanvasElement } from '@/hooks/useCanvas';
-import Slider from '@react-native-community/slider';
+import { Slider } from '@miblanchard/react-native-slider';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Pressable,
@@ -305,15 +305,16 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               Stroke Width: {strokeWidth.toFixed(0)}
             </ThemedText>
             <Slider
-              style={styles.slider}
               minimumValue={1}
               maximumValue={50} // Adjust max as needed
               step={1}
               value={strokeWidth}
-              onValueChange={setStrokeWidth} // Update local state live
-              onSlidingComplete={value =>
-                handlePropertyChange('strokeWidth', value)
-              } // Update element on release
+              onValueChange={value => {
+                setStrokeWidth(value[0]);
+              }}
+              onSlidingComplete={value => {
+                handlePropertyChange('strokeWidth', value[0]);
+              }}
               minimumTrackTintColor="#007AFF"
               thumbTintColor="#007AFF"
               maximumTrackTintColor="#D3D3D3"
@@ -328,14 +329,15 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               Font Size: {fontSize.toFixed(0)}
             </ThemedText>
             <Slider
-              style={styles.slider}
               minimumValue={8}
               maximumValue={80}
               step={1}
               value={fontSize}
-              onValueChange={setFontSize}
+              onValueChange={value => {
+                setFontSize(value[0]);
+              }}
               onSlidingComplete={value =>
-                handlePropertyChange('fontSize', value)
+                handlePropertyChange('fontSize', value[0])
               }
               minimumTrackTintColor="#007AFF"
               thumbTintColor="#007AFF"
@@ -369,13 +371,16 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               Spikes: {spikes.toFixed(0)}
             </ThemedText>
             <Slider
-              style={styles.slider}
               minimumValue={3}
               maximumValue={15}
               step={1}
               value={spikes}
-              onValueChange={setSpikes}
-              onSlidingComplete={value => handlePropertyChange('spikes', value)}
+              onValueChange={value => {
+                setSpikes(value[0]);
+              }}
+              onSlidingComplete={value =>
+                handlePropertyChange('spikes', value[0])
+              }
               minimumTrackTintColor="#007AFF"
               thumbTintColor="#007AFF"
               maximumTrackTintColor="#D3D3D3"

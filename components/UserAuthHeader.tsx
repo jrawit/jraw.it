@@ -1,5 +1,6 @@
 import { useAuthStore } from '@/utils/auth.store';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import {
   Alert,
@@ -19,11 +20,13 @@ export const UserAuthHeader: React.FC<UserAuthHeaderProps> = ({
 }) => {
   const { user, logout } = useAuthStore();
   const colorScheme = useColorScheme();
+  const router = useRouter();
   const isDark = colorScheme === 'dark';
 
   const handleLogout = async () => {
     try {
       await logout();
+      router.navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
       Alert.alert('Error', 'Failed to log out. Please try again.');

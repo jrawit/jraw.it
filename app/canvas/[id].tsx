@@ -56,7 +56,6 @@ export default function CanvasScreen() {
 
   const skiaCanvasRef = useCanvasRef();
   const canvasComponentRef = useRef<CanvasComponentHandle>(null);
-  const previousKeyEventRef = useRef<typeof keyEvent>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -83,7 +82,7 @@ export default function CanvasScreen() {
       window.removeEventListener('keyup', handleKeyUp);
       setIsShiftDown(false);
     };
-  }, []); 
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -92,7 +91,6 @@ export default function CanvasScreen() {
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Shift') {
-
         setIsShiftDown(true);
         // console.log('Web Shift Down');
       }
@@ -116,17 +114,24 @@ export default function CanvasScreen() {
       // Reset shift state on cleanup just in case
       setIsShiftDown(false);
     };
-  }, []); 
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      const shiftIsCurrentlyPressed = !!(keyEvent && (keyEvent.key === 'ShiftLeft' || keyEvent.key === 'ShiftRight'));
+      const shiftIsCurrentlyPressed = !!(
+        keyEvent &&
+        (keyEvent.key === 'ShiftLeft' || keyEvent.key === 'ShiftRight')
+      );
       if (shiftIsCurrentlyPressed !== isShiftDown) {
-         setIsShiftDown(shiftIsCurrentlyPressed);
+        setIsShiftDown(shiftIsCurrentlyPressed);
       }
     }
 
-    if (keyEvent && keyEvent.key !== 'ShiftLeft' && keyEvent.key !== 'ShiftRight') {
+    if (
+      keyEvent &&
+      keyEvent.key !== 'ShiftLeft' &&
+      keyEvent.key !== 'ShiftRight'
+    ) {
       switch (keyEvent.key) {
         case 'KeyZ':
           canvasComponentRef.current?.undo();
@@ -164,10 +169,8 @@ export default function CanvasScreen() {
         case 'Escape':
           setTool(Tools.PAN);
           break;
-
       }
     }
-
   }, [keyEvent, setTool, canvasComponentRef, isShiftDown]);
 
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
@@ -198,7 +201,8 @@ export default function CanvasScreen() {
     hidePermissionModal,
   } = useMediaLibraryPermissions();
 
-  const [backgroundColorPickerVisible, setBackgroundColorPickerVisible] = useState<boolean>(false); 
+  const [backgroundColorPickerVisible, setBackgroundColorPickerVisible] =
+    useState<boolean>(false);
 
   const [background, setBackground] = useState<Background>({
     color: '#F2F2F2',
@@ -590,7 +594,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     padding: 0,
     ...(Platform.OS === 'web' && {
-      outlineStyle: 'none',
+      outline: 'none',
     }),
   },
 });

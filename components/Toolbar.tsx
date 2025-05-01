@@ -1,6 +1,9 @@
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { ToolData, Tools } from '@/constants/Tools';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'; // Import for shape icon
-import Slider from '@react-native-community/slider';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Slider } from '@miblanchard/react-native-slider';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal, // Import Modal
@@ -25,9 +28,6 @@ import ColorPicker, {
   OpacitySlider,
   Panel2,
 } from 'reanimated-color-picker';
-import { ToolData, Tools } from '../constants/Tools';
-import { ThemedText } from './ThemedText';
-import { ThemedView } from './ThemedView';
 
 // Define the shape tools
 const shapeTools = [
@@ -60,7 +60,6 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
     const [shapeSelectorVisible, setShapeSelectorVisible] = useState(false); // State for shape selector modal
     const [initialColor, setInitialColor] = useState('#000000');
     const [strokeWidth, setStrokeWidth] = useState(3);
-    const [isSliderDragging, setIsSliderDragging] = useState(false);
     const selectedColor = useSharedValue(initialColor);
     const toggleButtonPosition = useSharedValue(140); // Starting position (matches original bottom: 70)
     const toolbarPosition = useSharedValue(0); // Initial position for the toolbar
@@ -187,19 +186,17 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
               {/* Stroke Width Slider */}
               <View style={styles.sliderContainer}>
                 <Slider
-                  style={styles.slider}
                   minimumValue={1}
                   maximumValue={100}
                   step={1}
                   value={strokeWidth}
-                  onSlidingStart={() => setIsSliderDragging(true)}
                   onSlidingComplete={useCallback(
-                    (value: number) => {
-                      setIsSliderDragging(false);
-                      setStrokeWidth(value);
-                      onStrokeWidthChange(value);
+                    (value: number[]) => {
+                      const newStrokeWidth = value[0];
+                      setStrokeWidth(newStrokeWidth);
+                      onStrokeWidthChange(newStrokeWidth);
                     },
-                    [onStrokeWidthChange]
+                    [onStrokeWidthChange, setStrokeWidth]
                   )}
                   minimumTrackTintColor="#007AFF"
                   thumbTintColor="#007AFF"
@@ -213,7 +210,6 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
               horizontal={true}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.toolsScrollContent}
-              scrollEnabled={!isSliderDragging} // <-- Disable scroll when slider is dragging
             >
               <View style={styles.toolsContainerContent}>
                 {/* Map through non-shape tools */}

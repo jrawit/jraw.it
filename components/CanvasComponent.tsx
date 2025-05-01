@@ -13,10 +13,11 @@ import { CanvasElements } from '@/constants/CanvasElement';
 import { ToolData, Tools } from '@/constants/Tools';
 import { CanvasElement, useCanvas } from '@/hooks/useCanvas';
 import { useFontManager } from '@/hooks/useFontManager';
-import { Canvas, Fill, Group, SkiaDomView } from '@shopify/react-native-skia';
+import { Canvas, Fill, Group } from '@shopify/react-native-skia';
 import React, {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useState,
@@ -42,7 +43,7 @@ export interface CanvasComponentHandle {
 }
 
 interface CanvasComponentProps {
-  canvasRef: React.RefObject<SkiaDomView>;
+  canvasRef: React.RefObject<any>;
   tool: Tools;
   strokeWidth: number;
   color: string;
@@ -235,6 +236,10 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         setHoverPoint(null);
         setPreviousPoint(null);
       });
+
+    useEffect(() => {
+      console.log('Elements: ', elements);
+    }, [elements]);
 
     const getElement = useCallback(
       (canvasElement: CanvasElement) => {

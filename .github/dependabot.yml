@@ -11,7 +11,6 @@ updates:
       interval: 'daily'
     open-pull-requests-limit: 10
     ignore:
-      - dependency-name: '@react-native-community/slider'
       - dependency-name: '@shopify/react-native-skia'
       - dependency-name: 'react-native'
       - dependency-name: 'react-native-gesture-handler'
