@@ -28,7 +28,7 @@
     "expo-blur": "~14.0.3",
     "expo-constants": "~17.0.8",
     "expo-font": "~13.0.4",
-    "expo-haptics": "~14.0.1",
+    "expo-haptics": "~14.1.4",
     "expo-image-manipulator": "~13.1.5",
     "expo-image-picker": "^16.0.6",
     "expo-key-event": "^1.4.0",
