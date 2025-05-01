@@ -89,7 +89,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       // path.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY));
       return newElement;
     },
-    finalizeElement: (element) => {
+    finalizeElement: element => {
       const path = element.element as CanvasElements.Path;
       // Discard paths with less than 2 points (just a dot)
       if (path.points.length < 2) {
@@ -136,7 +136,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       // path.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
     },
-    finalizeElement: (element) => {
+    finalizeElement: element => {
       const path = element.element as CanvasElements.Path;
       if (path.points.length < 2) {
         return null;
@@ -170,9 +170,9 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       return newElement;
     },
     // Moving/Scaling an eraser path doesn't make sense in typical usage
-    moveElement: (element) => element,
-    scaleElement: (element) => element,
-    finalizeElement: (element) => {
+    moveElement: element => element,
+    scaleElement: element => element,
+    finalizeElement: element => {
       // An eraser path itself might always be considered valid if > 1 point
       const path = element.element as CanvasElements.Path;
       if (path.points.length < 2) {
@@ -216,8 +216,14 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const line = newElement.element as CanvasElements.Line;
-      line.startPoint = { x: line.startPoint.x + deltaX, y: line.startPoint.y + deltaY };
-      line.endPoint = { x: line.endPoint.x + deltaX, y: line.endPoint.y + deltaY };
+      line.startPoint = {
+        x: line.startPoint.x + deltaX,
+        y: line.startPoint.y + deltaY,
+      };
+      line.endPoint = {
+        x: line.endPoint.x + deltaX,
+        y: line.endPoint.y + deltaY,
+      };
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
@@ -228,10 +234,13 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       // line.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
     },
-    finalizeElement: (element) => {
+    finalizeElement: element => {
       // Discard zero-length lines
       const line = element.element as CanvasElements.Line;
-      if (line.startPoint.x === line.endPoint.x && line.startPoint.y === line.endPoint.y) {
+      if (
+        line.startPoint.x === line.endPoint.x &&
+        line.startPoint.y === line.endPoint.y
+      ) {
         return null;
       }
       return element;
@@ -279,9 +288,17 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const rect = newElement.element as CanvasElements.Rectangle;
       // Scale top-left and bottom-right corners relative to origin
       const initialTopLeft = { x: rect.point.x, y: rect.point.y };
-      const initialBottomRight = { x: rect.point.x + rect.width, y: rect.point.y + rect.height };
+      const initialBottomRight = {
+        x: rect.point.x + rect.width,
+        y: rect.point.y + rect.height,
+      };
       const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
-      const newBottomRight = scalePoint(initialBottomRight, origin, scaleX, scaleY);
+      const newBottomRight = scalePoint(
+        initialBottomRight,
+        origin,
+        scaleX,
+        scaleY
+      );
       // Recalculate top-left, width, and height based on scaled corners
       rect.point.x = Math.min(newTopLeft.x, newBottomRight.x);
       rect.point.y = Math.min(newTopLeft.y, newBottomRight.y);
@@ -290,7 +307,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       // rect.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
     },
-    finalizeElement: (element) => {
+    finalizeElement: element => {
       const rect = element.element as CanvasElements.Rectangle;
       // Discard zero-size rectangles
       if (Math.abs(rect.width) < 1 && Math.abs(rect.height) < 1) {
@@ -330,7 +347,10 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     moveElement: (element, deltaX, deltaY) => {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
-      circle.center = { x: circle.center.x + deltaX, y: circle.center.y + deltaY };
+      circle.center = {
+        x: circle.center.x + deltaX,
+        y: circle.center.y + deltaY,
+      };
       return newElement;
     },
     scaleElement: (element, scaleX, scaleY, origin) => {
@@ -340,7 +360,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       circle.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
       return newElement;
     },
-    finalizeElement: (element) => {
+    finalizeElement: element => {
       const circle = element.element as CanvasElements.Circle;
       // Discard tiny circles
       if (circle.radius < 1) {
@@ -362,7 +382,8 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       } as CanvasElements.Triangle,
       tool: Tools.TRIANGLE,
     }),
-    updateElement: (element, x, y, isShiftDown) => { // Add isShiftDown
+    updateElement: (element, x, y, isShiftDown) => {
+      // Add isShiftDown
       const newElement = cloneDeep(element);
       const triangle = newElement.element as CanvasElements.Triangle;
       const startPoint = triangle.point1; // Alias for clarity
@@ -379,16 +400,23 @@ const toolHandlers: Record<Tools, ToolHandler> = {
 
         // Normalize angle to be between 0 and 2*PI for easier comparison
         if (angle < 0) {
-            angle += 2 * Math.PI;
+          angle += 2 * Math.PI;
         }
 
         // Check for snapping near horizontal axis (0 or PI)
-        if (Math.abs(angle) < snapThreshold || Math.abs(angle - Math.PI) < snapThreshold || Math.abs(angle - 2 * Math.PI) < snapThreshold) {
-            currentY = startPoint.y; // Snap vertically
+        if (
+          Math.abs(angle) < snapThreshold ||
+          Math.abs(angle - Math.PI) < snapThreshold ||
+          Math.abs(angle - 2 * Math.PI) < snapThreshold
+        ) {
+          currentY = startPoint.y; // Snap vertically
         }
         // Check for snapping near vertical axis (PI/2 or 3*PI/2)
-        else if (Math.abs(angle - Math.PI / 2) < snapThreshold || Math.abs(angle - 3 * Math.PI / 2) < snapThreshold) {
-            currentX = startPoint.x; // Snap horizontally
+        else if (
+          Math.abs(angle - Math.PI / 2) < snapThreshold ||
+          Math.abs(angle - (3 * Math.PI) / 2) < snapThreshold
+        ) {
+          currentX = startPoint.x; // Snap horizontally
         }
 
         // Recalculate dx, dy, and angle after potential snapping
@@ -396,7 +424,6 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         dy = currentY - startPoint.y;
         angle = Math.atan2(dy, dx); // Recalculate angle based on snapped coordinates
         // --- End Axis Snapping ---
-
 
         // Calculate points for an equilateral triangle based on (potentially snapped) currentX, currentY
         const sideLength = Math.sqrt(dx * dx + dy * dy);
@@ -421,11 +448,13 @@ const toolHandlers: Record<Tools, ToolHandler> = {
           x: midX + height * Math.cos(perpendicularAngle),
           y: midY + height * Math.sin(perpendicularAngle),
         };
-
       } else {
         // Original logic: Isosceles triangle
         triangle.point2 = { x: currentX, y: startPoint.y };
-        triangle.point3 = { x: startPoint.x + (currentX - startPoint.x) / 2, y: currentY };
+        triangle.point3 = {
+          x: startPoint.x + (currentX - startPoint.x) / 2,
+          y: currentY,
+        };
       }
       return newElement;
     },
@@ -438,7 +467,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       // triangle.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
     },
-    finalizeElement: (element) => {
+    finalizeElement: element => {
       // Add validation if needed (e.g., check if points are collinear)
       return element;
     },
@@ -479,7 +508,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       // star.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
       return newElement;
     },
-    finalizeElement: (element) => {
+    finalizeElement: element => {
       const star = element.element as CanvasElements.Star;
       // Discard tiny stars
       if (star.radius < 1) {
@@ -506,7 +535,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       text.fontSize *= Math.sqrt(Math.abs(scaleX * scaleY));
       return newElement;
     },
-    finalizeElement: (element) => element, // No finalization typically needed
+    finalizeElement: element => element, // No finalization typically needed
   },
   [Tools.IMAGE]: {
     // Image creation likely happens via file selection, not canvas drag
@@ -522,22 +551,29 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const newElement = cloneDeep(element);
       const img = newElement.element as CanvasElements.Image;
       const initialTopLeft = { x: img.point.x, y: img.point.y };
-      const initialBottomRight = { x: img.point.x + img.width, y: img.point.y + img.height };
+      const initialBottomRight = {
+        x: img.point.x + img.width,
+        y: img.point.y + img.height,
+      };
       const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
-      const newBottomRight = scalePoint(initialBottomRight, origin, scaleX, scaleY);
+      const newBottomRight = scalePoint(
+        initialBottomRight,
+        origin,
+        scaleX,
+        scaleY
+      );
       img.point.x = Math.min(newTopLeft.x, newBottomRight.x);
       img.point.y = Math.min(newTopLeft.y, newBottomRight.y);
       img.width = Math.abs(newTopLeft.x - newBottomRight.x);
       img.height = Math.abs(newTopLeft.y - newBottomRight.y);
       return newElement;
     },
-    finalizeElement: (element) => element, // No finalization typically needed
+    finalizeElement: element => element, // No finalization typically needed
   },
   // Tools that don't create persistent elements
   [Tools.SELECT]: {},
   [Tools.PAN]: {},
 };
-
 
 // Helper for processing and scaling images before adding to canvas
 export const processImageForCanvas = (
@@ -553,17 +589,24 @@ export const processImageForCanvas = (
   // Limit to max dimension if needed, maintaining aspect ratio
   if (resizeWidth > maxImageDimension || resizeHeight > maxImageDimension) {
     if (resizeWidth > resizeHeight) {
-      resizeHeight = Math.floor(resizeHeight * (maxImageDimension / resizeWidth));
+      resizeHeight = Math.floor(
+        resizeHeight * (maxImageDimension / resizeWidth)
+      );
       resizeWidth = maxImageDimension;
     } else {
-      resizeWidth = Math.floor(resizeWidth * (maxImageDimension / resizeHeight));
+      resizeWidth = Math.floor(
+        resizeWidth * (maxImageDimension / resizeHeight)
+      );
       resizeHeight = maxImageDimension;
     }
   }
 
   // Scale down further if it still exceeds canvas dimensions (e.g., fit 90%)
   const scaleToFit = 0.9;
-  if (resizeWidth > canvasWidth * scaleToFit || resizeHeight > canvasHeight * scaleToFit) {
+  if (
+    resizeWidth > canvasWidth * scaleToFit ||
+    resizeHeight > canvasHeight * scaleToFit
+  ) {
     const widthRatio = (canvasWidth * scaleToFit) / resizeWidth;
     const heightRatio = (canvasHeight * scaleToFit) / resizeHeight;
     const scaleFactor = Math.min(widthRatio, heightRatio);

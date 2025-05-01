@@ -14,7 +14,7 @@ interface PathProps {
   pathData: CanvasElements.Path;
 }
 
-const createPath = (points: Array<{ x: number; y: number }>) => {
+const createPath = (points: { x: number; y: number }[]) => {
   const newPath = Skia.Path.Make();
 
   if (points.length < 2) return newPath;

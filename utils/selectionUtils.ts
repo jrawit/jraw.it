@@ -26,7 +26,6 @@ export const isPointInsideBox = (
   point: { x: number; y: number },
   box: { x: number; y: number; width: number; height: number }
 ): boolean => {
-
   const normX = box.width < 0 ? box.x + box.width : box.x;
   const normY = box.height < 0 ? box.y + box.height : box.y;
   const normW = Math.abs(box.width);

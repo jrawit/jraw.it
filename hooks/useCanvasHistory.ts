@@ -3,14 +3,16 @@ import { CanvasElement } from './useCanvas'; // Adjust import path if needed
 
 // Define Action Types
 export type AddAction = { type: 'ADD_ELEMENT'; elements: CanvasElement[] };
-export type DeleteAction = { type: 'DELETE_ELEMENT'; elements: CanvasElement[] };
+export type DeleteAction = {
+  type: 'DELETE_ELEMENT';
+  elements: CanvasElement[];
+};
 export type ModifyAction = {
   type: 'MODIFY_ELEMENT';
   elementIds: string[];
   originalElements: CanvasElement[]; // Partial list of elements before modification
   newElements: CanvasElement[]; // Partial list of elements after modification
 };
-
 
 // Define the Union Type for all possible actions
 export type HistoryAction = AddAction | DeleteAction | ModifyAction;
@@ -41,7 +43,11 @@ export const useCanvasHistory = (
     switch (lastAction.type) {
       case 'ADD_ELEMENT':
         // Remove the added elements
-        setElements(prev => prev.filter(el => !lastAction.elements.some(added => added.id === el.id)));
+        setElements(prev =>
+          prev.filter(
+            el => !lastAction.elements.some(added => added.id === el.id)
+          )
+        );
         break;
       case 'DELETE_ELEMENT':
         // Re-add the deleted elements
@@ -50,9 +56,13 @@ export const useCanvasHistory = (
       case 'MODIFY_ELEMENT':
         // Restore previous state for modified elements (partial update)
         setElements(prev => {
-          const originalMap = new Map(lastAction.originalElements.map(el => [el.id, el]));
+          const originalMap = new Map(
+            lastAction.originalElements.map(el => [el.id, el])
+          );
           // Map over previous state, replacing elements found in the originalMap
-          return prev.map(currentEl => originalMap.get(currentEl.id) || currentEl);
+          return prev.map(
+            currentEl => originalMap.get(currentEl.id) || currentEl
+          );
         });
         break;
     }
@@ -80,7 +90,11 @@ export const useCanvasHistory = (
         break;
       case 'DELETE_ELEMENT':
         // Re-delete the elements
-        setElements(prev => prev.filter(el => !nextAction.elements.some(deleted => deleted.id === el.id)));
+        setElements(prev =>
+          prev.filter(
+            el => !nextAction.elements.some(deleted => deleted.id === el.id)
+          )
+        );
         break;
       case 'MODIFY_ELEMENT':
         // Apply new state for modified elements (partial update)
