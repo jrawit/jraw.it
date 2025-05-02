@@ -1001,7 +1001,7 @@
   resolved "https://registry.yarnpkg.com/@expo/config-types/-/config-types-53.0.3.tgz#d083d9b095972e89eee96c41d085feb5b92d2749"
   integrity sha512-V1e6CiM4TXtGxG/W2Msjp/QOx/vikLo5IUGMvEMjgAglBfGYx3PXfqsUb5aZDt6kqA3bDDwFuZoS5vNm/SYwSg==
 
-"@expo/config@~11.0.6", "@expo/config@~11.0.7":
+"@expo/config@~11.0.7":
   version "11.0.7"
   resolved "https://registry.yarnpkg.com/@expo/config/-/config-11.0.7.tgz#e6a6071942854269825e2450c3a115c963a4fd56"
   integrity sha512-pppH3Cy2IfituiYACMeW7cWYezcjmHKq7lDLfH1gMHT+zZ1QaYNs3EN6Kcc/QAXV//KFFhU0Qq4H/UrLuPp/yg==
@@ -1146,22 +1146,6 @@
     "@xmldom/xmldom" "^0.8.8"
     base64-js "^1.2.3"
     xmlbuilder "^15.1.1"
-
-"@expo/prebuild-config@^9.0.3":
-  version "9.0.4"
-  resolved "https://registry.yarnpkg.com/@expo/prebuild-config/-/prebuild-config-9.0.4.tgz#4c8cdac2299ea94977207b4707447aa83860cabd"
-  integrity sha512-YQwTLvHjgqtVM3ZNdMP79510Opnv+TVWTOf3gmi9fKOfWgpR0YiE19aRF7YrQ+qh22Mt1tBBFVRsT3gsBq/Ytw==
-  dependencies:
-    "@expo/config" "~11.0.7"
-    "@expo/config-plugins" "~10.0.1"
-    "@expo/config-types" "^53.0.3"
-    "@expo/image-utils" "^0.7.4"
-    "@expo/json-file" "^9.1.4"
-    "@react-native/normalize-colors" "0.79.1"
-    debug "^4.3.1"
-    resolve-from "^5.0.0"
-    semver "^7.6.0"
-    xml2js "0.6.0"
 
 "@expo/prebuild-config@^9.0.5":
   version "9.0.5"
@@ -3984,12 +3968,12 @@ expo-router@~5.0.3:
     server-only "^0.0.1"
     shallowequal "^1.1.0"
 
-expo-splash-screen@~0.30.7:
-  version "0.30.7"
-  resolved "https://registry.yarnpkg.com/expo-splash-screen/-/expo-splash-screen-0.30.7.tgz#bd4f0ea643c8f09ed43957ec6cf5a051edfcdfa7"
-  integrity sha512-rMMJC43bSqn4cNWsbilIodnCjnWXWLWNHSEvuyhiIg2UciV7bp2PKb6AuFqMdzjG4lmdM9ANn52AQaYnAaZoAQ==
+expo-splash-screen@~0.30.8:
+  version "0.30.8"
+  resolved "https://registry.yarnpkg.com/expo-splash-screen/-/expo-splash-screen-0.30.8.tgz#2e960ccff053bc8ace85eb56f7d6745e4ddfc6b6"
+  integrity sha512-2eh+uA543brfeG5HILXmtNKA7E2/pfywKzNumzy3Ef6OtDjYy6zJUGNSbhnZRbVEjUZo3/QNRs0JRBfY80okZg==
   dependencies:
-    "@expo/prebuild-config" "^9.0.3"
+    "@expo/prebuild-config" "^9.0.5"
 
 expo-status-bar@~2.2.3:
   version "2.2.3"
