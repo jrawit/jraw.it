@@ -3,6 +3,8 @@
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "strict": true,
+    "module": "esnext",
+    "moduleResolution": "node",
     "paths": {
       "@/*": ["./*"]
     }

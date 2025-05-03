@@ -1,5 +1,2 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-npx prettier --ignore-unknown --write .
+yarn lint-staged
 git add -u

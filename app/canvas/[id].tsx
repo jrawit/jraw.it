@@ -14,6 +14,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useCanvasRef } from '@shopify/react-native-skia';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeyEvent } from 'expo-key-event';
@@ -252,6 +254,31 @@ export default function CanvasScreen() {
       throw new Error('Failed to encode image to base64');
     }
     if (Platform.OS === 'web') {
+      console.log('Saving image from web');
+      if ('__TAURI_INTERNALS__' in window) {
+        console.log('Saving image from Tauri');
+        // Tauri-specific file saving
+        const filePath = await save({
+          filters: [
+            {
+              name: 'Images',
+              extensions: ['png'],
+            },
+          ],
+        });
+
+        console.log('File path:', filePath);
+
+        if (filePath) {
+          const binaryData = Uint8Array.from(atob(base64), c =>
+            c.charCodeAt(0)
+          );
+          await writeFile(filePath, binaryData);
+          alert('Image saved successfully');
+        }
+        return;
+      }
+
       const link = document.createElement('a');
       link.href = `data:image/png;base64,${base64}`;
       link.download = `jraw-canvas-${new Date().toISOString().slice(0, 10)}.png`;
@@ -261,6 +288,7 @@ export default function CanvasScreen() {
       document.body.removeChild(link);
       alert('Image downloaded');
     } else {
+      console.log('Saving image from mobile');
       const status = await requestPermission();
       if (status !== 'granted') {
         alert('Permission denied. Cannot save image.');
