@@ -330,7 +330,8 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       id: generateId(),
       element: {
         center: { x, y },
-        radius: 0,
+        radiusX: 0,
+        radiusY: 0,
         strokeWidth,
         strokeColor: color,
       } as CanvasElements.Circle,
@@ -339,9 +340,24 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
-      circle.radius = Math.sqrt(
-        Math.pow(x - circle.center.x, 2) + Math.pow(y - circle.center.y, 2)
-      );
+
+      // Calculate dx and dy from center point to current mouse position
+      const dx = Math.abs(x - circle.center.x);
+      const dy = Math.abs(y - circle.center.y);
+
+      if (isShiftDown) {
+        // When shift is pressed, create a perfect circle (both radiuses equal)
+        const radius = Math.max(dx, dy);
+        circle.radiusX = radius;
+        circle.radiusY = radius;
+        console.log('Circle with Shift:', radius); // Debug
+      } else {
+        // Default: create an oval with independent radiuses
+        circle.radiusX = dx;
+        circle.radiusY = dy;
+        console.log('Oval (no shift):', dx, dy); // Debug
+      }
+
       return newElement;
     },
     moveElement: (element, deltaX, deltaY) => {
@@ -357,13 +373,17 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
       circle.center = scalePoint(circle.center, origin, scaleX, scaleY);
-      circle.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
+
+      // Scale both radiuses independently to maintain oval shapes
+      circle.radiusX *= Math.abs(scaleX);
+      circle.radiusY *= Math.abs(scaleY);
+
       return newElement;
     },
     finalizeElement: element => {
       const circle = element.element as CanvasElements.Circle;
-      // Discard tiny circles
-      if (circle.radius < 1) {
+      // Discard tiny circles/ovals
+      if (circle.radiusX < 1 && circle.radiusY < 1) {
         return null;
       }
       return element;

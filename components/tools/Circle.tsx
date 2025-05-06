@@ -3,24 +3,39 @@ import {
   Paint,
   PaintStyle,
   SkCanvas,
-  Circle as SkCircle,
   Skia,
   SkPaint,
+  Path as SkPath,
 } from '@shopify/react-native-skia';
-import React from 'react';
+import React, { useMemo } from 'react';
 
 interface CircleProps {
   circleData: CanvasElements.Circle;
 }
 
 export const Circle: React.FC<CircleProps> = React.memo(({ circleData }) => {
-  const { center, radius, strokeColor, strokeWidth, fillColor } = circleData;
+  const { center, radiusX, radiusY, strokeColor, strokeWidth, fillColor } =
+    circleData;
+
+  // Create an elliptical path
+  const path = useMemo(() => {
+    const path = Skia.Path.Make();
+    path.addOval(
+      Skia.XYWHRect(
+        center.x - radiusX,
+        center.y - radiusY,
+        radiusX * 2,
+        radiusY * 2
+      )
+    );
+    return path;
+  }, [center.x, center.y, radiusX, radiusY]);
 
   return (
-    <SkCircle cx={center.x} cy={center.y} r={radius} style="stroke">
+    <SkPath path={path} style="stroke">
       {fillColor && <Paint color={fillColor} />}
       <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
-    </SkCircle>
+    </SkPath>
   );
 });
 
@@ -29,17 +44,30 @@ export const renderCircle = (
   paint: SkPaint,
   circleData: CanvasElements.Circle
 ) => {
-  const { center, radius, strokeColor, strokeWidth, fillColor } = circleData;
+  const { center, radiusX, radiusY, strokeColor, strokeWidth, fillColor } =
+    circleData;
+
+  // Create an elliptical path
+  const path = Skia.Path.Make();
+  path.addOval(
+    Skia.XYWHRect(
+      center.x - radiusX,
+      center.y - radiusY,
+      radiusX * 2,
+      radiusY * 2
+    )
+  );
+
   // Draw fill first
   if (fillColor) {
     paint.setStyle(PaintStyle.Fill);
     paint.setColor(Skia.Color(fillColor));
-    canvas.drawCircle(center.x, center.y, radius, paint);
+    canvas.drawPath(path, paint);
   }
 
   // Draw stroke
   paint.setStyle(PaintStyle.Stroke);
   paint.setStrokeWidth(strokeWidth);
   paint.setColor(Skia.Color(strokeColor));
-  canvas.drawCircle(center.x, center.y, radius, paint);
+  canvas.drawPath(path, paint);
 };
