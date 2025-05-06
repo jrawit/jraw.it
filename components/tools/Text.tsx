@@ -1,5 +1,5 @@
 import { CanvasElements } from '@/constants/CanvasElement';
-import { useFontManager } from '@/hooks/useFontManager';
+import { getFontFile, useFontManager } from '@/hooks/useFontManager';
 import {
   PaintStyle,
   SkCanvas,
@@ -26,6 +26,17 @@ export const Text: React.FC<TextProps> = React.memo(
         return null;
       }
 
+      // Convert string weight values to numeric values that Skia understands
+      let numericWeight = 400; // Default to regular (400)
+      if (fontWeight === 'bold') {
+        numericWeight = 700;
+      } else if (fontWeight === 'normal') {
+        numericWeight = 400;
+      } else if (fontWeight && !isNaN(Number(fontWeight))) {
+        // If it's already a numeric string like '500', convert to number
+        numericWeight = Number(fontWeight);
+      }
+
       const paragraph = Skia.ParagraphBuilder.Make(
         { textAlign: TextAlign.Left },
         fontManager
@@ -34,7 +45,7 @@ export const Text: React.FC<TextProps> = React.memo(
           fontFamilies: [fontFamily],
           fontSize: fontSize,
           fontStyle: {
-            weight: fontWeight as any,
+            weight: numericWeight,
             slant: fontStyle === 'italic' ? 1 : 0,
           },
           color: Skia.Color(color),
@@ -70,20 +81,8 @@ export const renderText = async (
   const { point, text, fontFamily, fontSize, fontStyle, fontWeight, color } =
     textData;
 
-  // Determine font file based on style and weight (simplified example for Roboto)
-  let fontFile;
-  if (fontFamily === 'Roboto') {
-    if (fontWeight === 'bold') {
-      fontFile = require('@/assets/fonts/roboto/Roboto-Bold.ttf');
-    } else if (fontStyle === 'italic') {
-      fontFile = require('@/assets/fonts/roboto/Roboto-Italic.ttf');
-    } else {
-      fontFile = require('@/assets/fonts/roboto/Roboto-Regular.ttf');
-    }
-  } else {
-    // Fallback or handle other font families
-    fontFile = require('@/assets/fonts/roboto/Roboto-Regular.ttf');
-  }
+  // Use the centralized getFontFile function instead of inline font selection logic
+  const fontFile = getFontFile(fontFamily, fontWeight, fontStyle);
 
   const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(
     await Skia.Data.fromURI(fontFile)
