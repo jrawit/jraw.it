@@ -672,8 +672,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'baseline',
     width: '100%',
-    borderColor: 'green',
-    borderWidth: 1,
   },
   textInputContainer: {
     minWidth: 100,
