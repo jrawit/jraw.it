@@ -14,7 +14,14 @@ import { CanvasElements } from '@/constants/CanvasElement';
 import { ToolData, Tools } from '@/constants/Tools';
 import { CanvasElement, useCanvas } from '@/hooks/useCanvas';
 import { useFontManager } from '@/hooks/useFontManager';
-import { Canvas, Fill, Group } from '@shopify/react-native-skia';
+import {
+  AlphaType,
+  Canvas,
+  ColorType,
+  Fill,
+  Group,
+  SkImage,
+} from '@shopify/react-native-skia';
 import React, {
   forwardRef,
   useCallback,
@@ -55,11 +62,12 @@ interface CanvasComponentProps {
   >;
   onDrawingStateChange: (isDrawing: boolean) => void;
   isShiftDown: boolean;
+  onEyeDropperColor?: (color: string) => void;
 }
 
 const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
-  (
-    {
+  (props, ref) => {
+    const {
       canvasRef,
       tool,
       strokeWidth,
@@ -69,9 +77,9 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       setElementsOffset,
       onDrawingStateChange,
       isShiftDown,
-    },
-    ref
-  ) => {
+      onEyeDropperColor,
+    } = props;
+
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
     const [currentElementOffset, setCurrentElementOffset] = useState<{
       x: number;
@@ -92,6 +100,34 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     } | null>(null);
 
     const fontManager = useFontManager();
+
+    // Function to get the color of the element at specific coordinates
+    const getPixelColorAt = (x: number, y: number): string => {
+      const image = canvasRef.current.makeImageSnapshot() as SkImage;
+      console.log('Image: ', image);
+
+      const pixel = image.readPixels(x, y, {
+        width: 1,
+        height: 1,
+        colorType: ColorType.RGBA_8888,
+        alphaType: AlphaType.Unpremul,
+      });
+
+      if (!pixel) {
+        console.error('Failed to read pixel color');
+        return color; // Return current color if pixel reading fails
+      }
+
+      const r = pixel[0];
+      const g = pixel[1];
+      const b = pixel[2];
+
+      // Convert to hex color format
+      const hexColor = `#${((1 << 24) + (r << 16) + (g << 8) + b)
+        .toString(16)
+        .slice(1)}`;
+      return hexColor;
+    };
 
     const {
       elements,
@@ -152,6 +188,14 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       .onStart(e => {
         const adjustedX = e.x - elementsOffset.x;
         const adjustedY = e.y - elementsOffset.y;
+
+        if (tool === Tools.EYEDROPPER) {
+          const pickedColor = getPixelColorAt(e.x, e.y);
+          if (onEyeDropperColor) {
+            onEyeDropperColor(pickedColor);
+          }
+          return;
+        }
 
         if (tool === Tools.TEXT) {
           if (pendingTextCreation) {
