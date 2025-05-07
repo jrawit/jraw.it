@@ -402,7 +402,8 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
                     <Circle
                       circleData={{
                         center: hoverPoint,
-                        radius: strokeWidth / 2,
+                        radiusX: strokeWidth / 2,
+                        radiusY: strokeWidth / 2,
                         strokeWidth: 1,
                         strokeColor: 'black',
                       }}

@@ -1,9 +1,9 @@
 import { CanvasElements } from '@/constants/CanvasElement';
 import {
-  Paint,
+  Group,
+  Oval,
   PaintStyle,
   SkCanvas,
-  Circle as SkCircle,
   Skia,
   SkPaint,
 } from '@shopify/react-native-skia';
@@ -14,13 +14,32 @@ interface CircleProps {
 }
 
 export const Circle: React.FC<CircleProps> = React.memo(({ circleData }) => {
-  const { center, radius, strokeColor, strokeWidth, fillColor } = circleData;
+  const { center, radiusX, radiusY, strokeColor, strokeWidth, fillColor } =
+    circleData;
+
+  const x = center.x - radiusX;
+  const y = center.y - radiusY;
+  const width = radiusX * 2;
+  const height = radiusY * 2;
 
   return (
-    <SkCircle cx={center.x} cy={center.y} r={radius} style="stroke">
-      {fillColor && <Paint color={fillColor} />}
-      <Paint color={strokeColor} style="stroke" strokeWidth={strokeWidth} />
-    </SkCircle>
+    <Group>
+      {/* Draw fill first if specified */}
+      {fillColor && (
+        <Oval x={x} y={y} width={width} height={height} color={fillColor} />
+      )}
+
+      {/* Draw stroke */}
+      <Oval
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        color={strokeColor}
+        style="stroke"
+        strokeWidth={strokeWidth}
+      />
+    </Group>
   );
 });
 
@@ -29,17 +48,22 @@ export const renderCircle = (
   paint: SkPaint,
   circleData: CanvasElements.Circle
 ) => {
-  const { center, radius, strokeColor, strokeWidth, fillColor } = circleData;
-  // Draw fill first
+  const { center, radiusX, radiusY, strokeColor, strokeWidth, fillColor } =
+    circleData;
+
+  const x = center.x - radiusX;
+  const y = center.y - radiusY;
+  const width = radiusX * 2;
+  const height = radiusY * 2;
+
   if (fillColor) {
     paint.setStyle(PaintStyle.Fill);
     paint.setColor(Skia.Color(fillColor));
-    canvas.drawCircle(center.x, center.y, radius, paint);
+    canvas.drawOval(Skia.XYWHRect(x, y, width, height), paint);
   }
 
-  // Draw stroke
   paint.setStyle(PaintStyle.Stroke);
   paint.setStrokeWidth(strokeWidth);
   paint.setColor(Skia.Color(strokeColor));
-  canvas.drawCircle(center.x, center.y, radius, paint);
+  canvas.drawOval(Skia.XYWHRect(x, y, width, height), paint);
 };

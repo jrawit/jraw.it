@@ -159,17 +159,28 @@ export const useCanvas = ({
           case Tools.CIRCLE: {
             const circleData = elementData as CanvasElements.Circle;
             if (!circleData?.center) break;
-            const radius = circleData.radius;
+
             const dx = x - circleData.center.x;
             const dy = y - circleData.center.y;
-            const distSq = dx * dx + dy * dy;
-            // Use the single effective radius
-            const outerEffectiveRadiusSq = (radius + effectiveCheckRadius) ** 2;
-            const innerEffectiveRadiusSq =
-              Math.max(0, radius - effectiveCheckRadius) ** 2;
+
+            // For ellipses, normalize the point to convert to the equation (x/a)² + (y/b)² = 1
+            const normalizedDistSq =
+              (dx * dx) / (circleData.radiusX * circleData.radiusX) +
+              (dy * dy) / (circleData.radiusY * circleData.radiusY);
+
+            // Calculate the precise threshold by accounting for the stroke width
+            // and converting the linear distance to the normalized ellipse space
+            const strokeFactor =
+              effectiveCheckRadius /
+              Math.min(circleData.radiusX, circleData.radiusY);
+
+            const outerThreshold = strokeFactor * 2; // Allow detection slightly outside
+            const innerThreshold = strokeFactor * 2; // Allow detection slightly inside
+
+            // Check if the point is near the ellipse outline
             if (
-              distSq <= outerEffectiveRadiusSq &&
-              distSq >= innerEffectiveRadiusSq
+              normalizedDistSq <= 1 + outerThreshold &&
+              normalizedDistSq >= 1 - innerThreshold
             ) {
               return element.id;
             }

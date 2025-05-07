@@ -44,9 +44,12 @@ export namespace CanvasElements {
 
   export type Circle = {
     center: Point;
-    radius: number;
-  } & StrokeProps &
-    FillProps;
+    radiusX: number;
+    radiusY: number;
+    strokeWidth: number;
+    strokeColor: string;
+    fillColor?: string;
+  };
 
   export type Star = {
     point: Point;

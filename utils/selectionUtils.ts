@@ -114,15 +114,16 @@ export const calculateBoundingBox = (
     case Tools.CIRCLE:
       const {
         center,
-        radius,
+        radiusX,
+        radiusY,
         strokeWidth: circleStrokeWidth = 0,
       } = data as CanvasElements.Circle;
       const halfCircleStrokeWidth = circleStrokeWidth / 2;
       return {
-        x: center.x - radius - halfCircleStrokeWidth,
-        y: center.y - radius - halfCircleStrokeWidth,
-        width: radius * 2 + circleStrokeWidth,
-        height: radius * 2 + circleStrokeWidth,
+        x: center.x - radiusX - halfCircleStrokeWidth,
+        y: center.y - radiusY - halfCircleStrokeWidth,
+        width: radiusX * 2 + circleStrokeWidth,
+        height: radiusY * 2 + circleStrokeWidth,
       };
     case Tools.STAR:
       const {
