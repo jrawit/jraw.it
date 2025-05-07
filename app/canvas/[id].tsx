@@ -25,6 +25,7 @@ import {
   Modal,
   Platform,
   StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
   useColorScheme,
@@ -356,6 +357,16 @@ export default function CanvasScreen() {
       }
     }
   }, [elementsOffset, requestPermission]);
+  const [zoomLevel, setZoomLevel] = useState(1); //initializes zoom level to 1
+  const handleZoomIn = () => {
+    setZoomLevel(Math.min(zoomLevel + 0.1, 2.5)); //max zoom level is 250%
+  };
+  const handleZoomOut = () => {
+    setZoomLevel(Math.max(zoomLevel - 0.1, 0.1));
+  };
+  const handleZoomReset = () => {
+    setZoomLevel(1); //resets zoom level to 100%
+  };
 
   const updateColorFromEyeDropper = useCallback(
     (pickedColor: string) => {
@@ -393,6 +404,7 @@ export default function CanvasScreen() {
         }}
       />
       <CanvasComponent
+        zoomScale={zoomLevel}
         ref={canvasComponentRef}
         canvasRef={skiaCanvasRef}
         tool={tool}
@@ -408,6 +420,24 @@ export default function CanvasScreen() {
 
       <View style={styles.controlsContainer}>
         <View style={styles.buttonRow}>
+          {/*Zoom tool buttons */}
+          <View style={styles.zoomButtons}>
+            <TouchableOpacity
+              onPress={handleZoomIn}
+              style={styles.controlButton}
+            >
+              <MaterialIcons name="zoom-in" size={24} color="black" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleZoomReset}>
+              <Text>{Math.round(zoomLevel * 100)}%</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleZoomOut}
+              style={styles.controlButton}
+            >
+              <MaterialIcons name="zoom-out" size={24} color="black" />
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             onPress={() => canvasComponentRef.current?.undo()}
             style={styles.controlButton}
@@ -611,5 +641,12 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' && {
       outline: 'none',
     }),
+  },
+  zoomButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+    borderRadius: 50,
   },
 });
