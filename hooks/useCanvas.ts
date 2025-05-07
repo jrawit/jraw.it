@@ -825,10 +825,7 @@ export const useCanvas = ({
   function isCircle(
     element: CanvasElements.Any
   ): element is CanvasElements.Circle {
-    return (
-      (element as CanvasElements.Circle).center !== undefined &&
-      (element as CanvasElements.Circle).radius !== undefined
-    );
+    return 'center' in element && 'radiusX' in element && 'radiusY' in element;
   }
 
   function isStar(element: CanvasElements.Any): element is CanvasElements.Star {
@@ -868,7 +865,7 @@ export const useCanvas = ({
           const newElement = cloneDeep(element);
           newElement.id = generateId(); // Generate a new ID for the duplicate
 
-          // Check if the element is a Path and handle accordingly
+          // Check element type and apply appropriate offset
           if (isPath(newElement.element)) {
             newElement.element.points = newElement.element.points.map(
               point => ({
@@ -904,10 +901,18 @@ export const useCanvas = ({
               y: newElement.element.point3.y + OFFSET,
             };
           } else if (isCircle(newElement.element)) {
-            newElement.element.center = {
-              x: newElement.element.center.x + OFFSET,
-              y: newElement.element.center.y + OFFSET,
+            // Add debug log to verify type guard is working
+            console.log('Duplicating Circle:', newElement.element);
+
+            // Ensure we're modifying a properly typed object
+            const circleElement = newElement.element as CanvasElements.Circle;
+            circleElement.center = {
+              x: circleElement.center.x + OFFSET,
+              y: circleElement.center.y + OFFSET,
             };
+
+            // Log after modification to verify changes
+            console.log('After duplication:', circleElement.center);
           } else if (isStar(newElement.element)) {
             newElement.element.point = {
               x: newElement.element.point.x + OFFSET,
@@ -923,26 +928,52 @@ export const useCanvas = ({
               x: newElement.element.point.x + OFFSET,
               y: newElement.element.point.y + OFFSET,
             };
+          } else {
+            // If we can't identify the element type, log it
+            console.warn(
+              'Unrecognized element type during duplication:',
+              newElement
+            );
           }
+
           return newElement;
         });
+
+        // Add the duplicated elements to state and history
         const action: HistoryAction = {
           type: 'ADD_ELEMENT',
           elements: newElements,
         };
         addToHistory(action);
+
+        // Update the elements array with the new duplicated elements
         setElements(prev => [...prev, ...newElements]);
-        setSelection({
-          ids: newElements.map(el => el.id),
-          selected: true,
-          x: selection.x + OFFSET,
-          y: selection.y + OFFSET,
-          width: selection.width,
-          height: selection.height,
-        });
+
+        // Update selection to focus on the newly duplicated elements
+        const combinedBox = calculateCombinedBoundingBox(
+          newElements,
+          10,
+          fontManager
+        );
+        if (
+          combinedBox &&
+          combinedBox.x !== undefined &&
+          combinedBox.y !== undefined &&
+          combinedBox.width !== undefined &&
+          combinedBox.height !== undefined
+        ) {
+          setSelection({
+            ids: newElements.map(el => el.id),
+            x: combinedBox.x,
+            y: combinedBox.y,
+            width: combinedBox.width,
+            height: combinedBox.height,
+            selected: true,
+          });
+        }
       }
     }
-  }, [selection, elements, addToHistory, generateId, fontManager]);
+  }, [selection, elements, generateId, addToHistory, setElements, fontManager]);
 
   const deleteSelection = useCallback(() => {
     if (selection && selection.ids.length > 0) {

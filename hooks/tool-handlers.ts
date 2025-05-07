@@ -491,6 +491,34 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       // Add validation if needed (e.g., check if points are collinear)
       return element;
     },
+    moveElement: (element, deltaX, deltaY) => {
+      // Create a deep clone first to avoid reference issues
+      const newElement = cloneDeep(element);
+      const triangle = newElement.element as CanvasElements.Triangle;
+
+      // Explicitly create new point objects for each point
+      triangle.point1 = {
+        x: triangle.point1.x + deltaX,
+        y: triangle.point1.y + deltaY,
+      };
+      triangle.point2 = {
+        x: triangle.point2.x + deltaX,
+        y: triangle.point2.y + deltaY,
+      };
+      triangle.point3 = {
+        x: triangle.point3.x + deltaX,
+        y: triangle.point3.y + deltaY,
+      };
+
+      // Add debug log to verify the movement
+      console.log('Moving Triangle:', {
+        before: element.element,
+        after: triangle,
+        delta: { deltaX, deltaY },
+      });
+
+      return newElement;
+    },
   },
   [Tools.STAR]: {
     initElement: (x, y, strokeWidth, color, generateId) => ({
