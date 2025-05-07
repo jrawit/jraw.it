@@ -2,10 +2,8 @@ import CanvasComponent, {
   CanvasComponentHandle,
 } from '@/components/CanvasComponent';
 import ColorPickerModal from '@/components/ColorPickerModal';
-import { TextModal } from '@/components/TextModal';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { CanvasElements } from '@/constants/CanvasElement';
 import { processImageForCanvas } from '@/hooks/tool-handlers';
 import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
@@ -177,12 +175,6 @@ export default function CanvasScreen() {
 
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
   const [color, setSelectedColor] = useState<string>('#000000');
-
-  const [textModalVisible, setTextModalVisible] = useState<boolean>(false);
-  const [textPosition, setTextPosition] = useState<{ x: number; y: number }>({
-    x: 0,
-    y: 0,
-  });
 
   const [elementsOffset, setElementsOffset] = useState<{
     x: number;
@@ -396,10 +388,6 @@ export default function CanvasScreen() {
         background={background}
         elementsOffset={elementsOffset}
         setElementsOffset={setElementsOffset}
-        onTapText={(x: number, y: number) => {
-          setTextPosition({ x, y });
-          setTextModalVisible(true);
-        }}
         onDrawingStateChange={setIsDrawing}
         isShiftDown={isShiftDown}
       />
@@ -454,22 +442,6 @@ export default function CanvasScreen() {
         onStrokeWidthChange={setStrokeWidth}
         onColorChange={setSelectedColor}
         isDrawing={isDrawing}
-      />
-      <TextModal
-        visible={textModalVisible}
-        position={textPosition}
-        onCancel={() => setTextModalVisible(false)}
-        onSubmit={(textElement: CanvasElements.Text) => {
-          canvasComponentRef.current?.addExternalElement(
-            textElement,
-            Tools.TEXT
-          );
-          setTextModalVisible(false);
-        }}
-        initialText={{
-          color: color,
-          fontSize: 20,
-        }}
       />
 
       <Modal

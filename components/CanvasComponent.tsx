@@ -1,6 +1,7 @@
 import PropertiesPanel from '@/components/PropertiesPanel';
 import SelectionContextMenu from '@/components/SelectionContextMenu';
 import SelectionOverlay from '@/components/SelectionOverlay';
+import TextEditor from '@/components/TextEditor';
 import { Circle } from '@/components/tools/Circle';
 import { Image } from '@/components/tools/Image';
 import { Line } from '@/components/tools/Line';
@@ -52,7 +53,6 @@ interface CanvasComponentProps {
   setElementsOffset: React.Dispatch<
     React.SetStateAction<{ x: number; y: number }>
   >;
-  onTapText: (x: number, y: number) => void;
   onDrawingStateChange: (isDrawing: boolean) => void;
   isShiftDown: boolean;
 }
@@ -67,7 +67,6 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       background: backgroundState,
       elementsOffset,
       setElementsOffset,
-      onTapText,
       onDrawingStateChange,
       isShiftDown,
     },
@@ -86,6 +85,10 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     const [previousPoint, setPreviousPoint] = useState<{
       x: number;
       y: number;
+    } | null>(null);
+    const [pendingTextCreation, setPendingTextCreation] = useState<{
+      position: { x: number; y: number };
+      textElement: CanvasElements.Text;
     } | null>(null);
 
     const fontManager = useFontManager();
@@ -122,6 +125,21 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       modifyElement,
     }));
 
+    // In case our tool changes, we need to finalize pending text creation
+    useEffect(() => {
+      if (
+        pendingTextCreation &&
+        tool !== Tools.TEXT &&
+        pendingTextCreation.textElement.text.trim() // Check if text is not empty
+      ) {
+        addExternalElement(pendingTextCreation?.textElement, Tools.TEXT);
+        setPendingTextCreation(null);
+      }
+      if (tool !== Tools.TEXT && pendingTextCreation) {
+        setPendingTextCreation(null);
+      }
+    }, [tool, pendingTextCreation, addExternalElement]);
+
     const selectedCanvasElements = useMemo(() => {
       if (!selection || !selection.selected) {
         return [];
@@ -136,7 +154,21 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         const adjustedY = e.y - elementsOffset.y;
 
         if (tool === Tools.TEXT) {
-          onTapText(adjustedX, adjustedY);
+          if (pendingTextCreation) {
+            return;
+          }
+          setPendingTextCreation({
+            position: { x: adjustedX, y: adjustedY },
+            textElement: {
+              text: '',
+              point: { x: adjustedX, y: adjustedY },
+              fontSize: 20,
+              fontFamily: 'Roboto',
+              fontWeight: 'normal',
+              fontStyle: 'normal',
+              color,
+            },
+          });
         } else {
           onDrawingStateChange(true);
           onStartInput(adjustedX, adjustedY);
@@ -482,7 +514,31 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
             />
           )}
 
-        {/* Properties Panel (Right Side) */}
+        {/* Pending Text Creation Editor */}
+        {pendingTextCreation && tool === Tools.TEXT && (
+          <TextEditor
+            textElement={pendingTextCreation.textElement}
+            position={{
+              x: pendingTextCreation.position.x + elementsOffset.x,
+              y: pendingTextCreation.position.y + elementsOffset.y,
+            }}
+            onBlur={() => setPendingTextCreation(null)}
+            onCreate={updatedTextElement => {
+              if (updatedTextElement.text.trim()) {
+                // Use the complete updated text element with all formatting properties
+                addExternalElement(updatedTextElement, Tools.TEXT);
+              }
+              setPendingTextCreation(null);
+            }}
+            onTextChange={updatedTextElement => {
+              setPendingTextCreation(prev =>
+                prev ? { ...prev, textElement: updatedTextElement } : null
+              );
+            }}
+          />
+        )}
+
+        {/* Properties Panel */}
         {selection &&
           selection.width !== 0 &&
           selection.height !== 0 &&

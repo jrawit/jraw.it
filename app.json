@@ -62,7 +62,169 @@
           "isAccessMediaLocationEnabled": true
         }
       ],
-      "expo-font"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          },
+          "ios": {
+            "infoPlist": {
+              "NSAppTransportSecurity": {
+                "NSAllowsArbitraryLoads": true
+              }
+            }
+          }
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/montserrat/Montserrat-Regular.ttf",
+            "./assets/fonts/montserrat/Montserrat-Italic.ttf",
+            "./assets/fonts/montserrat/Montserrat-Bold.ttf",
+            "./assets/fonts/montserrat/Montserrat-BoldItalic.ttf",
+            "./assets/fonts/open-sans/OpenSans-Regular.ttf",
+            "./assets/fonts/open-sans/OpenSans-Italic.ttf",
+            "./assets/fonts/open-sans/OpenSans-Bold.ttf",
+            "./assets/fonts/open-sans/OpenSans-BoldItalic.ttf",
+            "./assets/fonts/raleway/Raleway-Regular.ttf",
+            "./assets/fonts/raleway/Raleway-Italic.ttf",
+            "./assets/fonts/raleway/Raleway-Bold.ttf",
+            "./assets/fonts/raleway/Raleway-BoldItalic.ttf",
+            "./assets/fonts/roboto/Roboto-Regular.ttf",
+            "./assets/fonts/roboto/Roboto-Italic.ttf",
+            "./assets/fonts/roboto/Roboto-Bold.ttf",
+            "./assets/fonts/roboto/Roboto-BoldItalic.ttf"
+          ],
+          "ios": {
+            "fonts": [
+              "./assets/fonts/montserrat/Montserrat-Regular.ttf",
+              "./assets/fonts/montserrat/Montserrat-Italic.ttf",
+              "./assets/fonts/montserrat/Montserrat-Bold.ttf",
+              "./assets/fonts/montserrat/Montserrat-BoldItalic.ttf",
+              "./assets/fonts/open-sans/OpenSans-Regular.ttf",
+              "./assets/fonts/open-sans/OpenSans-Italic.ttf",
+              "./assets/fonts/open-sans/OpenSans-Bold.ttf",
+              "./assets/fonts/open-sans/OpenSans-BoldItalic.ttf",
+              "./assets/fonts/raleway/Raleway-Regular.ttf",
+              "./assets/fonts/raleway/Raleway-Italic.ttf",
+              "./assets/fonts/raleway/Raleway-Bold.ttf",
+              "./assets/fonts/raleway/Raleway-BoldItalic.ttf",
+              "./assets/fonts/roboto/Roboto-Regular.ttf",
+              "./assets/fonts/roboto/Roboto-Italic.ttf",
+              "./assets/fonts/roboto/Roboto-Bold.ttf",
+              "./assets/fonts/roboto/Roboto-BoldItalic.ttf"
+            ]
+          },
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "Montserrat",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/montserrat/Montserrat-Regular.ttf",
+                    "weight": 400,
+                    "style": "normal"
+                  },
+                  {
+                    "path": "./assets/fonts/montserrat/Montserrat-Italic.ttf",
+                    "weight": 400,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/montserrat/Montserrat-Bold.ttf",
+                    "weight": 700,
+                    "style": "normal"
+                  },
+                  {
+                    "path": "./assets/fonts/montserrat/Montserrat-BoldItalic.ttf",
+                    "weight": 700,
+                    "style": "italic"
+                  }
+                ]
+              },
+              {
+                "fontFamily": "OpenSans",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/open-sans/OpenSans-Regular.ttf",
+                    "weight": 400,
+                    "style": "normal"
+                  },
+                  {
+                    "path": "./assets/fonts/open-sans/OpenSans-Italic.ttf",
+                    "weight": 400,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/open-sans/OpenSans-Bold.ttf",
+                    "weight": 700,
+                    "style": "normal"
+                  },
+                  {
+                    "path": "./assets/fonts/open-sans/OpenSans-BoldItalic.ttf",
+                    "weight": 700,
+                    "style": "italic"
+                  }
+                ]
+              },
+              {
+                "fontFamily": "Raleway",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/raleway/Raleway-Regular.ttf",
+                    "weight": 400,
+                    "style": "normal"
+                  },
+                  {
+                    "path": "./assets/fonts/raleway/Raleway-Italic.ttf",
+                    "weight": 400,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/raleway/Raleway-Bold.ttf",
+                    "weight": 700,
+                    "style": "normal"
+                  },
+                  {
+                    "path": "./assets/fonts/raleway/Raleway-BoldItalic.ttf",
+                    "weight": 700,
+                    "style": "italic"
+                  }
+                ]
+              },
+              {
+                "fontFamily": "Roboto",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/roboto/Roboto-Regular.ttf",
+                    "weight": 400,
+                    "style": "normal"
+                  },
+                  {
+                    "path": "./assets/fonts/roboto/Roboto-Italic.ttf",
+                    "weight": 400,
+                    "style": "italic"
+                  },
+                  {
+                    "path": "./assets/fonts/roboto/Roboto-Bold.ttf",
+                    "weight": 700,
+                    "style": "normal"
+                  },
+                  {
+                    "path": "./assets/fonts/roboto/Roboto-BoldItalic.ttf",
+                    "weight": 700,
+                    "style": "italic"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true
