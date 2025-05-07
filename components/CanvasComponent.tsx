@@ -55,11 +55,12 @@ interface CanvasComponentProps {
   >;
   onDrawingStateChange: (isDrawing: boolean) => void;
   isShiftDown: boolean;
+  onEyeDropperColor?: (color: string) => void;
 }
 
 const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
-  (
-    {
+  (props, ref) => {
+    const {
       canvasRef,
       tool,
       strokeWidth,
@@ -69,9 +70,9 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       setElementsOffset,
       onDrawingStateChange,
       isShiftDown,
-    },
-    ref
-  ) => {
+      onEyeDropperColor,
+    } = props;
+
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
     const [currentElementOffset, setCurrentElementOffset] = useState<{
       x: number;
@@ -92,6 +93,179 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     } | null>(null);
 
     const fontManager = useFontManager();
+
+    // Function to get the color of the element at specific coordinates
+    const getPixelColorAt = (x: number, y: number): string => {
+      if (!canvasSize.width || !canvasSize.height) {
+        return color; // Return current color if canvas isn't available
+      }
+
+      try {
+        // Calculate adjusted coordinates for hit testing
+        const adjustedX = x - elementsOffset.x;
+        const adjustedY = y - elementsOffset.y;
+
+        // Find the element at the clicked point, searching from top to bottom (reversed order)
+        for (let i = elements.length - 1; i >= 0; i--) {
+          const element = elements[i];
+          const { tool: elementTool, element: elementData } = element;
+
+          // Get boundaries for the element to check if clicked point is inside
+          let isPointInside = false;
+          let elementColor = null;
+
+          switch (elementTool) {
+            case Tools.PEN:
+            case Tools.HIGHLIGHTER:
+            case Tools.ERASER:
+              const pathData = elementData as CanvasElements.Path;
+              if (pathData.points.length < 2) continue;
+
+              // For path elements, check if point is near any segment
+              for (let j = 1; j < pathData.points.length; j++) {
+                const p1 = pathData.points[j - 1];
+                const p2 = pathData.points[j];
+
+                // Calculate distance from point to line segment
+                const distanceToSegment = distancePointToLineSegment(
+                  adjustedX,
+                  adjustedY,
+                  p1.x,
+                  p1.y,
+                  p2.x,
+                  p2.y
+                );
+
+                // Check if distance is within stroke width
+                if (distanceToSegment <= pathData.strokeWidth / 2) {
+                  isPointInside = true;
+                  elementColor = pathData.strokeColor;
+                  break;
+                }
+              }
+              break;
+
+            case Tools.RECTANGLE:
+              const rectData = elementData as CanvasElements.Rectangle;
+              // Check if point is inside rectangle
+              if (
+                adjustedX >= rectData.point.x &&
+                adjustedX <= rectData.point.x + rectData.width &&
+                adjustedY >= rectData.point.y &&
+                adjustedY <= rectData.point.y + rectData.height
+              ) {
+                isPointInside = true;
+                // Prefer fill color if available, otherwise use stroke color
+                elementColor = rectData.fillColor || rectData.strokeColor;
+              }
+              break;
+
+            case Tools.CIRCLE:
+              const circleData = elementData as CanvasElements.Circle;
+              // Check if point is inside circle/ellipse
+              const dx = adjustedX - circleData.center.x;
+              const dy = adjustedY - circleData.center.y;
+              if (
+                (dx * dx) / (circleData.radius * circleData.radius) +
+                  (dy * dy) / (circleData.radius * circleData.radius) <=
+                1
+              ) {
+                isPointInside = true;
+                elementColor = circleData.fillColor || circleData.strokeColor;
+              }
+              break;
+
+            case Tools.LINE:
+              const lineData = elementData as CanvasElements.Line;
+              // Check if point is near the line
+              const distToLine = distancePointToLineSegment(
+                adjustedX,
+                adjustedY,
+                lineData.startPoint.x,
+                lineData.startPoint.y,
+                lineData.endPoint.x,
+                lineData.endPoint.y
+              );
+              if (distToLine <= lineData.strokeWidth / 2) {
+                isPointInside = true;
+                elementColor = lineData.strokeColor;
+              }
+              break;
+
+            case Tools.TEXT:
+              const textData = elementData as CanvasElements.Text;
+              // Simple bounding box for text (this is approximate)
+              const textWidth =
+                textData.text.length * (textData.fontSize * 0.6);
+              const textHeight = textData.fontSize * 1.2;
+              if (
+                adjustedX >= textData.point.x &&
+                adjustedX <= textData.point.x + textWidth &&
+                adjustedY >= textData.point.y - textData.fontSize &&
+                adjustedY <= textData.point.y + textHeight - textData.fontSize
+              ) {
+                isPointInside = true;
+                elementColor = textData.color;
+              }
+              break;
+
+            // Add more cases for other element types if needed
+          }
+
+          // If we found an element and its color, return it
+          if (isPointInside && elementColor) {
+            return elementColor;
+          }
+        }
+
+        // If no element was found at this position, return the background color
+        return backgroundState.color;
+      } catch (error) {
+        console.error('Error finding element color:', error);
+        return color; // Return current color on error
+      }
+    };
+
+    // Helper function to calculate distance from point to line segment
+    const distancePointToLineSegment = (
+      px: number,
+      py: number,
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number
+    ): number => {
+      const A = px - x1;
+      const B = py - y1;
+      const C = x2 - x1;
+      const D = y2 - y1;
+
+      const dot = A * C + B * D;
+      const len_sq = C * C + D * D;
+      let param = -1;
+
+      if (len_sq !== 0) {
+        param = dot / len_sq;
+      }
+
+      let xx, yy;
+
+      if (param < 0) {
+        xx = x1;
+        yy = y1;
+      } else if (param > 1) {
+        xx = x2;
+        yy = y2;
+      } else {
+        xx = x1 + param * C;
+        yy = y1 + param * D;
+      }
+
+      const dx = px - xx;
+      const dy = py - yy;
+
+      return Math.sqrt(dx * dx + dy * dy);
+    };
 
     const {
       elements,
@@ -152,6 +326,14 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       .onStart(e => {
         const adjustedX = e.x - elementsOffset.x;
         const adjustedY = e.y - elementsOffset.y;
+
+        if (tool === Tools.EYEDROPPER) {
+          const pickedColor = getPixelColorAt(e.x, e.y);
+          if (onEyeDropperColor) {
+            onEyeDropperColor(pickedColor);
+          }
+          return;
+        }
 
         if (tool === Tools.TEXT) {
           if (pendingTextCreation) {
@@ -477,6 +659,44 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
                           strokeWidth: 1,
                           strokeColor: 'black',
                           fillColor: 'transparent',
+                        }}
+                      />
+                    </Group>
+                  )}
+
+                  {tool === Tools.EYEDROPPER && (
+                    <Group>
+                      {/* Eye dropper crosshair */}
+                      <Circle
+                        circleData={{
+                          center: hoverPoint,
+                          radius: 10,
+                          strokeWidth: 1,
+                          strokeColor: 'rgba(0,0,0,0.8)',
+                        }}
+                      />
+                      <Circle
+                        circleData={{
+                          center: hoverPoint,
+                          radius: 2,
+                          strokeWidth: 1,
+                          strokeColor: 'rgba(0,0,0,0.8)',
+                        }}
+                      />
+                      <Line
+                        lineData={{
+                          startPoint: { x: hoverPoint.x - 15, y: hoverPoint.y },
+                          endPoint: { x: hoverPoint.x + 15, y: hoverPoint.y },
+                          strokeWidth: 1,
+                          strokeColor: 'rgba(0,0,0,0.8)',
+                        }}
+                      />
+                      <Line
+                        lineData={{
+                          startPoint: { x: hoverPoint.x, y: hoverPoint.y - 15 },
+                          endPoint: { x: hoverPoint.x, y: hoverPoint.y + 15 },
+                          strokeWidth: 1,
+                          strokeColor: 'rgba(0,0,0,0.8)',
                         }}
                       />
                     </Group>

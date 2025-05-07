@@ -357,6 +357,19 @@ export default function CanvasScreen() {
     }
   }, [elementsOffset, requestPermission]);
 
+  const updateColorFromEyeDropper = useCallback(
+    (pickedColor: string) => {
+      // Pass the picked color to the appropriate state or callback
+      setSelectedColor(pickedColor);
+
+      // If eye dropper was active, switch back to the previous tool
+      if (tool === Tools.EYEDROPPER) {
+        setTool(Tools.PEN);
+      }
+    },
+    [setSelectedColor, tool, setTool]
+  );
+
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -390,6 +403,7 @@ export default function CanvasScreen() {
         setElementsOffset={setElementsOffset}
         onDrawingStateChange={setIsDrawing}
         isShiftDown={isShiftDown}
+        onEyeDropperColor={updateColorFromEyeDropper}
       />
 
       <View style={styles.controlsContainer}>
@@ -442,6 +456,7 @@ export default function CanvasScreen() {
         onStrokeWidthChange={setStrokeWidth}
         onColorChange={setSelectedColor}
         isDrawing={isDrawing}
+        color={color}
       />
 
       <Modal
@@ -489,8 +504,8 @@ export default function CanvasScreen() {
       <ColorPickerModal
         visible={backgroundColorPickerVisible}
         initialBackground={background}
-        onSelectBackground={(newBackground: Background) => {
-          setBackground(newBackground);
+        onSelectBackground={background => {
+          setBackground(background);
           setBackgroundColorPickerVisible(false);
         }}
         onCancel={() => setBackgroundColorPickerVisible(false)}

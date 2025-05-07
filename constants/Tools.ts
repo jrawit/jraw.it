@@ -17,6 +17,7 @@ export enum Tools {
   PAN = 'pan',
   TEXT = 'text',
   IMAGE = 'image',
+  EYEDROPPER = 'eyedropper',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -85,5 +86,9 @@ export const ToolData = {
   [Tools.STAR]: {
     iconComponent: Feather,
     iconName: 'star',
+  },
+  [Tools.EYEDROPPER]: {
+    iconComponent: MaterialCommunityIcons,
+    iconName: 'eyedropper',
   },
 };

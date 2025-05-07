@@ -44,6 +44,7 @@ type ToolbarProps = {
   onStrokeWidthChange: (strokeWidth: number) => void;
   onColorChange: (color: string) => void;
   isDrawing?: boolean; // Add this prop to detect drawing state
+  color?: string; // Add this prop to receive the current color from parent
 };
 
 const Toolbar: React.FC<ToolbarProps> = React.memo(
@@ -53,6 +54,7 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
     onStrokeWidthChange,
     onColorChange,
     isDrawing = false,
+    color,
   }) => {
     const colorScheme = useColorScheme();
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -63,6 +65,31 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
     const selectedColor = useSharedValue(initialColor);
     const toggleButtonPosition = useSharedValue(140); // Starting position (matches original bottom: 70)
     const toolbarPosition = useSharedValue(0); // Initial position for the toolbar
+
+    // Update color picker with the current color value from parent
+    useEffect(() => {
+      if (color && color !== initialColor) {
+        setInitialColor(color);
+        selectedColor.value = color;
+      }
+    }, [color]);
+
+    // Handle eye dropper tool selection
+    const handleEyeDropperToggle = useCallback(() => {
+      setColorPickerVisible(false); // Close the color picker
+      onToolChange(tool === Tools.EYEDROPPER ? Tools.PEN : Tools.EYEDROPPER);
+    }, [tool, onToolChange]);
+
+    // When the external color changes (from eye dropper selection)
+    const updateColorFromEyeDropper = useCallback(
+      (newColor: string) => {
+        setInitialColor(newColor);
+        selectedColor.value = newColor;
+      },
+      [selectedColor]
+    );
+
+    // No need for an effect that checks non-existent color prop
 
     // Toggle handler
     const toggleCollapse = useCallback(() => {
@@ -142,7 +169,9 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
     // Memoize the non-shape tools list for better performance
     const nonShapeTools = useMemo(() => {
       return Object.entries(ToolData).filter(
-        ([toolType]) => !shapeTools.includes(toolType as Tools)
+        ([toolType]) =>
+          !shapeTools.includes(toolType as Tools) &&
+          toolType !== Tools.EYEDROPPER // Exclude the eye dropper tool from toolbar
       );
     }, []);
 
@@ -312,6 +341,26 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
                   />
                 </View>
               </ColorPicker>
+
+              {/* Eye Dropper Button */}
+              <View style={styles.eyeDropperButtonContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.eyeDropperButton,
+                    tool === Tools.EYEDROPPER && styles.eyeDropperActive,
+                  ]}
+                  onPress={handleEyeDropperToggle}
+                >
+                  <MaterialCommunityIcons
+                    name="eyedropper"
+                    size={18}
+                    color={tool === Tools.EYEDROPPER ? 'white' : '#444'}
+                  />
+                </TouchableOpacity>
+                <ThemedText style={styles.eyeDropperText}>
+                  Eye Dropper
+                </ThemedText>
+              </View>
             </View>
           )}
           {/* --- END COLOR PICKER --- */}
@@ -526,6 +575,34 @@ const styles = StyleSheet.create({
   },
   activeShapeButton: {
     backgroundColor: '#007AFF',
+  },
+  // Styles for Eye Dropper Button
+  eyeDropperButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    justifyContent: 'center',
+  },
+  eyeDropperButton: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 15,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    marginRight: 8,
+  },
+  eyeDropperActive: {
+    backgroundColor: '#007AFF',
+  },
+  eyeDropperText: {
+    fontSize: 12,
+    color: '#adadad',
   },
 });
 
