@@ -1,13 +1,11 @@
-import { Tools } from '@/constants/Tools';
 import { Selection } from '@/utils/selectionUtils';
 import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 interface SelectionOverlayProps {
   selection: Selection | null;
-  elementsOffset: { x: number; y: number };
-  currentElementOffset: { x: number; y: number };
-  tool: Tools;
+  top: number;
+  left: number;
 }
 
 // Define handle size for easier calculation and touch detection
@@ -16,9 +14,8 @@ export const HANDLE_TOUCH_AREA = 24; // Larger touch area
 
 const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   selection,
-  elementsOffset,
-  currentElementOffset,
-  tool,
+  top,
+  left,
 }) => {
   const normalizedSelection = useMemo(() => {
     if (!selection) return null;
@@ -80,17 +77,7 @@ const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     return null;
   }
 
-  const offsetX =
-    elementsOffset.x + (tool === Tools.PAN ? currentElementOffset.x : 0);
-  const offsetY =
-    elementsOffset.y + (tool === Tools.PAN ? currentElementOffset.y : 0);
-
-  const {
-    x: renderX,
-    y: renderY,
-    width: renderWidth,
-    height: renderHeight,
-  } = normalizedSelection;
+  const { width: renderWidth, height: renderHeight } = normalizedSelection;
 
   return (
     <>
@@ -98,8 +85,8 @@ const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         style={[
           styles.selectionBox,
           {
-            left: renderX + offsetX,
-            top: renderY + offsetY,
+            left: left,
+            top: top,
             width: renderWidth,
             height: renderHeight,
           },
@@ -112,8 +99,8 @@ const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
           style={[
             styles.selectionHandle,
             {
-              left: handle.x + offsetX - HANDLE_SIZE / 2,
-              top: handle.y + offsetY - HANDLE_SIZE / 2,
+              left: handle.x - HANDLE_SIZE / 2,
+              top: handle.y - HANDLE_SIZE / 2,
             },
           ]}
         />

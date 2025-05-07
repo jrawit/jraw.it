@@ -35,6 +35,7 @@ import { ThemedView } from './ThemedView';
 interface TextEditorProps {
   textElement: CanvasElements.Text;
   position: { x: number; y: number };
+  scale: number;
   onBlur?: () => void;
   onDelete?: () => void;
   onCreate?: (updatedTextElement: CanvasElements.Text) => void;
@@ -44,7 +45,7 @@ interface TextEditorProps {
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 
 // Custom hook for text formatting state management
-const useTextFormatting = (textElement: CanvasElements.Text) => {
+const useTextFormatting = (textElement: CanvasElements.Text, scale: number) => {
   const [text, setText] = useState(textElement.text || '');
   const [fontSize, setFontSize] = useState<number>(textElement.fontSize);
   const [fontFamily, setFontFamily] = useState<string>(textElement.fontFamily);
@@ -57,6 +58,9 @@ const useTextFormatting = (textElement: CanvasElements.Text) => {
   const [currentColor, setCurrentColor] = useState<string>(textElement.color);
   const animatedCurrentColor = useSharedValue(textElement.color);
   const [lineCount, setLineCount] = useState(1);
+
+  // Calculate the scaled font size for display
+  const scaledFontSize = useMemo(() => fontSize * scale, [fontSize, scale]);
 
   // Direct text change handler without debounce for better responsiveness
   const handleTextChange = useCallback((value: string) => {
@@ -127,6 +131,7 @@ const useTextFormatting = (textElement: CanvasElements.Text) => {
     placeholderTextColor,
     setFontFamily,
     updatedTextElement,
+    scaledFontSize,
   };
 };
 
@@ -372,7 +377,7 @@ const ColorPickerPanel = React.memo(
 );
 
 const TextEditor: React.FC<TextEditorProps> = React.memo(
-  ({ textElement, position, onBlur, onCreate, onTextChange }) => {
+  ({ textElement, position, scale, onBlur, onCreate, onTextChange }) => {
     const isDark = useColorScheme() === 'dark';
 
     // Use custom hooks to manage state and logic
@@ -395,7 +400,8 @@ const TextEditor: React.FC<TextEditorProps> = React.memo(
       placeholderTextColor,
       setFontFamily,
       updatedTextElement,
-    } = useTextFormatting(textElement);
+      scaledFontSize,
+    } = useTextFormatting(textElement, scale);
 
     const {
       toolbarPosition,
@@ -485,7 +491,7 @@ const TextEditor: React.FC<TextEditorProps> = React.memo(
               style={[
                 styles.input,
                 {
-                  fontSize: fontSize,
+                  fontSize: scaledFontSize,
                   fontFamily: fontFamily,
                   fontWeight: isBold ? 'bold' : 'normal',
                   fontStyle: isItalic ? 'italic' : 'normal',

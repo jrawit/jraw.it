@@ -22,6 +22,7 @@ export type Selection = {
   height: number;
   selected: boolean;
 };
+
 export const isPointInsideBox = (
   point: { x: number; y: number },
   box: { x: number; y: number; width: number; height: number }
