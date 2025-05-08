@@ -100,43 +100,35 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       position: { x: number; y: number };
       textElement: CanvasElements.Text;
     } | null>(null);
-    const [prevZoomScale, setPrevZoomScale] = useState<number>(zoomScale);
 
-    // Track zoom changes and adjust offset to zoom from center
-    useEffect(() => {
-      if (
-        prevZoomScale !== zoomScale &&
-        canvasSize.width > 0 &&
-        canvasSize.height > 0
-      ) {
-        // Calculate the center point of the canvas
+    const fontManager = useFontManager();
+
+    // Function to transform canvas coordinates to screen coordinates
+    const canvasToScreenCoords = useCallback(
+      (canvasX: number, canvasY: number) => {
         const centerX = canvasSize.width / 2;
         const centerY = canvasSize.height / 2;
 
-        // Calculate how much the elements should move to keep the center point stable
-        const zoomRatio = zoomScale / prevZoomScale;
-        const offsetX = centerX - (centerX - elementsOffset.x) * zoomRatio;
-        const offsetY = centerY - (centerY - elementsOffset.y) * zoomRatio;
+        // Step 1: Normalize coordinates to canvas center
+        const normalizedX = canvasX - centerX;
+        const normalizedY = canvasY - centerY;
 
-        // Update the elements offset
-        setElementsOffset({
-          x: offsetX,
-          y: offsetY,
-        });
+        // Step 2: Apply zoom
+        const zoomedX = normalizedX * zoomScale;
+        const zoomedY = normalizedY * zoomScale;
 
-        // Update the previous zoom scale
-        setPrevZoomScale(zoomScale);
-      }
-    }, [
-      zoomScale,
-      canvasSize,
-      prevZoomScale,
-      elementsOffset.x,
-      elementsOffset.y,
-      setElementsOffset,
-    ]);
+        // Step 3: Move back from center
+        const repositionedX = zoomedX + centerX;
+        const repositionedY = zoomedY + centerY;
 
-    const fontManager = useFontManager();
+        // Step 4: Apply pan offset
+        const finalX = repositionedX + elementsOffset.x;
+        const finalY = repositionedY + elementsOffset.y;
+
+        return { x: finalX, y: finalY };
+      },
+      [canvasSize, zoomScale, elementsOffset]
+    );
 
     // Function to get the color of the element at specific coordinates
     const getPixelColorAt = useCallback(
@@ -245,12 +237,35 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     // Helper for coordinate adjustments - used in multiple gesture handlers
     const getAdjustedCoordinates = useCallback(
       (x: number, y: number) => {
-        return {
-          x: (x - elementsOffset.x) / zoomScale,
-          y: (y - elementsOffset.y) / zoomScale,
-        };
+        // Apply inverse of center-based transform to convert screen coords to canvas element coords
+        const centerX = canvasSize.width / 2;
+        const centerY = canvasSize.height / 2;
+
+        // Step 1: Remove pan offset (inverse of step 4 in mainGroupTransform)
+        const offsetX =
+          elementsOffset.x +
+          (tool === Tools.PAN ? currentMovingElementOffset.x : 0);
+        const offsetY =
+          elementsOffset.y +
+          (tool === Tools.PAN ? currentMovingElementOffset.y : 0);
+        const unpannedX = x - offsetX;
+        const unpannedY = y - offsetY;
+
+        // Step 2: Normalize to center (inverse of step 3 in mainGroupTransform)
+        const normalizedX = unpannedX - centerX;
+        const normalizedY = unpannedY - centerY;
+
+        // Step 3: Remove zoom (inverse of step 2 in mainGroupTransform)
+        const unzoomedX = normalizedX / zoomScale;
+        const unzoomedY = normalizedY / zoomScale;
+
+        // Step 4: Move back from center (inverse of step 1 in mainGroupTransform)
+        const finalX = unzoomedX + centerX;
+        const finalY = unzoomedY + centerY;
+
+        return { x: finalX, y: finalY };
       },
-      [elementsOffset, zoomScale]
+      [elementsOffset, zoomScale, canvasSize, tool, currentMovingElementOffset]
     );
 
     const handleTapStart = useCallback(
@@ -468,12 +483,6 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         .onEnd(handleHoverEnd);
     }, [handleHoverBegin, handleHoverChange, handleHoverEnd]);
 
-    // Debug log elements when they change
-    useEffect(() => {
-      // Using DEBUG flag would be better, only enable when debugging
-      // console.log('Elements: ', elements);
-    }, [elements]);
-
     const getElement = useCallback((canvasElement: CanvasElement) => {
       const { id, element, tool: elementTool } = canvasElement;
       switch (elementTool) {
@@ -518,7 +527,9 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     // Memoize the transform for the Group components to prevent unnecessary re-renders
     const mainGroupTransform = useMemo(() => {
       return [
+        { translate: [canvasSize.width / 2, canvasSize.height / 2] },
         { scale: zoomScale },
+        { translate: [-canvasSize.width / 2, -canvasSize.height / 2] },
         {
           translate: [
             (elementsOffset.x +
@@ -696,40 +707,66 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     const selectionProps = useMemo(() => {
       if (!selection) return null;
 
+      // First normalize the selection to ensure positive width/height
+      const normalizedSelectionData = {
+        x: selection.width < 0 ? selection.x + selection.width : selection.x,
+        y: selection.height < 0 ? selection.y + selection.height : selection.y,
+        width: Math.abs(selection.width),
+        height: Math.abs(selection.height),
+        ids: selection.ids,
+        selected: selection.selected,
+      };
+
+      // Apply the EXACT same center-based zoom transformation as the canvas elements
+      // by using the same transform steps as mainGroupTransform
+      const centerX = canvasSize.width / 2;
+      const centerY = canvasSize.height / 2;
+
+      // Step 1: Normalize selection coordinates to canvas center (same as mainGroupTransform step 1 & 3)
+      const normalizedX = normalizedSelectionData.x - centerX;
+      const normalizedY = normalizedSelectionData.y - centerY;
+
+      // Step 2: Apply zoom (same as mainGroupTransform step 2)
+      const zoomedX = normalizedX * zoomScale;
+      const zoomedY = normalizedY * zoomScale;
+      const zoomedWidth = normalizedSelectionData.width * zoomScale;
+      const zoomedHeight = normalizedSelectionData.height * zoomScale;
+
+      // Step 3: Move back from center (reverse of step 1)
+      const repositionedX = zoomedX + centerX;
+      const repositionedY = zoomedY + centerY;
+
+      // Step 4: Apply pan offset (same as mainGroupTransform step 4)
+      const offsetX =
+        elementsOffset.x +
+        (tool === Tools.PAN ? currentMovingElementOffset.x : 0);
+      const offsetY =
+        elementsOffset.y +
+        (tool === Tools.PAN ? currentMovingElementOffset.y : 0);
+
+      const finalX = repositionedX + offsetX;
+      const finalY = repositionedY + offsetY;
+
       return {
         selection: {
           ...selection,
-          x:
-            (selection.x +
-              elementsOffset.x / zoomScale +
-              currentMovingElementOffset.x / zoomScale) *
-            zoomScale,
-          y:
-            (selection.y +
-              elementsOffset.y / zoomScale +
-              currentMovingElementOffset.y / zoomScale) *
-            zoomScale,
-          width: selection.width * zoomScale,
-          height: selection.height * zoomScale,
+          x: finalX,
+          y: finalY,
+          width: zoomedWidth,
+          height: zoomedHeight,
         },
-        top:
-          (selection.y +
-            elementsOffset.y / zoomScale +
-            currentMovingElementOffset.y / zoomScale) *
-          zoomScale,
-        left:
-          (selection.x +
-            elementsOffset.x / zoomScale +
-            currentMovingElementOffset.x / zoomScale) *
-          zoomScale,
-        centerX:
-          (selection.x +
-            selection.width / 2 +
-            elementsOffset.x / zoomScale +
-            currentMovingElementOffset.x / zoomScale) *
-          zoomScale,
+        top: finalY,
+        left: finalX,
+        centerX: finalX + zoomedWidth / 2,
       };
-    }, [selection, elementsOffset, currentMovingElementOffset, zoomScale]);
+    }, [
+      selection,
+      elementsOffset,
+      currentMovingElementOffset,
+      zoomScale,
+      canvasSize,
+      tool,
+    ]);
 
     // Memoize combined gestures
     const combinedGestures = useMemo(() => {
@@ -788,18 +825,10 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         {pendingTextCreation && tool === Tools.TEXT && (
           <TextEditor
             textElement={pendingTextCreation.textElement}
-            position={{
-              x:
-                (pendingTextCreation.position.x +
-                  elementsOffset.x / zoomScale +
-                  currentMovingElementOffset.x / zoomScale) *
-                zoomScale,
-              y:
-                (pendingTextCreation.position.y +
-                  elementsOffset.y / zoomScale +
-                  currentMovingElementOffset.y / zoomScale) *
-                zoomScale,
-            }}
+            position={canvasToScreenCoords(
+              pendingTextCreation.position.x,
+              pendingTextCreation.position.y
+            )}
             scale={zoomScale}
             onBlur={() => setPendingTextCreation(null)}
             onCreate={updatedTextElement => {
