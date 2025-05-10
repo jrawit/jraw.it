@@ -7,7 +7,11 @@ import { ThemedView } from '@/components/ThemedView';
 import { processImageForCanvas } from '@/hooks/tool-handlers';
 import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
+import { API_URL, useAuthStore } from '@/utils/auth.store';
+import { ELECTRIC_URL, envParams } from '@/utils/electric';
 import { renderElementsOffscreen } from '@/utils/offscreenRenderer';
+import { Row } from '@electric-sql/client/model';
+import { useShape } from '@electric-sql/react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -31,7 +35,6 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { Tools } from '../../constants/Tools';
 
@@ -43,7 +46,54 @@ interface Background {
   textureOpacity: number;
 }
 
+// Define an interface for the Room shape
+interface Room extends Row {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string; // Assuming string representation from ElectricSQL
+  updated_at: string; // Assuming string representation from ElectricSQL
+  // Add index signature for compatibility with ElectricSQL Row type
+  [key: string]: any;
+}
+
 export default function CanvasScreen() {
+  // Get the roomId from the URL /canvas/[id]/
+  const { id: roomId } = useLocalSearchParams<{ id: string }>();
+  const { token: authToken } = useAuthStore();
+
+  // Subscribe to room data for real-time updates to the name
+  const { data: roomData, isLoading: isRoomLoading } = useShape<Room>({
+    url: `${ELECTRIC_URL}/v1/shape`,
+    params: {
+      table: 'rooms',
+      where: `id = '${roomId}'`,
+      ...envParams,
+    },
+  });
+
+  const currentRoom = roomData?.[0];
+  const [title, setTitle] = useState<string>(
+    currentRoom?.name ?? roomId?.toString() ?? 'Untitled'
+  );
+  const [isTitleInputFocused, setIsTitleInputFocused] =
+    useState<boolean>(false);
+  const [isSubmittingTitle, setIsSubmittingTitle] = useState<boolean>(false);
+
+  // Effect to update local title when roomData changes from ElectricSQL
+  useEffect(() => {
+    if (
+      !isTitleInputFocused &&
+      !isSubmittingTitle &&
+      currentRoom &&
+      currentRoom.name !== title
+    ) {
+      setTitle(currentRoom.name as string);
+    }
+  }, [currentRoom, title, isTitleInputFocused, isSubmittingTitle, setTitle]);
+
+  console.log('CanvasScreen', roomId);
+
   const [socket, setSocket] = useState<any>(null);
   const [tool, setTool] = useState<Tools>(Tools.PEN);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
@@ -135,10 +185,14 @@ export default function CanvasScreen() {
     ) {
       switch (keyEvent.key) {
         case 'KeyZ':
-          canvasComponentRef.current?.undo();
+          canvasComponentRef.current
+            ?.undo()
+            .catch(e => console.error('Error during undo:', e));
           break;
         case 'KeyY':
-          canvasComponentRef.current?.redo();
+          canvasComponentRef.current
+            ?.redo()
+            .catch(e => console.error('Error during redo:', e));
           break;
         case 'Digit1':
           setTool(Tools.PEN);
@@ -186,7 +240,7 @@ export default function CanvasScreen() {
 
   const { id } = useLocalSearchParams();
 
-  const [title, setTitle] = useState(id?.toString() ?? '');
+  // const [title, setTitle] = useState(id?.toString() ?? ''); // Commented out or remove this line
 
   const {
     isPermissionModalVisible,
@@ -205,14 +259,6 @@ export default function CanvasScreen() {
     gridSize: 20,
     textureOpacity: 0.1,
   });
-
-  useEffect(() => {
-    setSocket(io('http://localhost:3000/room'));
-
-    return () => {
-      socket?.emit('leaveRoom', { roomId: id });
-    };
-  }, []);
 
   const fontManager = useFontManager();
 
@@ -381,6 +427,64 @@ export default function CanvasScreen() {
     [setSelectedColor, tool, setTool]
   );
 
+  const updateRoomNameAPI = useCallback(
+    async (newName: string) => {
+      if (!roomId || !newName.trim()) {
+        console.warn('Room ID or new name is missing, skipping update.');
+        return;
+      }
+      // Prevent API call if the name hasn't changed from the synced version
+      // relative to the currentRoom state at the time of this function call.
+      if (currentRoom && newName.trim() === currentRoom.name) {
+        console.log('Room name has not changed, skipping update.');
+        return;
+      }
+
+      const originalNameFromServer = currentRoom?.name as string | undefined;
+      setIsSubmittingTitle(true);
+
+      try {
+        const response = await fetch(`${API_URL}/room/${roomId}/name`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({ name: newName.trim() }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`API Error (${response.status}): ${errorText}`);
+          if (originalNameFromServer !== undefined) {
+            setTitle(originalNameFromServer);
+          } else {
+            // Fallback if there was no known server name (e.g. initial load error)
+            setTitle(roomId?.toString() ?? 'Untitled');
+          }
+          throw new Error(
+            `API error: ${response.status} ${response.statusText}`
+          );
+        }
+        // On successful API call, the local `title` is already the optimistic newName.
+        // ElectricSQL will sync, and the useEffect might align it if there was any discrepancy,
+        // but typically currentRoom.name will become newName.
+        console.log('Room name updated successfully via API.');
+      } catch (error) {
+        console.error('Failed to update room name:', error);
+        // Revert to original server name on any error if it was known
+        if (originalNameFromServer !== undefined) {
+          setTitle(originalNameFromServer);
+        } else {
+          setTitle(roomId?.toString() ?? 'Untitled');
+        }
+      } finally {
+        setIsSubmittingTitle(false);
+      }
+    },
+    [roomId, authToken, currentRoom, setTitle, setIsSubmittingTitle] // Added setIsSubmittingTitle
+  );
+
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -389,6 +493,19 @@ export default function CanvasScreen() {
             <TextInput
               value={title}
               onChangeText={setTitle}
+              onFocus={() => setIsTitleInputFocused(true)}
+              onBlur={() => {
+                const currentTitleOnBlur = title; // Capture the optimistic title
+                setIsTitleInputFocused(false);
+                updateRoomNameAPI(currentTitleOnBlur);
+              }}
+              onEndEditing={() => {
+                // onEndEditing can also trigger the update.
+                // Ensure isTitleInputFocused is false if this is the primary submission action.
+                // However, onBlur will likely handle most cases.
+                setIsTitleInputFocused(false); // Ensure focus state is correct
+                updateRoomNameAPI(title);
+              }}
               style={[
                 styles.headerTitleInput,
                 { color: colorScheme === 'dark' ? 'white' : 'black' },
@@ -416,6 +533,7 @@ export default function CanvasScreen() {
         onDrawingStateChange={setIsDrawing}
         isShiftDown={isShiftDown}
         onEyeDropperColor={updateColorFromEyeDropper}
+        roomId={roomId?.toString() ?? ''}
       />
 
       <View style={styles.controlsContainer}>
@@ -439,13 +557,21 @@ export default function CanvasScreen() {
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            onPress={() => canvasComponentRef.current?.undo()}
+            onPress={() =>
+              canvasComponentRef.current
+                ?.undo()
+                .catch(e => console.error('Error during undo:', e))
+            }
             style={styles.controlButton}
           >
             <MaterialIcons name="undo" size={24} color="black" />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => canvasComponentRef.current?.redo()}
+            onPress={() =>
+              canvasComponentRef.current
+                ?.redo()
+                .catch(e => console.error('Error during redo:', e))
+            }
             style={styles.controlButton}
           >
             <MaterialIcons name="redo" size={24} color="black" />
@@ -471,7 +597,11 @@ export default function CanvasScreen() {
             />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => canvasComponentRef.current?.clear()}
+            onPress={() =>
+              canvasComponentRef.current
+                ?.clear()
+                .catch(e => console.error('Error during clear:', e))
+            }
             style={[styles.controlButton, styles.clearButton]}
           >
             <FontAwesome name="trash" size={24} color="black" />
