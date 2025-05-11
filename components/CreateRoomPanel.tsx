@@ -22,7 +22,7 @@ export function CreateRoomPanel({
         editable
         onChangeText={text => setRoomId(text)}
         value={roomId}
-        placeholder="Enter Room ID"
+        placeholder="Enter room name"
         placeholderTextColor={isDark ? '#999' : '#666'}
         style={[
           styles.roomInput,

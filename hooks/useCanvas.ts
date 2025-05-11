@@ -15,13 +15,14 @@ import {
   isPointInsideBox,
 } from '@/utils/selectionUtils';
 import { cloneDeep } from 'lodash';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { Tools } from '../constants/Tools';
 import toolHandlers from './tool-handlers';
 // Import the action types and the hook itself
 import { HistoryAction, useCanvasHistory } from './useCanvasHistory';
+import { useElectricCanvas } from './useElectric';
 
 export type CanvasElement = {
   id: string;
@@ -35,6 +36,8 @@ export type CanvasProps = {
   color: string;
   isShiftDown: boolean;
   fontManager?: any;
+  roomId?: string;
+  isCollaborative?: boolean;
 };
 
 type SelectionState = 'selecting' | 'moving' | 'selected' | 'scaling' | null;
@@ -45,11 +48,54 @@ export const useCanvas = ({
   color,
   fontManager,
   isShiftDown,
+  roomId,
+  isCollaborative = false,
 }: CanvasProps) => {
-  const [elements, setElements] = useState<CanvasElement[]>([]);
+  // State for local canvas elements
+  const [localElements, setLocalElements] = useState<CanvasElement[]>([]);
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(
     null
   );
+
+  // Initialize Electric sync for collaborative mode
+  const electric =
+    isCollaborative && roomId
+      ? useElectricCanvas({ roomId })
+      : {
+          elements: [] as CanvasElement[],
+          // Updated mock signature for addElement
+          addElement: async (data: {
+            id: string;
+            room_id: string;
+            tool_type: string;
+            element_data: any;
+          }) => Promise.resolve(null as any),
+          updateElement: async (_id: string, _data: any) => Promise.resolve(),
+          removeElement: async (_id: string) => Promise.resolve(),
+          isLoading: false,
+        };
+
+  // Use elements from electric in collaborative mode, otherwise use local
+  const elements = isCollaborative ? electric.elements : localElements;
+
+  useEffect(() => {
+    console.log('Elements in useCanvas:', elements);
+  }, [elements]);
+
+  // Wrapper function to update elements based on collaboration mode
+  const setElements = useCallback(
+    async (
+      newElementsOrFn:
+        | CanvasElement[]
+        | ((prev: CanvasElement[]) => CanvasElement[])
+    ) => {
+      if (!isCollaborative) {
+        setLocalElements(newElementsOrFn);
+      }
+    },
+    [isCollaborative, roomId, electric]
+  );
+
   // --- Eraser Refs ---
   const elementsToEraseRef = useRef<Set<string>>(new Set());
   // Stores the full element state *before* the erase operation started
@@ -82,7 +128,9 @@ export const useCanvas = ({
   // Pass setElements and clearSelection to the history hook
   const { addToHistory, undo, redo } = useCanvasHistory(
     setElements,
-    clearSelection
+    clearSelection,
+    electric as any,
+    roomId // Pass roomId here
   );
 
   // --- Hit Detection ---
@@ -296,6 +344,9 @@ export const useCanvas = ({
           }
 
           // Immediately remove the element visually
+          if (isCollaborative && roomId) {
+            electric.removeElement(touchedElementId);
+          }
           setElements(prev => prev.filter(el => el.id !== touchedElementId));
           // Track the ID of the erased element
           elementsToEraseRef.current.add(touchedElementId);
@@ -401,7 +452,7 @@ export const useCanvas = ({
   );
 
   const onMoveInput = useCallback(
-    (x: number, y: number) => {
+    async (x: number, y: number) => {
       // --- Eraser Move ---
       if (tool === Tools.ERASER) {
         const touchedElementId = findElementAtPoint(
@@ -428,6 +479,9 @@ export const useCanvas = ({
           }
 
           elementsToEraseRef.current.add(touchedElementId);
+          if (isCollaborative && roomId) {
+            electric.removeElement(touchedElementId);
+          }
           setElements(prev => prev.filter(el => el.id !== touchedElementId));
           if (selection?.ids.includes(touchedElementId)) {
             clearSelection(); // Clear selection if erased element was selected
@@ -473,6 +527,30 @@ export const useCanvas = ({
                 : initialElement;
             }
           );
+          if (isCollaborative && roomId) {
+            try {
+              // We need to update each moved element via the Electric sync
+              for (let i = 0; i < movedElements.length; i++) {
+                const originalElement = initialCanvasElementsRef.current.find(
+                  el => el.id === movedElements[i].id
+                );
+                const updatedElement = movedElements[i];
+
+                if (
+                  originalElement &&
+                  JSON.stringify(originalElement) !==
+                    JSON.stringify(updatedElement)
+                ) {
+                  await electric.updateElement(updatedElement.id, {
+                    tool_type: updatedElement.tool,
+                    element_data: JSON.stringify(updatedElement.element),
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Failed to sync element movement:', error);
+            }
+          }
           setElements(prevElements =>
             prevElements.map(
               el => movedElements.find(movedEl => movedEl.id === el.id) || el
@@ -536,6 +614,32 @@ export const useCanvas = ({
                 : initialElement;
             }
           );
+
+          if (isCollaborative && roomId) {
+            try {
+              // We need to update each scaled element via the Electric sync
+              for (let i = 0; i < scaledElements.length; i++) {
+                const originalElement = initialCanvasElementsRef.current.find(
+                  el => el.id === scaledElements[i].id
+                );
+                const updatedElement = scaledElements[i];
+
+                if (
+                  originalElement &&
+                  JSON.stringify(originalElement) !==
+                    JSON.stringify(updatedElement)
+                ) {
+                  await electric.updateElement(updatedElement.id, {
+                    tool_type: updatedElement.tool,
+                    element_data: JSON.stringify(updatedElement.element),
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Failed to sync element scaling:', error);
+            }
+          }
+
           setElements(prevElements =>
             prevElements.map(
               el => scaledElements.find(scaledEl => scaledEl.id === el.id) || el
@@ -581,7 +685,7 @@ export const useCanvas = ({
   );
 
   const onEndInput = useCallback(
-    (x: number, y: number) => {
+    async (x: number, y: number) => {
       if (tool === Tools.ERASER) {
         elementsToEraseRef.current.clear();
         originalElementsBeforeEraseRef.current = null;
@@ -601,30 +705,67 @@ export const useCanvas = ({
             selectionStateRef.current = selection.selected ? 'selected' : null;
             return;
           }
+
           const finalElements = elements.filter(el =>
             initialSelectionRef.current!.ids.includes(el.id)
           );
-          // Add history only if elements actually changed
-          if (
-            initialCanvasElementsRef.current.length > 0 &&
-            finalElements.length > 0 &&
-            JSON.stringify(initialCanvasElementsRef.current) !==
-              JSON.stringify(finalElements)
-          ) {
-            const action: HistoryAction = {
-              type: 'MODIFY_ELEMENT',
-              elementIds: initialSelectionRef.current.ids,
-              originalElements: initialCanvasElementsRef.current, // Original state of moved elements
-              newElements: finalElements, // Final state of moved elements
-            };
-            addToHistory(action);
+
+          // Handle collaboration-specific updates for moved elements
+          if (isCollaborative && roomId) {
+            try {
+              // We need to update each moved element via the Electric sync
+              for (let i = 0; i < finalElements.length; i++) {
+                const originalElement = initialCanvasElementsRef.current.find(
+                  el => el.id === finalElements[i].id
+                );
+                const updatedElement = finalElements[i];
+
+                if (
+                  originalElement &&
+                  JSON.stringify(originalElement) !==
+                    JSON.stringify(updatedElement)
+                ) {
+                  await electric.updateElement(updatedElement.id, {
+                    tool_type: updatedElement.tool,
+                    element_data: JSON.stringify(updatedElement.element),
+                  });
+                }
+              }
+              addToHistory({
+                type: 'MODIFY_ELEMENT',
+                elementIds: initialSelectionRef.current.ids,
+                originalElements: initialCanvasElementsRef.current, // Original state
+                newElements: finalElements, // Final state of moved elements
+              });
+            } catch (error) {
+              console.error('Failed to sync element movement:', error);
+            }
+          } else {
+            // Add to history for local state
+            // Add history only if elements actually changed
+            if (
+              initialCanvasElementsRef.current.length > 0 &&
+              finalElements.length > 0 &&
+              JSON.stringify(initialCanvasElementsRef.current) !==
+                JSON.stringify(finalElements)
+            ) {
+              const action: HistoryAction = {
+                type: 'MODIFY_ELEMENT',
+                elementIds: initialSelectionRef.current.ids,
+                originalElements: initialCanvasElementsRef.current, // Original state
+                newElements: finalElements, // Final state of moved elements
+              };
+              addToHistory(action);
+            }
           }
+
           selectionStateRef.current = 'selected';
           initialPointRef.current = null;
           initialSelectionRef.current = null;
           initialCanvasElementsRef.current = [];
           return;
         }
+
         // --- Scaling End ---
         else if (selectionStateRef.current === 'scaling') {
           if (
@@ -634,24 +775,59 @@ export const useCanvas = ({
             selectionStateRef.current = selection.selected ? 'selected' : null;
             return;
           }
+
           const finalElements = elements.filter(el =>
             initialSelectionRef.current!.ids.includes(el.id)
           );
-          // Add history only if elements actually changed
-          if (
-            initialCanvasElementsRef.current.length > 0 &&
-            finalElements.length > 0 &&
-            JSON.stringify(initialCanvasElementsRef.current) !==
-              JSON.stringify(finalElements)
-          ) {
-            const action: HistoryAction = {
-              type: 'MODIFY_ELEMENT',
-              elementIds: initialSelectionRef.current.ids,
-              originalElements: initialCanvasElementsRef.current, // Original state of scaled elements
-              newElements: finalElements, // Final state of scaled elements
-            };
-            addToHistory(action);
+
+          // Handle collaboration-specific updates for scaled elements
+          if (isCollaborative && roomId) {
+            try {
+              // We need to update each scaled element via the Electric sync
+              for (let i = 0; i < finalElements.length; i++) {
+                const originalElement = initialCanvasElementsRef.current.find(
+                  el => el.id === finalElements[i].id
+                );
+                const updatedElement = finalElements[i];
+
+                if (
+                  originalElement &&
+                  JSON.stringify(originalElement) !==
+                    JSON.stringify(updatedElement)
+                ) {
+                  await electric.updateElement(updatedElement.id, {
+                    tool_type: updatedElement.tool,
+                    element_data: JSON.stringify(updatedElement.element),
+                  });
+                }
+              }
+              addToHistory({
+                type: 'MODIFY_ELEMENT',
+                elementIds: initialSelectionRef.current.ids,
+                originalElements: initialCanvasElementsRef.current, // Original state
+                newElements: finalElements, // Final state of scaled elements
+              });
+            } catch (error) {
+              console.error('Failed to sync element scaling:', error);
+            }
+          } else {
+            // Add history only if elements actually changed
+            if (
+              initialCanvasElementsRef.current.length > 0 &&
+              finalElements.length > 0 &&
+              JSON.stringify(initialCanvasElementsRef.current) !==
+                JSON.stringify(finalElements)
+            ) {
+              const action: HistoryAction = {
+                type: 'MODIFY_ELEMENT',
+                elementIds: initialSelectionRef.current.ids,
+                originalElements: initialCanvasElementsRef.current, // Original state
+                newElements: finalElements, // Final state of scaled elements
+              };
+              addToHistory(action);
+            }
           }
+
           selectionStateRef.current = 'selected';
           initialPointRef.current = null;
           initialSelectionRef.current = null;
@@ -660,6 +836,7 @@ export const useCanvas = ({
           scalingOriginRef.current = null;
           return;
         }
+
         // --- Selecting End ---
         else if (selectionStateRef.current === 'selecting') {
           const finalSelection = calculateSelectionBounds(
@@ -677,42 +854,60 @@ export const useCanvas = ({
       // --- Drawing Tool End ---
       if (currentElement) {
         const handler = toolHandlers[tool];
-        // Finalize element (e.g., remove redundant points) before adding
         const finalElement = handler?.finalizeElement
           ? handler.finalizeElement(currentElement)
           : currentElement;
-        const isValid = finalElement !== null; // Check if finalizeElement returned null (invalid)
+        const isValid = finalElement !== null;
 
         if (isValid && finalElement) {
-          // Check finalElement exists
-          // Add the completed element to the main state
-          setElements(prev => [...prev, finalElement]);
-          // Add to history
-          const action: HistoryAction = {
-            type: 'ADD_ELEMENT',
-            elements: [finalElement], // History only needs the added element
-          };
-          addToHistory(action);
+          if (isCollaborative && roomId) {
+            try {
+              // Add the element through Electric sync, passing the ID
+              await electric.addElement({
+                id: finalElement.id, // Pass the ID generated in useCanvas
+                room_id: roomId,
+                tool_type: finalElement.tool,
+                element_data: JSON.stringify(finalElement.element),
+              });
+            } catch (error) {
+              console.error('Failed to sync new element:', error);
+            }
+            addToHistory({
+              type: 'ADD_ELEMENT',
+              elements: [finalElement],
+            });
+          } else {
+            setLocalElements(prev => [...prev, finalElement]);
+            const action: HistoryAction = {
+              type: 'ADD_ELEMENT',
+              elements: [finalElement],
+            };
+            addToHistory(action);
+          }
         }
-        setCurrentElement(null); // Clear the temporary drawing element
+        setCurrentElement(null);
       }
-      initialPointRef.current = null; // Reset initial point ref for all tools
+      initialPointRef.current = null;
     },
     [
       currentElement,
       tool,
-      elements,
+      elements, // elements is used by selection logic if it runs before this
       selection,
       addToHistory,
-      fontManager,
-      clearSelection,
+      fontManager, // for selection calculation if any
+      clearSelection, // if selection is cleared
+      isCollaborative,
+      roomId,
+      electric,
+      setLocalElements, // Added setLocalElements
+      setCurrentElement, // Added setCurrentElement
     ]
   );
 
   // --- External Element Modification Functions ---
-
   const addExternalElement = useCallback(
-    (
+    async (
       element: CanvasElements.Any,
       toolType: Tools,
       propagateToHistory = true
@@ -722,20 +917,49 @@ export const useCanvas = ({
         element,
         tool: toolType,
       };
-      setElements(prev => [...prev, newElementData]);
-      if (propagateToHistory) {
-        const action: HistoryAction = {
-          type: 'ADD_ELEMENT',
-          elements: [newElementData],
-        };
-        addToHistory(action);
+
+      if (!isCollaborative) {
+        setLocalElements(prev => [...prev, newElementData]);
+        if (propagateToHistory) {
+          const action: HistoryAction = {
+            type: 'ADD_ELEMENT',
+            elements: [newElementData],
+          };
+          addToHistory(action);
+        }
+      } else if (roomId) {
+        try {
+          // Sync with Electric in collaborative mode, passing the ID
+          await electric.addElement({
+            id: newElementData.id, // Pass the ID for external elements
+            room_id: roomId,
+            tool_type: newElementData.tool,
+            element_data: JSON.stringify(newElementData.element),
+          });
+        } catch (error) {
+          console.error('Failed to sync element addition:', error);
+        }
+        if (propagateToHistory) {
+          const action: HistoryAction = {
+            type: 'ADD_ELEMENT',
+            elements: [newElementData],
+          };
+          addToHistory(action);
+        }
       }
     },
-    [generateId, addToHistory]
+    [
+      generateId,
+      addToHistory,
+      isCollaborative,
+      roomId,
+      electric,
+      setLocalElements,
+    ] // Added setLocalElements
   );
 
   const modifyElement = useCallback(
-    (
+    async (
       id: string,
       updates: Partial<CanvasElements.Any>,
       propagateToHistory = true
@@ -743,44 +967,105 @@ export const useCanvas = ({
       let originalElement: CanvasElement | null = null;
       let newElementData: CanvasElement | null = null;
 
-      setElements(prev =>
-        prev.map(el => {
-          if (el.id === id) {
-            originalElement = cloneDeep(el);
-            newElementData = { ...el, element: { ...el.element, ...updates } };
-            return newElementData;
-          }
-          return el;
-        })
-      );
-
-      if (selection && selection.ids.includes(id) && newElementData) {
-        const selectedElements = elements.filter(el =>
-          selection.ids.includes(el.id)
-        );
-        const updatedSelectedElements = selectedElements.map(el =>
-          el.id === id ? newElementData! : el
-        );
-        const newCombinedBox = calculateCombinedBoundingBox(
-          updatedSelectedElements,
-          10,
-          fontManager
-        );
-        if (newCombinedBox) {
-          setSelection({ ...selection, ...newCombinedBox });
-        } else {
-          clearSelection();
-        }
+      // Find the element to modify
+      const elementToModify = elements.find(el => el.id === id);
+      if (!elementToModify) {
+        console.error(`Element not found for modification: ${id}`);
+        return;
       }
 
-      if (propagateToHistory && originalElement && newElementData) {
-        const action: HistoryAction = {
-          type: 'MODIFY_ELEMENT',
-          elementIds: [id],
-          originalElements: [originalElement], // Original state of the single modified element
-          newElements: [newElementData], // Final state of the single modified element
-        };
-        addToHistory(action);
+      // Create updated versions for history and state updates
+      originalElement = cloneDeep(elementToModify);
+      newElementData = {
+        ...elementToModify,
+        element: { ...elementToModify.element, ...updates },
+      };
+
+      if (!isCollaborative) {
+        // Update local state
+        setLocalElements(prev =>
+          prev.map(el => {
+            if (el.id === id) {
+              return newElementData!;
+            }
+            return el;
+          })
+        );
+
+        // Update selection if this element is part of the current selection
+        if (selection && selection.ids.includes(id) && newElementData) {
+          const selectedElements = elements.filter(el =>
+            selection.ids.includes(el.id)
+          );
+          const updatedSelectedElements = selectedElements.map(el =>
+            el.id === id ? newElementData! : el
+          );
+          const newCombinedBox = calculateCombinedBoundingBox(
+            updatedSelectedElements,
+            10,
+            fontManager
+          );
+          if (newCombinedBox) {
+            setSelection({ ...selection, ...newCombinedBox });
+          } else {
+            clearSelection();
+          }
+        }
+
+        // Add to history
+        if (propagateToHistory && originalElement && newElementData) {
+          const action: HistoryAction = {
+            type: 'MODIFY_ELEMENT',
+            elementIds: [id],
+            originalElements: [originalElement], // Original state of the single modified element
+            newElements: [newElementData], // Final state of the single modified element
+          };
+          addToHistory(action);
+        }
+      } else if (roomId) {
+        // Sync with Electric in collaborative mode
+        try {
+          await electric.updateElement(id, {
+            tool_type: elementToModify.tool,
+            element_data: JSON.stringify({
+              ...elementToModify.element,
+              ...updates,
+            }),
+          });
+
+          // Update selection if needed (selection UI is still managed locally)
+          if (selection && selection.ids.includes(id)) {
+            const selectedElements = elements.filter(el =>
+              selection.ids.includes(el.id)
+            );
+            const updatedSelectedElements = selectedElements.map(el =>
+              el.id === id ? newElementData! : el
+            );
+            const newCombinedBox = calculateCombinedBoundingBox(
+              updatedSelectedElements,
+              10,
+              fontManager
+            );
+            if (newCombinedBox) {
+              setSelection({ ...selection, ...newCombinedBox });
+            } else {
+              clearSelection();
+            }
+          }
+
+          // Add to history
+          if (propagateToHistory && originalElement && newElementData) {
+            const action: HistoryAction = {
+              type: 'MODIFY_ELEMENT',
+              elementIds: [id],
+              originalElements: [originalElement], // Original state of the single modified element
+              newElements: [newElementData], // Final state of the single modified element
+            };
+            addToHistory(action);
+          }
+        } catch (error) {
+          console.error('Failed to sync element modification:', error);
+        }
       }
     },
     [
@@ -790,6 +1075,9 @@ export const useCanvas = ({
       setSelection,
       fontManager,
       clearSelection,
+      isCollaborative,
+      roomId,
+      electric,
     ]
   );
   function isPath(element: CanvasElements.Any): element is CanvasElements.Path {
@@ -854,18 +1142,22 @@ export const useCanvas = ({
       (element as CanvasElements.Image).uri !== undefined
     );
   }
-  const duplicateSelection = useCallback(() => {
+  const duplicateSelection = useCallback(async () => {
     if (selection && selection.ids.length > 0) {
-      const elementsToDupe = elements.filter(element =>
+      // Find the elements in the selection
+      const selectedElements = elements.filter(element =>
         selection.ids.includes(element.id)
       );
-      if (elementsToDupe.length > 0) {
-        const OFFSET = 40; // Offset for duplicated elements
-        const newElements = elementsToDupe.map(element => {
-          const newElement = cloneDeep(element);
-          newElement.id = generateId(); // Generate a new ID for the duplicate
 
-          // Check element type and apply appropriate offset
+      if (selectedElements.length > 0) {
+        // Create a deep copy with new IDs
+        const OFFSET = 20; // Offset for clear visual differentiation
+        const newElements = selectedElements.map(element => {
+          const newElement = cloneDeep(element);
+          // Assign new unique ID
+          newElement.id = generateId();
+
+          // Offset position based on element type
           if (isPath(newElement.element)) {
             newElement.element.points = newElement.element.points.map(
               point => ({
@@ -939,73 +1231,167 @@ export const useCanvas = ({
           return newElement;
         });
 
-        // Add the duplicated elements to state and history
-        const action: HistoryAction = {
-          type: 'ADD_ELEMENT',
-          elements: newElements,
-        };
-        addToHistory(action);
+        if (!isCollaborative) {
+          // Add the duplicated elements to local state and history
+          const action: HistoryAction = {
+            type: 'ADD_ELEMENT',
+            elements: newElements,
+          };
+          addToHistory(action);
 
-        // Update the elements array with the new duplicated elements
-        setElements(prev => [...prev, ...newElements]);
+          // Update the local elements array with the new duplicated elements
+          setLocalElements(prev => [...prev, ...newElements]);
+        } else if (roomId) {
+          // Add each duplicated element through Electric sync
+          try {
+            for (const newElement of newElements) {
+              await electric.addElement({
+                id: newElement.id, // Pass the ID generated in useCanvas
+                room_id: roomId,
+                tool_type: newElement.tool,
+                element_data: JSON.stringify(newElement.element),
+              });
+            }
+            // Update selection to include the new duplicated elements
+          } catch (error) {
+            console.error('Failed to sync duplicated elements:', error);
+          }
 
-        // Update selection to focus on the newly duplicated elements
+          // Add to history
+          const action: HistoryAction = {
+            type: 'ADD_ELEMENT',
+            elements: newElements,
+          };
+          addToHistory(action);
+        }
+
+        // Update selection to focus on the newly duplicated elements (for both modes)
         const combinedBox = calculateCombinedBoundingBox(
           newElements,
           10,
           fontManager
         );
-        if (
-          combinedBox &&
-          combinedBox.x !== undefined &&
-          combinedBox.y !== undefined &&
-          combinedBox.width !== undefined &&
-          combinedBox.height !== undefined
-        ) {
+        if (combinedBox) {
           setSelection({
             ids: newElements.map(el => el.id),
-            x: combinedBox.x,
-            y: combinedBox.y,
-            width: combinedBox.width,
-            height: combinedBox.height,
+            ...combinedBox,
             selected: true,
           });
+          selectionStateRef.current = 'selected';
         }
       }
     }
-  }, [selection, elements, generateId, addToHistory, setElements, fontManager]);
+  }, [
+    selection,
+    elements,
+    generateId,
+    addToHistory,
+    setLocalElements,
+    fontManager,
+    isCollaborative,
+    roomId,
+    electric,
+  ]);
 
-  const deleteSelection = useCallback(() => {
+  const deleteSelection = useCallback(async () => {
     if (selection && selection.ids.length > 0) {
       const elementsToDelete = elements.filter(element =>
         selection.ids.includes(element.id)
       );
+
       if (elementsToDelete.length > 0) {
-        const action: HistoryAction = {
-          type: 'DELETE_ELEMENT',
-          elements: cloneDeep(elementsToDelete),
-        };
-        addToHistory(action);
-        setElements(prev =>
-          prev.filter(element => !selection.ids.includes(element.id))
-        );
+        if (!isCollaborative) {
+          // Handle local deletion
+          const action: HistoryAction = {
+            type: 'DELETE_ELEMENT',
+            elements: cloneDeep(elementsToDelete),
+          };
+          addToHistory(action);
+          setLocalElements(prev =>
+            prev.filter(element => !selection.ids.includes(element.id))
+          );
+        } else if (roomId) {
+          // Handle collaborative deletion
+          try {
+            // Delete each element through Electric sync
+            for (const element of elementsToDelete) {
+              await electric.removeElement(element.id);
+            }
+          } catch (error) {
+            console.error('Failed to sync element deletion:', error);
+          }
+          // Add to history
+          const action: HistoryAction = {
+            type: 'DELETE_ELEMENT',
+            elements: cloneDeep(elementsToDelete),
+          };
+        }
       }
       clearSelection();
     }
-  }, [selection, elements, addToHistory, clearSelection]);
+  }, [
+    selection,
+    elements,
+    addToHistory,
+    clearSelection,
+    isCollaborative,
+    roomId,
+    electric,
+  ]);
 
-  const clear = useCallback(() => {
+  const clear = useCallback(async () => {
     if (elements.length > 0) {
-      const action: HistoryAction = {
-        type: 'DELETE_ELEMENT',
-        elements: cloneDeep(elements),
-      };
-      addToHistory(action);
+      if (!isCollaborative) {
+        // Handle local clear
+        const action: HistoryAction = {
+          type: 'DELETE_ELEMENT',
+          elements: cloneDeep(elements),
+        };
+        addToHistory(action);
+        setLocalElements([]);
+      } else if (roomId) {
+        // Handle collaborative clear
+        try {
+          // Group elements to delete for more efficient processing
+          const batchSize = 10; // Process elements in batches to improve performance
+          const elementBatches = [];
+
+          // Create batches of elements to process
+          for (let i = 0; i < elements.length; i += batchSize) {
+            elementBatches.push(elements.slice(i, i + batchSize));
+          }
+
+          // Process each batch sequentially
+          for (const batch of elementBatches) {
+            // Process elements in each batch concurrently
+            await Promise.all(
+              batch.map(element =>
+                electric.removeElement(element.id).catch(err => {
+                  console.error(`Failed to remove element ${element.id}:`, err);
+                  throw err; // Rethrow to fail the entire operation
+                })
+              )
+            );
+          }
+
+          console.log('Successfully cleared all elements from the canvas');
+        } catch (error) {
+          console.error('Failed to sync canvas clear:', error);
+          throw error; // Propagate error to be handled by caller
+        }
+      }
     }
-    setElements([]);
     setCurrentElement(null);
     clearSelection();
-  }, [elements, addToHistory, clearSelection]);
+    return true; // Return success status for consistency
+  }, [
+    elements,
+    addToHistory,
+    clearSelection,
+    isCollaborative,
+    roomId,
+    electric,
+  ]);
 
   // --- Return Values ---
   return {
@@ -1014,14 +1400,22 @@ export const useCanvas = ({
     onStartInput,
     onMoveInput,
     onEndInput,
-    undo,
-    redo,
+    undo: async () => {
+      // Wrap in async to ensure consistent return type
+      return await undo();
+    },
+    redo: async () => {
+      // Wrap in async to ensure consistent return type
+      return await redo();
+    },
     clear,
     addExternalElement,
     modifyElement,
     selection,
     deleteSelection,
     duplicateSelection,
+    isLoading: isCollaborative ? electric.isLoading : false,
+    isCollaborative,
   };
 };
 

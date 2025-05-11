@@ -43,11 +43,14 @@ interface Background {
 export interface CanvasComponentHandle {
   getCanvasSize: () => { width: number; height: number };
   getElements: () => CanvasElement[];
-  undo: () => void;
-  redo: () => void;
-  clear: () => void;
-  addExternalElement: (element: CanvasElements.Any, tool: Tools) => void;
-  modifyElement: (id: string, newElement: CanvasElements.Any) => void;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
+  clear: () => Promise<void>;
+  addExternalElement: (
+    element: CanvasElements.Any,
+    tool: Tools
+  ) => Promise<void>;
+  modifyElement: (id: string, newElement: CanvasElements.Any) => Promise<void>;
 }
 
 interface CanvasComponentProps {
@@ -63,7 +66,8 @@ interface CanvasComponentProps {
   onDrawingStateChange: (isDrawing: boolean) => void;
   isShiftDown: boolean;
   onEyeDropperColor?: (color: string) => void;
-  zoomScale?: number; // Add zoom scale prop
+  zoomScale?: number;
+  roomId?: string;
 }
 
 const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
@@ -80,6 +84,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       isShiftDown,
       onEyeDropperColor,
       zoomScale = 1,
+      roomId,
     } = props;
 
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -188,6 +193,8 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       color,
       fontManager,
       isShiftDown,
+      roomId,
+      isCollaborative: !!roomId,
     });
 
     useImperativeHandle(
@@ -197,7 +204,9 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         getElements: () => elements,
         undo,
         redo,
-        clear,
+        clear: async () => {
+          await clear();
+        },
         addExternalElement,
         modifyElement,
       }),

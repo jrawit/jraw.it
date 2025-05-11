@@ -4,7 +4,8 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 // API URL
-const API_URL = 'http://208.87.101.119:80/v1';
+export const API_URL =
+  `${process.env.EXPO_PUBLIC_API_URL}/v1` || 'http://localhost:80/v1';
 
 // User type definition
 interface User {
