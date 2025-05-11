@@ -107,6 +107,7 @@ export default function CanvasScreen() {
 
   const skiaCanvasRef = useCanvasRef();
   const canvasComponentRef = useRef<CanvasComponentHandle>(null);
+  const canvasWrapperRef = useRef<any>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -231,16 +232,18 @@ export default function CanvasScreen() {
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
   const [color, setSelectedColor] = useState<string>('#000000');
 
+  const [isMiddleMouseDown, setIsMiddleMouseDown] = useState<boolean>(false);
+  const [lastPanPosition, setLastPanPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
   const [elementsOffset, setElementsOffset] = useState<{
     x: number;
     y: number;
   }>({ x: 0, y: 0 });
 
   const colorScheme = useColorScheme();
-
-  const { id } = useLocalSearchParams();
-
-  // const [title, setTitle] = useState(id?.toString() ?? ''); // Commented out or remove this line
 
   const {
     isPermissionModalVisible,
@@ -414,6 +417,112 @@ export default function CanvasScreen() {
     setZoomLevel(1); //resets zoom level to 100%
   };
 
+  const handleCanvasZoomChange = useCallback(
+    (newScale: number) => {
+      setZoomLevel(newScale);
+    },
+    [setZoomLevel]
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !canvasWrapperRef.current) {
+      return;
+    }
+
+    const canvasDiv = canvasWrapperRef.current as HTMLElement; // More specific type for web
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.ctrlKey) {
+        // Pinch-to-zoom or Ctrl + Scroll
+        const delta = event.deltaY;
+        const scaleAmount = 1.05; // Factor for multiplicative zoom
+
+        let newZoomLevel = zoomLevel;
+        if (delta < 0) {
+          // Zoom In (pinch out / scroll wheel up)
+          newZoomLevel = zoomLevel * scaleAmount;
+        } else if (delta > 0) {
+          // Zoom Out (pinch in / scroll wheel down)
+          newZoomLevel = zoomLevel / scaleAmount;
+        }
+
+        newZoomLevel = Math.max(0.1, Math.min(newZoomLevel, 2.5)); // Clamp zoom level
+
+        if (newZoomLevel !== zoomLevel) {
+          handleCanvasZoomChange(newZoomLevel);
+        }
+      } else {
+        // Two-finger pan (comes as wheel events without ctrlKey on touchpads)
+        const panSensitivity = 1; // Adjust sensitivity as needed
+        const newOffsetX = elementsOffset.x - event.deltaX * panSensitivity;
+        const newOffsetY = elementsOffset.y - event.deltaY * panSensitivity;
+        // Here, we directly set elementsOffset, or we could adapt handleCanvasZoomChange
+        // or create a new specific handler if pan should also affect zoom (which is not typical for this case)
+        setElementsOffset({ x: newOffsetX, y: newOffsetY });
+      }
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button === 1) {
+        // Middle mouse button
+        event.preventDefault();
+        setIsMiddleMouseDown(true);
+        setLastPanPosition({ x: event.clientX, y: event.clientY });
+        canvasDiv.style.cursor = 'grabbing'; // Optional: change cursor
+      }
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (isMiddleMouseDown && lastPanPosition) {
+        event.preventDefault();
+        const deltaX = event.clientX - lastPanPosition.x;
+        const deltaY = event.clientY - lastPanPosition.y;
+
+        setElementsOffset(prevOffset => ({
+          x: prevOffset.x + deltaX,
+          y: prevOffset.y + deltaY,
+        }));
+        setLastPanPosition({ x: event.clientX, y: event.clientY });
+      }
+    };
+
+    const handleMouseUp = (event: MouseEvent) => {
+      if (event.button === 1 && isMiddleMouseDown) {
+        // Middle mouse button
+        event.preventDefault();
+        setIsMiddleMouseDown(false);
+        setLastPanPosition(null);
+        canvasDiv.style.cursor = 'default'; // Optional: reset cursor
+      }
+    };
+
+    // Add event listener with passive: false to allow preventDefault
+    canvasDiv.addEventListener('wheel', handleWheel, { passive: false });
+    canvasDiv.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove); // Listen on window for smoother panning
+    window.addEventListener('mouseup', handleMouseUp); // Listen on window
+
+    return () => {
+      canvasDiv.removeEventListener('wheel', handleWheel);
+      canvasDiv.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      if (canvasDiv) {
+        canvasDiv.style.cursor = 'default'; // Ensure cursor is reset on unmount
+      }
+    };
+  }, [
+    zoomLevel,
+    elementsOffset,
+    handleCanvasZoomChange,
+    setElementsOffset,
+    isMiddleMouseDown,
+    lastPanPosition,
+  ]); // Dependencies
+
   const updateColorFromEyeDropper = useCallback(
     (pickedColor: string) => {
       // Pass the picked color to the appropriate state or callback
@@ -520,21 +629,27 @@ export default function CanvasScreen() {
           headerTintColor: colorScheme === 'dark' ? 'white' : 'black',
         }}
       />
-      <CanvasComponent
-        zoomScale={zoomLevel}
-        ref={canvasComponentRef}
-        canvasRef={skiaCanvasRef}
-        tool={tool}
-        strokeWidth={strokeWidth}
-        color={color}
-        background={background}
-        elementsOffset={elementsOffset}
-        setElementsOffset={setElementsOffset}
-        onDrawingStateChange={setIsDrawing}
-        isShiftDown={isShiftDown}
-        onEyeDropperColor={updateColorFromEyeDropper}
-        roomId={roomId?.toString() ?? ''}
-      />
+      <View
+        ref={canvasWrapperRef}
+        style={{ flex: 1, overflow: 'hidden' }} // Added a wrapper View for event handling
+      >
+        <CanvasComponent
+          zoomScale={zoomLevel}
+          ref={canvasComponentRef}
+          canvasRef={skiaCanvasRef}
+          tool={tool}
+          strokeWidth={strokeWidth}
+          color={color}
+          background={background}
+          elementsOffset={elementsOffset}
+          setElementsOffset={setElementsOffset} // For one-finger pan and direct manipulation in CanvasComponent
+          onDrawingStateChange={setIsDrawing}
+          isShiftDown={isShiftDown}
+          onEyeDropperColor={updateColorFromEyeDropper}
+          roomId={roomId?.toString() ?? ''}
+          onZoomChange={handleCanvasZoomChange} // Pass the new callback here
+        />
+      </View>
 
       <View style={styles.controlsContainer}>
         <View style={styles.buttonRow}>

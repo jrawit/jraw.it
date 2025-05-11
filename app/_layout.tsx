@@ -21,7 +21,6 @@ function AuthenticationGuard({ children }: { children: React.ReactNode }) {
       // If no token and not on auth screens, redirect to login
       if (!token && !inAuthGroup) {
         router.replace('/login');
-        router.replace('/canvas/test');
       } else if (token && inAuthGroup) {
         // If authenticated and on auth screens, redirect to home
         router.replace('/');

@@ -28,6 +28,7 @@ import React, {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { LayoutChangeEvent } from 'react-native';
@@ -68,6 +69,11 @@ interface CanvasComponentProps {
   onEyeDropperColor?: (color: string) => void;
   zoomScale?: number;
   roomId?: string;
+  onZoomChange?: (
+    newScale: number,
+    newOffsetX: number,
+    newOffsetY: number
+  ) => void; // Added for pinch-to-zoom
 }
 
 const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
@@ -85,6 +91,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       onEyeDropperColor,
       zoomScale = 1,
       roomId,
+      onZoomChange,
     } = props;
 
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -107,6 +114,18 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     } | null>(null);
 
     const fontManager = useFontManager();
+
+    // Ref for two-finger panning
+    const twoFingerPanStartOffsetRef = useRef<{ x: number; y: number } | null>(
+      null
+    );
+
+    // Ref for pinch-to-zoom
+    const pinchInitialStateRef = useRef<{
+      zoom: number;
+      offset: { x: number; y: number };
+      focalPointCanvas: { x: number; y: number }; // Focal point in canvas space relative to canvas 0,0
+    } | null>(null);
 
     // Function to transform canvas coordinates to screen coordinates
     const canvasToScreenCoords = useCallback(
@@ -194,7 +213,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       fontManager,
       isShiftDown,
       roomId,
-      isCollaborative: !!roomId,
+      isCollaborative: false,
     });
 
     useImperativeHandle(
@@ -406,26 +425,98 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       ]
     );
 
+    // --- Two-Finger Pan Handlers ---
+    const handleTwoFingerPanBegin = useCallback(() => {
+      twoFingerPanStartOffsetRef.current = elementsOffset;
+    }, [elementsOffset]);
+
     const handleTwoFingerPanChange = useCallback(
       (e: { translationX: number; translationY: number }) => {
-        setCurrentElementOffset({
-          x: e.translationX,
-          y: e.translationY,
-        });
+        if (twoFingerPanStartOffsetRef.current) {
+          setElementsOffset({
+            x: twoFingerPanStartOffsetRef.current.x + e.translationX,
+            y: twoFingerPanStartOffsetRef.current.y + e.translationY,
+          });
+        }
       },
-      []
+      [setElementsOffset]
     );
 
     const handleTwoFingerPanEnd = useCallback(
       (e: { translationX: number; translationY: number }) => {
-        setElementsOffset(prev => ({
-          x: prev.x + e.translationX,
-          y: prev.y + e.translationY,
-        }));
-        setCurrentElementOffset({ x: 0, y: 0 });
+        if (twoFingerPanStartOffsetRef.current) {
+          // Final update, though onUpdate should have kept it current
+          setElementsOffset({
+            x: twoFingerPanStartOffsetRef.current.x + e.translationX,
+            y: twoFingerPanStartOffsetRef.current.y + e.translationY,
+          });
+        }
+        twoFingerPanStartOffsetRef.current = null; // Reset for the next gesture
       },
       [setElementsOffset]
     );
+
+    // --- Pinch to Zoom Handlers ---
+    const handlePinchBegin = useCallback(
+      (e: { focalX: number; focalY: number }) => {
+        // e.focalX, e.focalY from gesture are not used for zoom center
+        if (!onZoomChange) return;
+
+        const canvasViewCenterX = canvasSize.width / 2;
+        const canvasViewCenterY = canvasSize.height / 2;
+
+        // Determine the point in canvas coordinates that is currently at the center of the screen.
+        const canvasPointAtScreenCenter = getAdjustedCoordinates(
+          canvasViewCenterX,
+          canvasViewCenterY
+        );
+
+        pinchInitialStateRef.current = {
+          zoom: zoomScale,
+          offset: { ...elementsOffset }, // Store initial offset
+          focalPointCanvas: canvasPointAtScreenCenter, // This canvas point should stay at the screen center
+        };
+      },
+      [
+        zoomScale,
+        elementsOffset,
+        getAdjustedCoordinates,
+        onZoomChange,
+        canvasSize.width, // Added dependency
+        canvasSize.height, // Added dependency
+      ]
+    );
+
+    const handlePinchChange = useCallback(
+      (e: { scale: number; focalX: number; focalY: number }) => {
+        // e.focalX, e.focalY from gesture are not used for zoom target
+        if (!onZoomChange || !pinchInitialStateRef.current) return;
+
+        const { zoom: initialZoom, focalPointCanvas } =
+          pinchInitialStateRef.current; // focalPointCanvas is the canvas point that was at screen center
+        let newZoom = initialZoom * e.scale;
+        newZoom = Math.max(0.1, Math.min(newZoom, 10)); // Clamp zoom
+
+        const screenCenterX = canvasSize.width / 2; // Target screen X & canvas pivot X
+        const screenCenterY = canvasSize.height / 2; // Target screen Y & canvas pivot Y
+
+        // Calculate new offset to keep `focalPointCanvas` (the canvas point that was at screen center)
+        // at `screenCenterX, screenCenterY` on the screen.
+        const newOffsetX =
+          screenCenterX -
+          ((focalPointCanvas.x - screenCenterX) * newZoom + screenCenterX);
+        const newOffsetY =
+          screenCenterY -
+          ((focalPointCanvas.y - screenCenterY) * newZoom + screenCenterY);
+
+        onZoomChange(newZoom, newOffsetX, newOffsetY);
+      },
+      [onZoomChange, canvasSize.width, canvasSize.height] // Dependencies are correct
+    );
+
+    const handlePinchEnd = useCallback(() => {
+      pinchInitialStateRef.current = null;
+    }, []);
 
     const handleHoverBegin = useCallback(
       (e: { x: number; y: number }) => {
@@ -470,19 +561,35 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     const pan = useMemo(() => {
       return Gesture.Pan()
         .runOnJS(true)
+        .minPointers(1)
+        .maxPointers(1)
         .minDistance(5)
         .onStart(handlePanStart)
         .onChange(handlePanChange)
         .onEnd(handlePanEnd);
     }, [handlePanStart, handlePanChange, handlePanEnd]);
 
-    const twoFingerPan = useMemo(() => {
-      return Gesture.Pan()
-        .runOnJS(true)
-        .minPointers(2)
-        .onChange(handleTwoFingerPanChange)
-        .onEnd(handleTwoFingerPanEnd);
-    }, [handleTwoFingerPanChange, handleTwoFingerPanEnd]);
+    const twoFingerPan = useMemo(
+      () =>
+        Gesture.Pan()
+          .runOnJS(true)
+          .minPointers(2)
+          .maxPointers(2)
+          .onBegin(handleTwoFingerPanBegin)
+          .onUpdate(handleTwoFingerPanChange)
+          .onEnd(handleTwoFingerPanEnd),
+      [handleTwoFingerPanBegin, handleTwoFingerPanChange, handleTwoFingerPanEnd]
+    );
+
+    const pinchGesture = useMemo(
+      () =>
+        Gesture.Pinch()
+          .runOnJS(true)
+          .onBegin(handlePinchBegin)
+          .onUpdate(handlePinchChange)
+          .onEnd(handlePinchEnd),
+      [handlePinchBegin, handlePinchChange, handlePinchEnd]
+    );
 
     const hover = useMemo(() => {
       return Gesture.Hover()
@@ -778,9 +885,20 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     ]);
 
     // Memoize combined gestures
-    const combinedGestures = useMemo(() => {
-      return Gesture.Exclusive(pan, tap, twoFingerPan, hover);
-    }, [pan, tap, twoFingerPan, hover]);
+    // IMPORTANT: The way gestures are combined (e.g., Gesture.Exclusive, Gesture.Simultaneous)
+    // needs to be reviewed to correctly incorporate pinchGesture and the updated twoFingerPan.
+    // For example, pinch and two-finger pan might be simultaneous, and that group
+    // might be exclusive with single-finger pan and tap.
+    const combinedGestures = useMemo(
+      () =>
+        Gesture.Race(
+          Gesture.Simultaneous(pinchGesture, twoFingerPan),
+          pan,
+          tap,
+          hover
+        ), // Example: using Race. Adjust as needed.
+      [pan, tap, twoFingerPan, hover, pinchGesture] // Added pinchGesture
+    );
 
     return (
       <>
