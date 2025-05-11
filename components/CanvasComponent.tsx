@@ -213,7 +213,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       fontManager,
       isShiftDown,
       roomId,
-      isCollaborative: false,
+      isCollaborative: !!roomId,
     });
 
     useImperativeHandle(
