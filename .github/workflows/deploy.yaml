@@ -1,0 +1,72 @@
+name: Deploy jraw.it Frontend
+
+on:
+  push:
+    branches:
+      - main # Triggers the workflow on push events to the main branch
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  build-and-deploy-frontend:
+    runs-on: ubuntu-latest
+    # This assumes your package.json for the frontend is at the root of the jraw.it directory.
+    # If jraw.it is a subdirectory in your repository, adjust working-directory or paths accordingly.
+    defaults:
+      run:
+        working-directory: ./ # Relative to the checkout path of jraw.it
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        # If jraw.it is a subdirectory of your main Git repository, you might need:
+        # with:
+        #   path: jraw.it # Checkout into a 'jraw.it' subdirectory
+    # Then, subsequent steps would need `working-directory: ./jraw.it` if you use the above.
+    # However, your current file path suggests jraw.it is the repo root or a distinct unit.
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
+
+      # Optional: Add linting (uncomment and adapt if you have a lint script)
+      # - name: Lint frontend
+      #   run: yarn lint
+
+      # Optional: Add testing (uncomment and adapt if you have a test script)
+      # - name: Test frontend
+      #   # Ensure your test script can run in a CI environment (e.g., no watch mode)
+      #   run: yarn test --ci --watchAll=false # Example, adjust as per your test setup
+
+      - name: Build frontend
+        # Uses "build-web": "expo export -p web" from your package.json
+        run: yarn build-web
+        env:
+          # This secret needs to be configured in your GitHub repository settings
+          EXPO_PUBLIC_ELECTRIC_URL: ${{ secrets.EXPO_PUBLIC_ELECTRIC_URL }}
+          # NODE_ENV: production # 'expo export' usually handles this
+
+      - name: Deploy to Server via SSH
+        uses: easingthemes/ssh-deploy@v5.0.0 # Changed to easingthemes/ssh-deploy
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          REMOTE_PORT: ${{ secrets.SSH_PORT || 22 }}
+          SOURCE: "web-build/" # Directory on the runner to copy from
+          TARGET: "/root/jraw.it" # Target directory on the server
+          ARGS: "-rlgoDzvc --delete" # rsync arguments: recursive, links, group, owner, devices, verbose, compress, checksum, delete extraneous files
+          SCRIPT_BEFORE: |
+            echo "Preparing target directory on server..."
+            TARGET_DIR="/root/jraw.it"
+            sudo mkdir -p $TARGET_DIR
+            sudo chown ${{ secrets.SSH_USER }}:${{ secrets.SSH_USER }} $TARGET_DIR
+            echo "Target directory $TARGET_DIR prepared."
+          SCRIPT_AFTER: |
+            echo "Deployment to /root/jraw.it successful."
+            # Optional: If you need to restart a web server (e.g., Nginx, Apache)
+            # sudo systemctl restart nginx
