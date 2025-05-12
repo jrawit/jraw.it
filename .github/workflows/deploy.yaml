@@ -58,11 +58,19 @@ jobs:
           REMOTE_USER: ${{ secrets.SSH_USER }}
           REMOTE_PORT: ${{ secrets.SSH_PORT || 22 }}
           SOURCE: "web-build/" # Directory on the runner to copy from
-          TARGET: "/root/jraw.it" # Target directory on the server
+          TARGET: "/root/jraw.it" # Make sure this is your intended target directory
           ARGS: "-rlgoDzvc --delete" # rsync arguments: recursive, links, group, owner, devices, verbose, compress, checksum, delete extraneous files
           SCRIPT_BEFORE: |
+            echo "Checking for rsync and installing if not present..."
+            if ! command -v rsync &> /dev/null
+            then
+                echo "rsync could not be found, attempting to install..."
+                sudo apt-get update -y && sudo apt-get install -y rsync
+            else
+                echo "rsync is already installed."
+            fi
             echo "Preparing target directory on server..."
-            TARGET_DIR="/root/jraw.it"
+            TARGET_DIR="/root/jraw.it" # Ensure this matches the TARGET input above
             sudo mkdir -p $TARGET_DIR
             sudo chown ${{ secrets.SSH_USER }}:${{ secrets.SSH_USER }} $TARGET_DIR
             echo "Target directory $TARGET_DIR prepared."
