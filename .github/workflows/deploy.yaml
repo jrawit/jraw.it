@@ -57,12 +57,12 @@ jobs:
           REMOTE_HOST: ${{ secrets.SSH_HOST }}
           REMOTE_USER: ${{ secrets.SSH_USER }}
           REMOTE_PORT: ${{ secrets.SSH_PORT || 22 }}
-          SOURCE: "web-build/" # Directory on the runner to copy from
+          SOURCE: "dist/" # Changed from web-build/ to dist/
           TARGET: "/root/jraw.it" # Make sure this is your intended target directory
           ARGS: "-rlgoDzvc --delete" # rsync arguments: recursive, links, group, owner, devices, verbose, compress, checksum, delete extraneous files
           SCRIPT_BEFORE: |
             echo "Checking for rsync and installing if not present..."
-            if ! command -v rsync &> /dev/null
+            if ! command -v rsync &> /dev/null # Corrected /null to /dev/null
             then
                 echo "rsync could not be found, attempting to install..."
                 sudo apt-get update -y && sudo apt-get install -y rsync
