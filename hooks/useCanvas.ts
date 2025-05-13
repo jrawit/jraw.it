@@ -836,27 +836,19 @@ export const useCanvas = ({
           // Calculate angle difference from start
           const angleDiff = newAngle - rotationStartAngleRef.current;
 
-          // Apply the rotation (add to initial angle)
-          const newRotation = initialAngleRef.current + angleDiff;
-
-          // Update selection with new rotation
-          setSelection({
-            ...initialSelectionRef.current,
-            rotation: newRotation,
-          });
-
-          // Update all selected elements
+          // Update all selected elements by rotating them
           const rotatedElements = initialCanvasElementsRef.current.map(
             initialElement => {
               const handler = toolHandlers[initialElement.tool];
               return handler?.rotateElement
                 ? handler.rotateElement(
                     initialElement,
-                    centerX,
-                    centerY,
-                    angleDiff
+                    centerX, // Pivot for element rotation
+                    centerY, // Pivot for element rotation
+                    angleDiff // Angle to rotate elements by
                   )
                 : {
+                    // Fallback if no specific rotateElement handler
                     ...initialElement,
                     rotation: (initialElement.rotation || 0) + angleDiff,
                   };
@@ -868,6 +860,40 @@ export const useCanvas = ({
               el => rotatedElements.find(rotEl => rotEl.id === el.id) || el
             )
           );
+
+          // Recalculate the axis-aligned bounding box for the selection
+          // based on the actual rotated elements.
+          const newCombinedBox = calculateCombinedBoundingBox(
+            rotatedElements,
+            10, // Standard margin for selection box
+            fontManager
+          );
+
+          if (newCombinedBox) {
+            setSelection({
+              ...initialSelectionRef.current, // Keep ids, selected status
+              ...newCombinedBox, // new x, y, width, height
+              rotation: 0, // Box is now axis-aligned
+              selected: true,
+            });
+          } else {
+            // Fallback if box calculation fails.
+            // Keep selection with original IDs, but mark as axis-aligned.
+            setSelection(prev =>
+              prev && initialSelectionRef.current
+                ? {
+                    ...prev, // or ...initialSelectionRef.current
+                    ids: initialSelectionRef.current.ids,
+                    x: initialSelectionRef.current.x, // Keep old bounds as a fallback
+                    y: initialSelectionRef.current.y,
+                    width: initialSelectionRef.current.width,
+                    height: initialSelectionRef.current.height,
+                    selected: true,
+                    rotation: 0,
+                  }
+                : null
+            );
+          }
           return;
         }
         // --- Scaling Move ---
@@ -1471,6 +1497,7 @@ export const useCanvas = ({
             width: combinedBox.width,
             height: combinedBox.height,
             selected: true,
+            rotation: 0, // Ensure duplicated selection box is axis-aligned
           });
         }
       }

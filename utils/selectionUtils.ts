@@ -49,19 +49,22 @@ export const calculateBoundingBox = (
     case Tools.PEN:
     case Tools.HIGHLIGHTER:
       const { points, strokeWidth = 0 } = data as CanvasElements.Path;
+      if (!points || points.length === 0) return null; // Guard against empty points
       const minX = Math.min(...points.map(point => point.x));
       const minY = Math.min(...points.map(point => point.y));
       const maxX = Math.max(...points.map(point => point.x));
       const maxY = Math.max(...points.map(point => point.y));
 
-      // Expand the bounding box by half the stroke width in all directions
-      const halfStrokeWidth = strokeWidth / 2;
+      // Be more generous with stroke allowance for paths to account for miter joins and caps.
+      // Skia's default miter limit is 4. A miter can extend by `miterLimit * strokeWidth / 2`.
+      // Using strokeWidth directly (instead of strokeWidth/2) as padding on each side should be safer.
+      const pathStrokeAllowance = strokeWidth; // Increased from strokeWidth / 2
 
       return {
-        x: minX - halfStrokeWidth,
-        y: minY - halfStrokeWidth,
-        width: maxX - minX + strokeWidth,
-        height: maxY - minY + strokeWidth,
+        x: minX - pathStrokeAllowance,
+        y: minY - pathStrokeAllowance,
+        width: maxX - minX + 2 * pathStrokeAllowance,
+        height: maxY - minY + 2 * pathStrokeAllowance,
       };
     case Tools.LINE:
       const {
@@ -107,17 +110,20 @@ export const calculateBoundingBox = (
         }
 
         // Calculate bounding box using points
-        const points = trianglePath.points;
-        const minXTriangle = Math.min(...points.map(point => point.x));
-        const minYTriangle = Math.min(...points.map(point => point.y));
-        const maxXTriangle = Math.max(...points.map(point => point.x));
-        const maxYTriangle = Math.max(...points.map(point => point.y));
+        const triPoints = trianglePath.points;
+        const minXTriangle = Math.min(...triPoints.map(point => point.x));
+        const minYTriangle = Math.min(...triPoints.map(point => point.y));
+        const maxXTriangle = Math.max(...triPoints.map(point => point.x));
+        const maxYTriangle = Math.max(...triPoints.map(point => point.y));
+
+        // Use the same generous stroke allowance as for PEN/HIGHLIGHTER
+        const triangleStrokeAllowance = trianglePath.strokeWidth; // Increased
 
         return {
-          x: minXTriangle - trianglePath.strokeWidth / 2,
-          y: minYTriangle - trianglePath.strokeWidth / 2,
-          width: maxXTriangle - minXTriangle + trianglePath.strokeWidth,
-          height: maxYTriangle - minYTriangle + trianglePath.strokeWidth,
+          x: minXTriangle - triangleStrokeAllowance,
+          y: minYTriangle - triangleStrokeAllowance,
+          width: maxXTriangle - minXTriangle + 2 * triangleStrokeAllowance,
+          height: maxYTriangle - minYTriangle + 2 * triangleStrokeAllowance,
         };
       } else {
         // Handle traditional triangle format
@@ -281,22 +287,21 @@ export const findElementsInSelection = (
   fontManager?: any
 ) => {
   return elements.filter(element => {
-    const boundingBox = calculateBoundingBox(
-      element.tool,
-      element.element,
-      fontManager
-    );
+    // Use calculateElementBoundingBox to get the AABB of the potentially rotated element
+    const elementAABB = calculateElementBoundingBox(element, 0, fontManager); // Use 0 margin for precise check
 
-    if (!boundingBox) return false;
+    if (!elementAABB) return false;
 
-    // Check if element is completely inside selection box
-    return (
-      boundingBox.x >= selectionBox.x &&
-      boundingBox.x + boundingBox.width <=
-        selectionBox.x + selectionBox.width &&
-      boundingBox.y >= selectionBox.y &&
-      boundingBox.y + boundingBox.height <= selectionBox.y + selectionBox.height
-    );
+    // Check for intersection between the element's AABB and the selection box.
+    // The selectionBox is already normalized (positive width/height) when this function is called
+    // from calculateSelectionBounds.
+    const intersects =
+      elementAABB.x < selectionBox.x + selectionBox.width &&
+      elementAABB.x + elementAABB.width > selectionBox.x &&
+      elementAABB.y < selectionBox.y + selectionBox.height &&
+      elementAABB.y + elementAABB.height > selectionBox.y;
+
+    return intersects;
   });
 };
 
@@ -310,7 +315,9 @@ export const calculateCombinedBoundingBox = (
 ) => {
   const boundingBoxes = elements
     .map(element =>
-      calculateBoundingBox(element.tool, element.element, fontManager)
+      // Use calculateElementBoundingBox to get the AABB of potentially rotated elements
+      // Pass 0 for margin here, as the overall margin is added by this function later
+      calculateElementBoundingBox(element, 0, fontManager)
     )
     .filter(Boolean) as {
     x: number;
@@ -355,21 +362,29 @@ export const calculateElementBoundingBox = (
     fontManager
   );
   if (!boundingBox) return null;
-  boundingBox.x -= margin;
-  boundingBox.y -= margin;
-  boundingBox.width += margin * 2;
-  boundingBox.height += margin * 2;
+  // The margin is applied to the unrotated bounding box first.
+  // This was identified as potentially problematic if margin should be an outer shell to the final rotated AABB.
+  // However, the previous logic (applying margin before calculating rotated AABB dimensions)
+  // often results in a LARGER final box, which is safer against "poking out".
+  // Reverting to applying margin to the unrotated box before calculating rotated AABB dimensions,
+  // as the primary fix is now targeted at calculateBoundingBox's stroke allowance.
 
-  if (element.rotation && boundingBox) {
-    // Calculate a bounding box that encompasses the rotated box
-    const centerX = boundingBox.x + boundingBox.width / 2;
-    const centerY = boundingBox.y + boundingBox.height / 2;
+  const marginedBox = {
+    x: boundingBox.x - margin,
+    y: boundingBox.y - margin,
+    width: boundingBox.width + margin * 2,
+    height: boundingBox.height + margin * 2,
+  };
 
-    // For a rotated rectangle, the new width and height can be calculated as:
+  if (element.rotation && marginedBox) {
+    // Calculate a bounding box that encompasses the rotated margined box
+    const centerX = marginedBox.x + marginedBox.width / 2;
+    const centerY = marginedBox.y + marginedBox.height / 2;
+
     const cos = Math.abs(Math.cos(element.rotation));
     const sin = Math.abs(Math.sin(element.rotation));
-    const newWidth = boundingBox.width * cos + boundingBox.height * sin;
-    const newHeight = boundingBox.width * sin + boundingBox.height * cos;
+    const newWidth = marginedBox.width * cos + marginedBox.height * sin;
+    const newHeight = marginedBox.width * sin + marginedBox.height * cos;
 
     return {
       x: centerX - newWidth / 2,
@@ -379,5 +394,5 @@ export const calculateElementBoundingBox = (
     };
   }
 
-  return boundingBox;
+  return marginedBox; // Return margined unrotated box if no rotation
 };

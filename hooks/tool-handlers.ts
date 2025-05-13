@@ -154,7 +154,8 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       path.points = path.points.map(p =>
         rotatePoint(p, { x: centerX, y: centerY }, angleDiff)
       );
-      newElement.rotation = (newElement.rotation || 0) + angleDiff;
+      // DO NOT set newElement.rotation here, as points are already transformed to world space.
+      // newElement.rotation should remain 0 or undefined for paths handled this way.
       return newElement;
     },
     finalizeElement: element => {
@@ -211,7 +212,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       path.points = path.points.map(p =>
         rotatePoint(p, { x: centerX, y: centerY }, angleDiff)
       );
-      newElement.rotation = (newElement.rotation || 0) + angleDiff;
+      // DO NOT set newElement.rotation here.
       return newElement;
     },
     finalizeElement: element => {
@@ -337,7 +338,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         { x: centerX, y: centerY },
         angleDiff
       );
-      newElement.rotation = (newElement.rotation || 0) + angleDiff;
+      // DO NOT set newElement.rotation here.
       return newElement;
     },
     finalizeElement: element => {
@@ -731,8 +732,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         rotatePoint(p, { x: centerX, y: centerY }, angleDiff)
       );
 
-      // Store rotation
-      newElement.rotation = (newElement.rotation || 0) + angleDiff;
+      // DO NOT set newElement.rotation here if points are directly transformed.
       return newElement;
     },
 
