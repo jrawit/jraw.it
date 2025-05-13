@@ -483,36 +483,76 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         .onEnd(handleHoverEnd);
     }, [handleHoverBegin, handleHoverChange, handleHoverEnd]);
 
+    // Modify the getElement function to pass the whole element to the tool components
     const getElement = useCallback((canvasElement: CanvasElement) => {
       const { id, element, tool: elementTool } = canvasElement;
       switch (elementTool) {
         case Tools.PEN:
         case Tools.HIGHLIGHTER:
         case Tools.ERASER:
-          return <Path key={id} pathData={element as CanvasElements.Path} />;
+          return (
+            <Path
+              key={id}
+              pathData={element as CanvasElements.Path}
+              elementData={canvasElement}
+            />
+          );
         case Tools.LINE:
-          return <Line key={id} lineData={element as CanvasElements.Line} />;
+          return (
+            <Line
+              key={id}
+              lineData={element as CanvasElements.Line}
+              elementData={canvasElement}
+            />
+          );
         case Tools.RECTANGLE:
           return (
-            <Rect key={id} rectData={element as CanvasElements.Rectangle} />
+            <Rect
+              key={id}
+              rectData={element as CanvasElements.Rectangle}
+              elementData={canvasElement}
+            />
           );
         case Tools.CIRCLE:
           return (
-            <Circle key={id} circleData={element as CanvasElements.Circle} />
+            <Circle
+              key={id}
+              circleData={element as CanvasElements.Circle}
+              elementData={canvasElement}
+            />
           );
         case Tools.TRIANGLE:
           return (
             <Triangle
               key={id}
               triangleData={element as CanvasElements.Triangle}
+              elementData={canvasElement}
             />
           );
         case Tools.STAR:
-          return <Star key={id} starData={element as CanvasElements.Star} />;
+          return (
+            <Star
+              key={id}
+              starData={element as CanvasElements.Star}
+              elementData={canvasElement}
+            />
+          );
         case Tools.TEXT:
-          return <Text key={id} textData={element as CanvasElements.Text} />;
+          return (
+            <Text
+              key={id}
+              textData={element as CanvasElements.Text}
+              elementData={canvasElement}
+            />
+          );
         case Tools.IMAGE:
-          return <Image key={id} imageData={element as CanvasElements.Image} />;
+          return (
+            <Image
+              key={id}
+              imageData={element as CanvasElements.Image}
+              elementData={canvasElement}
+            />
+          );
         default:
           console.warn(`Unhandled tool type: ${elementTool}`);
           return null;

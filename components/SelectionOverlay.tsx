@@ -1,131 +1,170 @@
 import { Selection } from '@/utils/selectionUtils';
-import React, { useMemo } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
+export const HANDLE_SIZE = 12;
+export const HANDLE_TOUCH_AREA = 24; // Larger than visible size for easier touch
+
 interface SelectionOverlayProps {
-  selection: Selection | null;
+  selection: Selection;
   top: number;
   left: number;
 }
-
-// Define handle size for easier calculation and touch detection
-export const HANDLE_SIZE = 8;
-export const HANDLE_TOUCH_AREA = 24; // Larger touch area
 
 const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   selection,
   top,
   left,
 }) => {
-  const normalizedSelection = useMemo(() => {
-    if (!selection) return null;
+  const width = Math.abs(selection.width);
+  const height = Math.abs(selection.height);
+  const rotation = selection.rotation || 0;
 
-    const renderX =
-      selection.width < 0 ? selection.x + selection.width : selection.x;
-    const renderY =
-      selection.height < 0 ? selection.y + selection.height : selection.y;
-    const renderWidth = Math.abs(selection.width);
-    const renderHeight = Math.abs(selection.height);
+  const normalizeRotation = (rad: number): number => {
+    // Normalize to range 0-2π
+    let normalized = rad % (2 * Math.PI);
+    if (normalized < 0) normalized += 2 * Math.PI;
+    return normalized;
+  };
 
-    if (renderWidth === 0 || renderHeight === 0) return null;
+  // Convert rotation to CSS degrees
+  const rotationDeg = (normalizeRotation(rotation) * 180) / Math.PI;
 
-    return { x: renderX, y: renderY, width: renderWidth, height: renderHeight };
-  }, [selection]);
+  // Calculate center for rotation pivot
+  const centerX = width / 2;
+  const centerY = height / 2;
 
-  // Calculate handle positions
-  const handles = useMemo(() => {
-    // Check selection existence and selected status
-    if (!normalizedSelection || !selection) return [];
-
-    const {
-      x: renderX,
-      y: renderY,
-      width: renderWidth,
-      height: renderHeight,
-    } = normalizedSelection;
-
-    const halfW = renderWidth / 2;
-    const halfH = renderHeight / 2;
-
-    // Define all 8 handles
-    const allHandles = [
-      { x: renderX, y: renderY }, // 0: Top-left
-      { x: renderX + halfW, y: renderY }, // 1: Top-middle
-      { x: renderX + renderWidth, y: renderY }, // 2: Top-right
-      { x: renderX + renderWidth, y: renderY + halfH }, // 3: Middle-right
-      { x: renderX + renderWidth, y: renderY + renderHeight }, // 4: Bottom-right
-      { x: renderX + halfW, y: renderY + renderHeight }, // 5: Bottom-middle
-      { x: renderX, y: renderY + renderHeight }, // 6: Bottom-left
-      { x: renderX, y: renderY + halfH }, // 7: Middle-left
-    ];
-
-    // Return only corners if selection is not finalized
-    if (!selection.selected) {
-      return [
-        allHandles[0], // Top-left
-        allHandles[2], // Top-right
-        allHandles[4], // Bottom-right
-        allHandles[6], // Bottom-left
-      ];
-    }
-
-    // Return all handles if selection is finalized
-    return allHandles;
-  }, [normalizedSelection, selection]); // Add selection dependency
-
-  if (!normalizedSelection) {
-    return null;
-  }
-
-  const { width: renderWidth, height: renderHeight } = normalizedSelection;
+  // Calculate position for rotation handle (bottom middle + offset)
+  const rotationHandlePosition = {
+    left: centerX - HANDLE_SIZE / 2,
+    top: height + 30 - HANDLE_SIZE / 2, // Position below the selection
+  };
 
   return (
-    <>
+    <View
+      style={[
+        styles.selectionContainer,
+        {
+          top,
+          left,
+          width,
+          height,
+          transform: [
+            { translateX: centerX },
+            { translateY: centerY },
+            { rotate: `${rotationDeg}deg` },
+            { translateX: -centerX },
+            { translateY: -centerY },
+          ],
+        },
+      ]}
+    >
+      {/* Selection outline */}
+      <View style={styles.selectionBorder} />
+
+      {/* Scaling handles */}
+      <View style={[styles.handle, styles.topLeftHandle]} />
+      <View style={[styles.handle, styles.topCenterHandle]} />
+      <View style={[styles.handle, styles.topRightHandle]} />
+      <View style={[styles.handle, styles.middleRightHandle]} />
+      <View style={[styles.handle, styles.bottomRightHandle]} />
+      <View style={[styles.handle, styles.bottomCenterHandle]} />
+      <View style={[styles.handle, styles.bottomLeftHandle]} />
+      <View style={[styles.handle, styles.middleLeftHandle]} />
+
+      {/* Rotation handle - at the bottom */}
       <View
         style={[
-          styles.selectionBox,
+          styles.rotationHandleLine,
+          { top: height, left: centerX - 1, height: 25 },
+        ]}
+      />
+      <View
+        style={[
+          styles.rotationHandle,
           {
-            left: left,
-            top: top,
-            width: renderWidth,
-            height: renderHeight,
+            left: rotationHandlePosition.left,
+            top: rotationHandlePosition.top,
           },
         ]}
       />
-      {/* Render handles */}
-      {handles.map((handle, index) => (
-        <View
-          key={`handle-${handle.x}-${handle.y}-${index}`}
-          style={[
-            styles.selectionHandle,
-            {
-              left: handle.x - HANDLE_SIZE / 2,
-              top: handle.y - HANDLE_SIZE / 2,
-            },
-          ]}
-        />
-      ))}
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  selectionBox: {
+  selectionContainer: {
     position: 'absolute',
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 134, 223, 0.8)',
-    backgroundColor: 'rgba(0, 134, 223, 0.1)',
-    pointerEvents: 'none', // Allow gestures to pass through
+    pointerEvents: 'none',
   },
-  selectionHandle: {
+  selectionBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderWidth: 2,
+    borderColor: '#4285F4',
+    borderStyle: 'dashed',
+  },
+  handle: {
     position: 'absolute',
     width: HANDLE_SIZE,
     height: HANDLE_SIZE,
-    backgroundColor: 'white',
+    backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: 'rgba(0, 134, 223, 1)',
-    borderRadius: 2,
-    pointerEvents: 'none', // Allow gestures to pass through
+    borderColor: '#4285F4',
+  },
+  topLeftHandle: {
+    top: -HANDLE_SIZE / 2,
+    left: -HANDLE_SIZE / 2,
+  },
+  topCenterHandle: {
+    top: -HANDLE_SIZE / 2,
+    left: '50%',
+    marginLeft: -HANDLE_SIZE / 2,
+  },
+  topRightHandle: {
+    top: -HANDLE_SIZE / 2,
+    right: -HANDLE_SIZE / 2,
+  },
+  middleRightHandle: {
+    top: '50%',
+    marginTop: -HANDLE_SIZE / 2,
+    right: -HANDLE_SIZE / 2,
+  },
+  bottomRightHandle: {
+    bottom: -HANDLE_SIZE / 2,
+    right: -HANDLE_SIZE / 2,
+  },
+  bottomCenterHandle: {
+    bottom: -HANDLE_SIZE / 2,
+    left: '50%',
+    marginLeft: -HANDLE_SIZE / 2,
+  },
+  bottomLeftHandle: {
+    bottom: -HANDLE_SIZE / 2,
+    left: -HANDLE_SIZE / 2,
+  },
+  middleLeftHandle: {
+    top: '50%',
+    marginTop: -HANDLE_SIZE / 2,
+    left: -HANDLE_SIZE / 2,
+  },
+  // Rotation handle styles
+  rotationHandle: {
+    position: 'absolute',
+    width: HANDLE_SIZE,
+    height: HANDLE_SIZE,
+    borderRadius: HANDLE_SIZE / 2,
+    backgroundColor: '#4285F4',
+    borderWidth: 1,
+    borderColor: '#FFF',
+  },
+  rotationHandleLine: {
+    position: 'absolute',
+    width: 2,
+    backgroundColor: '#4285F4',
   },
 });
 

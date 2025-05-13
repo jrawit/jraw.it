@@ -21,6 +21,7 @@ export type Selection = {
   width: number;
   height: number;
   selected: boolean;
+  rotation?: number; // Add rotation property
 };
 
 export const isPointInsideBox = (
@@ -96,22 +97,52 @@ export const calculateBoundingBox = (
         height: actualHeight + rectStrokeWidth,
       };
     case Tools.TRIANGLE:
-      const {
-        point1,
-        point2,
-        point3,
-        strokeWidth: triangleStrokeWidth,
-      } = data as CanvasElements.Triangle;
-      const minXTriangle = Math.min(point1.x, point2.x, point3.x);
-      const minYTriangle = Math.min(point1.y, point2.y, point3.y);
-      const maxXTriangle = Math.max(point1.x, point2.x, point3.x);
-      const maxYTriangle = Math.max(point1.y, point2.y, point3.y);
-      return {
-        x: minXTriangle - triangleStrokeWidth / 2,
-        y: minYTriangle - triangleStrokeWidth / 2,
-        width: maxXTriangle - minXTriangle + triangleStrokeWidth,
-        height: maxYTriangle - minYTriangle + triangleStrokeWidth,
-      };
+      // Check if this is a triangle using the new Path structure (with points)
+      if ('points' in data && (data as CanvasElements.Path).closed === true) {
+        // Handle triangle represented as Path
+        const trianglePath = data as CanvasElements.Path;
+        if (trianglePath.points.length < 3) {
+          // Not enough points for a triangle
+          return null;
+        }
+
+        // Calculate bounding box using points
+        const points = trianglePath.points;
+        const minXTriangle = Math.min(...points.map(point => point.x));
+        const minYTriangle = Math.min(...points.map(point => point.y));
+        const maxXTriangle = Math.max(...points.map(point => point.x));
+        const maxYTriangle = Math.max(...points.map(point => point.y));
+
+        return {
+          x: minXTriangle - trianglePath.strokeWidth / 2,
+          y: minYTriangle - trianglePath.strokeWidth / 2,
+          width: maxXTriangle - minXTriangle + trianglePath.strokeWidth,
+          height: maxYTriangle - minYTriangle + trianglePath.strokeWidth,
+        };
+      } else {
+        // Handle traditional triangle format
+        const {
+          point1,
+          point2,
+          point3,
+          strokeWidth: triangleStrokeWidth,
+        } = data as CanvasElements.Triangle;
+
+        if (!point1 || !point2 || !point3) {
+          return null; // Handle incomplete triangle data
+        }
+
+        const minXTriangle = Math.min(point1.x, point2.x, point3.x);
+        const minYTriangle = Math.min(point1.y, point2.y, point3.y);
+        const maxXTriangle = Math.max(point1.x, point2.x, point3.x);
+        const maxYTriangle = Math.max(point1.y, point2.y, point3.y);
+        return {
+          x: minXTriangle - triangleStrokeWidth / 2,
+          y: minYTriangle - triangleStrokeWidth / 2,
+          width: maxXTriangle - minXTriangle + triangleStrokeWidth,
+          height: maxYTriangle - minYTriangle + triangleStrokeWidth,
+        };
+      }
     case Tools.CIRCLE:
       const {
         center,
@@ -328,5 +359,25 @@ export const calculateElementBoundingBox = (
   boundingBox.y -= margin;
   boundingBox.width += margin * 2;
   boundingBox.height += margin * 2;
+
+  if (element.rotation && boundingBox) {
+    // Calculate a bounding box that encompasses the rotated box
+    const centerX = boundingBox.x + boundingBox.width / 2;
+    const centerY = boundingBox.y + boundingBox.height / 2;
+
+    // For a rotated rectangle, the new width and height can be calculated as:
+    const cos = Math.abs(Math.cos(element.rotation));
+    const sin = Math.abs(Math.sin(element.rotation));
+    const newWidth = boundingBox.width * cos + boundingBox.height * sin;
+    const newHeight = boundingBox.width * sin + boundingBox.height * cos;
+
+    return {
+      x: centerX - newWidth / 2,
+      y: centerY - newHeight / 2,
+      width: newWidth,
+      height: newHeight,
+    };
+  }
+
   return boundingBox;
 };
