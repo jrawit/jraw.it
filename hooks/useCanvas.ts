@@ -1,7 +1,6 @@
 import { HANDLE_TOUCH_AREA } from '@/components/SelectionOverlay';
-import { CanvasElements } from '@/constants/CanvasElement';
+import { CanvasElement, CanvasElements } from '@/constants/CanvasElement';
 import {
-  calculateStarVertices,
   distanceSqFromPointToSegment,
   getPointsOnSmoothedPathQuadratic,
   isPointNearPolygonOutline,
@@ -24,13 +23,6 @@ import toolHandlers from './tool-handlers';
 import { HistoryAction, useCanvasHistory } from './useCanvasHistory';
 // Import the new eraser hit detection utility
 import { eraserHitTest } from '@/utils/eraserHitDetection';
-
-export type CanvasElement = {
-  id: string;
-  element: CanvasElements.Any;
-  tool: Tools;
-  rotation?: number; // Add rotation property to CanvasElement
-};
 
 export type CanvasProps = {
   tool: Tools;
@@ -148,208 +140,86 @@ export const useCanvas = ({
         // Calculate Single Effective Radius - important to match visual size
         const effectiveCheckRadius =
           actualElementStrokeWidth / 2 + eraserRadius;
-        const effectiveCheckRadiusSq = effectiveCheckRadius ** 2;
+        const effectiveCheckRadiusSq = effectiveCheckRadius ** 2; // Only for distanceSq checks
 
-        // Handle triangles specially
-        if (elementTool === Tools.TRIANGLE) {
-          const triangleData = elementData as CanvasElements.Triangle;
+        // For Path-based elements (PEN, HIGHLIGHTER, RECTANGLE, CIRCLE, STAR, TRIANGLE)
+        // their rotation should be 0, and points are in world space.
+        // If elementRotation is used, points need to be transformed first.
+        // Assuming for these new path-based shapes, elementRotation is 0.
 
-          // Early exit if we don't have valid triangle data
-          if (
-            !triangleData?.point1 ||
-            !triangleData?.point2 ||
-            !triangleData?.point3
-          )
-            continue;
-
-          // Get the original triangle vertices
-          const vertices = [
-            triangleData.point1,
-            triangleData.point2,
-            triangleData.point3,
-          ];
-
-          // Calculate the centroid (center point) of the triangle
-          const centroidX =
-            (triangleData.point1.x +
-              triangleData.point2.x +
-              triangleData.point3.x) /
-            3;
-          const centroidY =
-            (triangleData.point1.y +
-              triangleData.point2.y +
-              triangleData.point3.y) /
-            3;
-          const centroid = { x: centroidX, y: centroidY };
-
-          // Apply rotation to the vertices if needed
-          const transformedVertices = elementRotation
-            ? vertices.map(v => {
-                // Translate to origin (relative to centroid)
-                const dx = v.x - centroid.x;
-                const dy = v.y - centroid.y;
-
-                // Apply rotation
-                const cos = Math.cos(elementRotation);
-                const sin = Math.sin(elementRotation);
-                const rotatedX = dx * cos - dy * sin;
-                const rotatedY = dx * sin + dy * cos;
-
-                // Translate back
-                return {
-                  x: rotatedX + centroid.x,
-                  y: rotatedY + centroid.y,
-                };
-              })
-            : vertices;
-
-          // Check each edge of the triangle
-          for (let j = 0; j < 3; j++) {
-            const start = transformedVertices[j];
-            const end = transformedVertices[(j + 1) % 3]; // Loop back to the first vertex
-
-            // Calculate distance from point to this edge
-            const edgeDistSq = distanceSqFromPointToSegment(
-              x,
-              y,
-              start.x,
-              start.y,
-              end.x,
-              end.y
-            );
-
-            // If the point is close enough to any edge, we have a hit
-            if (edgeDistSq <= effectiveCheckRadiusSq) {
-              return element.id;
-            }
-          }
-
-          // No hit on any edge
-          continue;
-        }
-
-        // Broad phase check
-        const bboxPadding =
-          tool === Tools.ERASER ? effectiveCheckRadius : effectiveCheckRadius;
+        const bboxPadding = effectiveCheckRadius; // Simplified padding
         const bbox = calculateElementBoundingBox(element, bboxPadding, fm);
         if (!bbox || !isPointInsideBox(point, bbox)) {
           continue;
         }
 
-        // Precise phase: Use the single effectiveCheckRadius or its square
+        // Precise phase
         switch (elementTool) {
           case Tools.PEN:
           case Tools.HIGHLIGHTER: {
             const pathData = elementData as CanvasElements.Path;
             if (!pathData?.points || pathData.points.length < 1) break;
 
-            // Calculate the center of the path for rotation
-            let minX = Infinity,
-              minY = Infinity,
-              maxX = -Infinity,
-              maxY = -Infinity;
-            for (const pt of pathData.points) {
-              minX = Math.min(minX, pt.x);
-              minY = Math.min(minY, pt.y);
-              maxX = Math.max(maxX, pt.x);
-              maxY = Math.max(maxY, pt.y);
+            // PEN/HIGHLIGHTER might have their own rotation if not baked into points by their specific rotateElement
+            // The PEN.rotateElement now bakes it, so elementRotation should be 0.
+            // If elementRotation is not 0, transform points:
+            let transformedPoints = pathData.points;
+            if (elementRotation) {
+              let minPathX = Infinity,
+                minPathY = Infinity,
+                maxPathX = -Infinity,
+                maxPathY = -Infinity;
+              pathData.points.forEach(pt => {
+                minPathX = Math.min(minPathX, pt.x);
+                minPathY = Math.min(minPathY, pt.y);
+                maxPathX = Math.max(maxPathX, pt.x);
+                maxPathY = Math.max(maxPathY, pt.y);
+              });
+              const pathCenterX = (minPathX + maxPathX) / 2;
+              const pathCenterY = (minPathY + maxPathY) / 2;
+              const cosR = Math.cos(elementRotation);
+              const sinR = Math.sin(elementRotation);
+              transformedPoints = pathData.points.map(pt => {
+                const dx = pt.x - pathCenterX;
+                const dy = pt.y - pathCenterY;
+                return {
+                  x: pathCenterX + (dx * cosR - dy * sinR),
+                  y: pathCenterY + (dx * sinR + dy * cosR),
+                };
+              });
             }
-            const centerX = (minX + maxX) / 2;
-            const centerY = (minY + maxY) / 2;
 
-            // Transform all points according to their rotation
-            const transformedPoints = pathData.points.map(pt => {
-              if (!elementRotation) return pt;
-
-              // Apply rotation transformation around center
-              const dx = pt.x - centerX;
-              const dy = pt.y - centerY;
-              const cos = Math.cos(elementRotation);
-              const sin = Math.sin(elementRotation);
-
-              return {
-                x: centerX + (dx * cos - dy * sin),
-                y: centerY + (dx * sin + dy * cos),
-              };
-            });
-
-            // Calculate a more precise radius specifically for pen/highlighter
             const penPrecisionFactor = tool === Tools.ERASER ? 0.75 : 1.0;
             const penCheckRadius = effectiveCheckRadius * penPrecisionFactor;
 
             const smoothedPoints = getPointsOnSmoothedPathQuadratic(
-              transformedPoints,
+              transformedPoints, // Use potentially rotated points
               10
             );
 
-            // Use the transformed points for detection
             if (isPointNearPolyline(point, smoothedPoints, penCheckRadius)) {
               return element.id;
             }
             break;
           }
-          case Tools.CIRCLE: {
-            const circleData = elementData as CanvasElements.Circle;
-            if (!circleData?.center) break;
-
-            // For rotated ellipses, we need a different approach
-            if (elementRotation && circleData.radiusX !== circleData.radiusY) {
-              // Transform the test point to the ellipse's coordinate system
-              const centerX = circleData.center.x;
-              const centerY = circleData.center.y;
-
-              // First, translate to origin
-              const translatedX = x - centerX;
-              const translatedY = y - centerY;
-
-              // Then rotate backwards by elementRotation
-              const cos = Math.cos(-elementRotation);
-              const sin = Math.sin(-elementRotation);
-              const rotatedX = translatedX * cos - translatedY * sin;
-              const rotatedY = translatedX * sin + translatedY * cos;
-
-              // Check if the point is near the ellipse in its unrotated form
-              const normalizedDistSq =
-                (rotatedX * rotatedX) /
-                  (circleData.radiusX * circleData.radiusX) +
-                (rotatedY * rotatedY) /
-                  (circleData.radiusY * circleData.radiusY);
-
-              const strokeFactor =
-                effectiveCheckRadius /
-                Math.min(circleData.radiusX, circleData.radiusY);
-
-              const outerThreshold = strokeFactor * 2; // Allow detection slightly outside
-              const innerThreshold = strokeFactor * 2; // Allow detection slightly inside
-
-              if (
-                normalizedDistSq <= 1 + outerThreshold &&
-                normalizedDistSq >= 1 - innerThreshold
-              ) {
-                return element.id;
-              }
-            } else {
-              // For perfect circles or unrotated ellipses, use the original method
-              const dx = x - circleData.center.x;
-              const dy = y - circleData.center.y;
-
-              const normalizedDistSq =
-                (dx * dx) / (circleData.radiusX * circleData.radiusX) +
-                (dy * dy) / (circleData.radiusY * circleData.radiusY);
-
-              const strokeFactor =
-                effectiveCheckRadius /
-                Math.min(circleData.radiusX, circleData.radiusY);
-
-              const outerThreshold = strokeFactor * 2;
-              const innerThreshold = strokeFactor * 2;
-
-              if (
-                normalizedDistSq <= 1 + outerThreshold &&
-                normalizedDistSq >= 1 - innerThreshold
-              ) {
-                return element.id;
-              }
+          case Tools.CIRCLE:
+          case Tools.RECTANGLE:
+          case Tools.STAR:
+          case Tools.TRIANGLE: {
+            // All these are now CanvasElements.Path
+            const pathData = elementData as CanvasElements.Path;
+            if (!pathData?.points || pathData.points.length < 2) break;
+            // These shapes should have elementRotation = 0 as rotation is baked into points.
+            // If elementRotation is present, points would need transformation.
+            // For now, assume points are world-space.
+            if (
+              isPointNearPolygonOutline(
+                point,
+                pathData.points,
+                effectiveCheckRadius
+              )
+            ) {
+              return element.id;
             }
             break;
           }
@@ -374,7 +244,7 @@ export const useCanvas = ({
 
               startPoint = {
                 x: centerX + (startDx * cos - startDy * sin),
-                y: centerY + (startDx * sin + startDy * cos),
+                y: centerX + (startDx * sin + startDy * cos),
               };
 
               // Apply rotation to end point
@@ -383,7 +253,7 @@ export const useCanvas = ({
 
               endPoint = {
                 x: centerX + (endDx * cos - endDy * sin),
-                y: centerY + (endDx * sin + endDy * cos),
+                y: centerX + (endDx * sin + endDy * cos),
               };
             }
 
@@ -401,90 +271,11 @@ export const useCanvas = ({
             }
             break;
           }
-          case Tools.RECTANGLE:
-          case Tools.STAR: {
-            let vertices: Array<{ x: number; y: number }> = [];
-
-            if (elementTool === Tools.RECTANGLE) {
-              const rectData = elementData as CanvasElements.Rectangle;
-              if (!rectData?.point) break;
-
-              // Get the four corners of the rectangle
-              const topLeft = rectData.point;
-              const topRight = { x: topLeft.x + rectData.width, y: topLeft.y };
-              const bottomRight = {
-                x: topLeft.x + rectData.width,
-                y: topLeft.y + rectData.height,
-              };
-              const bottomLeft = {
-                x: topLeft.x,
-                y: topLeft.y + rectData.height,
-              };
-
-              // Transform corners according to rotation
-              vertices = [topLeft, topRight, bottomRight, bottomLeft];
-
-              if (elementRotation) {
-                // Calculate the center of the rectangle for rotation
-                const centerX = topLeft.x + rectData.width / 2;
-                const centerY = topLeft.y + rectData.height / 2;
-
-                vertices = vertices.map(corner => {
-                  const dx = corner.x - centerX;
-                  const dy = corner.y - centerY;
-                  const cos = Math.cos(elementRotation);
-                  const sin = Math.sin(elementRotation);
-
-                  return {
-                    x: centerX + (dx * cos - dy * sin),
-                    y: centerY + (dx * sin + dy * cos),
-                  };
-                });
-              }
-            } else if (elementTool === Tools.STAR) {
-              const starData = elementData as CanvasElements.Star;
-              if (!starData?.point || !starData?.radius || !starData?.spikes)
-                break;
-
-              // Calculate star vertices
-              vertices = calculateStarVertices(
-                starData.point,
-                starData.radius,
-                0.5, // innerRadiusRatio (default)
-                starData.spikes
-              );
-
-              // Transform vertices according to rotation
-              if (elementRotation) {
-                const centerX = starData.point.x;
-                const centerY = starData.point.y;
-
-                vertices = vertices.map(vertex => {
-                  const dx = vertex.x - centerX;
-                  const dy = vertex.y - centerY;
-                  const cos = Math.cos(elementRotation);
-                  const sin = Math.sin(elementRotation);
-
-                  return {
-                    x: centerX + (dx * cos - dy * sin),
-                    y: centerY + (dx * sin + dy * cos),
-                  };
-                });
-              }
-            }
-
-            // Only test if we have vertices
-            if (
-              vertices.length > 0 &&
-              isPointNearPolygonOutline(point, vertices, effectiveCheckRadius)
-            ) {
-              return element.id;
-            }
-            break;
-          }
           case Tools.IMAGE:
-          case Tools.TEXT:
-            return element.id;
+          case Tools.TEXT: // Text and Image have their own bounding box logic / simple point
+            // For Text/Image, bbox check might be enough, or add specific logic if needed.
+            // If bbox passed, consider it a hit for simplicity for now.
+            return element.id; // Fallback to bbox for these
         }
       }
       return null;
@@ -1330,40 +1121,6 @@ export const useCanvas = ({
     );
   }
 
-  function isRectangle(
-    element: CanvasElements.Any
-  ): element is CanvasElements.Rectangle {
-    return (
-      (element as CanvasElements.Rectangle).point !== undefined &&
-      (element as CanvasElements.Rectangle).width !== undefined &&
-      (element as CanvasElements.Rectangle).height !== undefined
-    );
-  }
-
-  function isTriangle(
-    element: CanvasElements.Any
-  ): element is CanvasElements.Triangle {
-    return (
-      (element as CanvasElements.Triangle).point1 !== undefined &&
-      (element as CanvasElements.Triangle).point2 !== undefined &&
-      (element as CanvasElements.Triangle).point3 !== undefined
-    );
-  }
-
-  function isCircle(
-    element: CanvasElements.Any
-  ): element is CanvasElements.Circle {
-    return 'center' in element && 'radiusX' in element && 'radiusY' in element;
-  }
-
-  function isStar(element: CanvasElements.Any): element is CanvasElements.Star {
-    return (
-      (element as CanvasElements.Star).point !== undefined &&
-      (element as CanvasElements.Star).radius !== undefined &&
-      (element as CanvasElements.Star).spikes !== undefined
-    );
-  }
-
   function isText(element: CanvasElements.Any): element is CanvasElements.Text {
     return (
       (element as CanvasElements.Text).point !== undefined &&
@@ -1394,6 +1151,7 @@ export const useCanvas = ({
           newElement.id = generateId(); // Generate a new ID for the duplicate
 
           // Check element type and apply appropriate offset
+          // Rectangle, Circle, Star, Triangle are now Paths, handled by isPath
           if (isPath(newElement.element)) {
             newElement.element.points = newElement.element.points.map(
               point => ({
@@ -1409,42 +1167,6 @@ export const useCanvas = ({
             newElement.element.endPoint = {
               x: newElement.element.endPoint.x + OFFSET,
               y: newElement.element.endPoint.y + OFFSET,
-            };
-          } else if (isRectangle(newElement.element)) {
-            newElement.element.point = {
-              x: newElement.element.point.x + OFFSET,
-              y: newElement.element.point.y + OFFSET,
-            };
-          } else if (isTriangle(newElement.element)) {
-            newElement.element.point1 = {
-              x: newElement.element.point1.x + OFFSET,
-              y: newElement.element.point1.y + OFFSET,
-            };
-            newElement.element.point2 = {
-              x: newElement.element.point2.x + OFFSET,
-              y: newElement.element.point2.y + OFFSET,
-            };
-            newElement.element.point3 = {
-              x: newElement.element.point3.x + OFFSET,
-              y: newElement.element.point3.y + OFFSET,
-            };
-          } else if (isCircle(newElement.element)) {
-            // Add debug log to verify type guard is working
-            console.log('Duplicating Circle:', newElement.element);
-
-            // Ensure we're modifying a properly typed object
-            const circleElement = newElement.element as CanvasElements.Circle;
-            circleElement.center = {
-              x: circleElement.center.x + OFFSET,
-              y: circleElement.center.y + OFFSET,
-            };
-
-            // Log after modification to verify changes
-            console.log('After duplication:', circleElement.center);
-          } else if (isStar(newElement.element)) {
-            newElement.element.point = {
-              x: newElement.element.point.x + OFFSET,
-              y: newElement.element.point.y + OFFSET,
             };
           } else if (isText(newElement.element)) {
             newElement.element.point = {

@@ -39,8 +39,6 @@ export function isPointInsideTriangle(
   return !(has_neg && has_pos);
 }
 
-type Point = { x: number; y: number };
-
 export function calculateStarVertices(
   center: Point,
   outerRadius: number,
@@ -244,3 +242,39 @@ export function isPointNearPolyline(
   // console.log("  => Polyline No Hit"); // DEBUG
   return false;
 }
+
+// Added Point type if not already present, or ensure it's imported/compatible
+type Point = { x: number; y: number };
+
+export const getCirclePoints = (
+  center: Point,
+  radiusX: number,
+  radiusY: number,
+  segments: number = 36
+): Point[] => {
+  const points: Point[] = [];
+  if (radiusX <= 0 || radiusY <= 0) return [center, center]; // Degenerate case
+  for (let i = 0; i < segments; i++) {
+    const angle = (i / segments) * 2 * Math.PI;
+    points.push({
+      x: center.x + radiusX * Math.cos(angle),
+      y: center.y + radiusY * Math.sin(angle),
+    });
+  }
+  return points;
+};
+
+export const getRectanglePoints = (
+  topLeft: Point,
+  width: number,
+  height: number
+): Point[] => {
+  return [
+    topLeft,
+    { x: topLeft.x + width, y: topLeft.y },
+    { x: topLeft.x + width, y: topLeft.y + height },
+    { x: topLeft.x, y: topLeft.y + height },
+  ];
+};
+
+// Function to generate points along a path smoothed with quadratic Bezier curves

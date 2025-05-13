@@ -80,126 +80,29 @@ export const calculateBoundingBox = (
         height: Math.abs(startPoint.y - endPoint.y) + lineStrokeWidth,
       };
     case Tools.RECTANGLE:
-      const {
-        point,
-        width,
-        height,
-        strokeWidth: rectStrokeWidth = 0,
-      } = data as CanvasElements.Rectangle;
-      const halfRectStrokeWidth = rectStrokeWidth / 2;
-      // Normalize coordinates and dimensions for bounding box calculation
-      const actualX = width < 0 ? point.x + width : point.x;
-      const actualY = height < 0 ? point.y + height : point.y;
-      const actualWidth = Math.abs(width);
-      const actualHeight = Math.abs(height);
-
-      return {
-        x: actualX - halfRectStrokeWidth,
-        y: actualY - halfRectStrokeWidth,
-        width: actualWidth + rectStrokeWidth,
-        height: actualHeight + rectStrokeWidth,
-      };
-    case Tools.TRIANGLE:
-      // Check if this is a triangle using the new Path structure (with points)
-      if ('points' in data && (data as CanvasElements.Path).closed === true) {
-        // Handle triangle represented as Path
-        const trianglePath = data as CanvasElements.Path;
-        if (trianglePath.points.length < 3) {
-          // Not enough points for a triangle
-          return null;
-        }
-
-        // Calculate bounding box using points
-        const triPoints = trianglePath.points;
-        const minXTriangle = Math.min(...triPoints.map(point => point.x));
-        const minYTriangle = Math.min(...triPoints.map(point => point.y));
-        const maxXTriangle = Math.max(...triPoints.map(point => point.x));
-        const maxYTriangle = Math.max(...triPoints.map(point => point.y));
-
-        // Use the same generous stroke allowance as for PEN/HIGHLIGHTER
-        const triangleStrokeAllowance = trianglePath.strokeWidth; // Increased
-
-        return {
-          x: minXTriangle - triangleStrokeAllowance,
-          y: minYTriangle - triangleStrokeAllowance,
-          width: maxXTriangle - minXTriangle + 2 * triangleStrokeAllowance,
-          height: maxYTriangle - minYTriangle + 2 * triangleStrokeAllowance,
-        };
-      } else {
-        // Handle traditional triangle format
-        const {
-          point1,
-          point2,
-          point3,
-          strokeWidth: triangleStrokeWidth,
-        } = data as CanvasElements.Triangle;
-
-        if (!point1 || !point2 || !point3) {
-          return null; // Handle incomplete triangle data
-        }
-
-        const minXTriangle = Math.min(point1.x, point2.x, point3.x);
-        const minYTriangle = Math.min(point1.y, point2.y, point3.y);
-        const maxXTriangle = Math.max(point1.x, point2.x, point3.x);
-        const maxYTriangle = Math.max(point1.y, point2.y, point3.y);
-        return {
-          x: minXTriangle - triangleStrokeWidth / 2,
-          y: minYTriangle - triangleStrokeWidth / 2,
-          width: maxXTriangle - minXTriangle + triangleStrokeWidth,
-          height: maxYTriangle - minYTriangle + triangleStrokeWidth,
-        };
-      }
     case Tools.CIRCLE:
-      const {
-        center,
-        radiusX,
-        radiusY,
-        strokeWidth: circleStrokeWidth = 0,
-      } = data as CanvasElements.Circle;
-      const halfCircleStrokeWidth = circleStrokeWidth / 2;
-      return {
-        x: center.x - radiusX - halfCircleStrokeWidth,
-        y: center.y - radiusY - halfCircleStrokeWidth,
-        width: radiusX * 2 + circleStrokeWidth,
-        height: radiusY * 2 + circleStrokeWidth,
-      };
-    case Tools.STAR:
-      const {
-        point: pointStar,
-        radius: radiusStar,
-        spikes,
-        strokeWidth: starStrokeWidth = 0,
-      } = data as CanvasElements.Star;
+    case Tools.TRIANGLE:
+    case Tools.STAR: {
+      // All these shapes are now CanvasElements.Path
+      const pathData = data as CanvasElements.Path;
+      if (!pathData.points || pathData.points.length === 0) return null;
 
-      const path = Skia.Path.Make();
+      const { points, strokeWidth = 0 } = pathData;
+      const minX = Math.min(...points.map(point => point.x));
+      const minY = Math.min(...points.map(point => point.y));
+      const maxX = Math.max(...points.map(point => point.x));
+      const maxY = Math.max(...points.map(point => point.y));
 
-      const angle = (Math.PI * 2) / spikes;
-      const halfAngle = angle / 2;
-      const innerRadius = radiusStar / 2;
-      path.moveTo(pointStar.x, pointStar.y - radiusStar);
-      for (let i = 0; i < spikes; i++) {
-        const x = pointStar.x + radiusStar * Math.sin(i * angle);
-        const y = pointStar.y - radiusStar * Math.cos(i * angle);
-        path.lineTo(x, y);
-        const innerX =
-          pointStar.x + innerRadius * Math.sin(i * angle + halfAngle);
-        const innerY =
-          pointStar.y - innerRadius * Math.cos(i * angle + halfAngle);
-        path.lineTo(innerX, innerY);
-      }
-      path.lineTo(pointStar.x, pointStar.y - radiusStar);
-
-      path.close();
-
-      const bounds = path.getBounds();
-      path.dispose();
+      // Consistent stroke allowance for all path-based shapes
+      const pathStrokeAllowance = strokeWidth;
 
       return {
-        x: bounds.x - starStrokeWidth,
-        y: bounds.y - starStrokeWidth,
-        width: bounds.width + starStrokeWidth * 2,
-        height: bounds.height + starStrokeWidth * 2,
+        x: minX - pathStrokeAllowance,
+        y: minY - pathStrokeAllowance,
+        width: maxX - minX + 2 * pathStrokeAllowance,
+        height: maxY - minY + 2 * pathStrokeAllowance,
       };
+    }
     case Tools.TEXT:
       const {
         text,

@@ -1,7 +1,10 @@
 import { CanvasElements } from '@/constants/CanvasElement';
 import { Tools } from '@/constants/Tools';
 import { CanvasElement } from '@/hooks/useCanvas';
-import { calculateStarVertices } from './geometryUtils';
+import {
+  getPointsOnSmoothedPathQuadratic,
+  isPointNearPolygonOutline,
+} from './geometryUtils';
 
 // Point interface for consistent type usage
 export interface Point {
@@ -97,14 +100,6 @@ export const getTriangleCenter = (
   }
 };
 
-// Calculate the center of a rectangle
-export const getRectangleCenter = (rect: CanvasElements.Rectangle): Point => {
-  return {
-    x: rect.point.x + rect.width / 2,
-    y: rect.point.y + rect.height / 2,
-  };
-};
-
 // Calculate the center of a path
 export const getPathCenter = (path: CanvasElements.Path): Point => {
   let minX = Infinity,
@@ -133,319 +128,54 @@ export const getLineCenter = (line: CanvasElements.Line): Point => {
   };
 };
 
-// Calculate the center of a star
-export const getStarCenter = (star: CanvasElements.Star): Point => {
-  return star.point;
-};
-
-// Check if a point is near a triangle (considering rotation)
-export const isPointNearTriangle = (
+// Helper: Check if point is near a path (polyline)
+const isPointNearPath = (
   point: Point,
-  triangle: CanvasElements.Path | CanvasElements.Triangle,
-  rotation: number = 0,
-  threshold: number = 5
+  pathData: CanvasElements.Path,
+  eraserRadius: number
 ): boolean => {
-  // If triangle is represented as Path (new format), use the path hit detection logic
-  if ('points' in triangle && triangle.closed) {
-    return isPointNearPath(
-      point,
-      triangle as CanvasElements.Path,
-      rotation,
-      threshold
-    );
-  }
+  if (!pathData.points || pathData.points.length < 1) return false;
+  // For smoother paths like PEN, consider using a smoothed version for hit detection
+  const smoothedPoints = getPointsOnSmoothedPathQuadratic(pathData.points, 5); // Density can be adjusted
 
-  // For traditional Triangle format, convert to path points first
-  let pathPoints: Point[] = [];
+  const checkRadius = eraserRadius + (pathData.strokeWidth || 0) / 2;
 
-  if ('points' in triangle) {
-    // Path-based triangle (new format)
-    if (!triangle.points || triangle.points.length < 3) {
-      return false; // Invalid triangle
-    }
-    pathPoints = [...triangle.points];
-    // Close the path by adding the first point again
+  for (let i = 0; i < smoothedPoints.length - 1; i++) {
     if (
-      pathPoints.length >= 3 &&
-      (pathPoints[0].x !== pathPoints[pathPoints.length - 1].x ||
-        pathPoints[0].y !== pathPoints[pathPoints.length - 1].y)
-    ) {
-      pathPoints.push({ ...pathPoints[0] });
-    }
-  } else {
-    // Traditional Triangle format
-    const { point1, point2, point3 } = triangle as CanvasElements.Triangle;
-    if (!point1 || !point2 || !point3) {
-      return false; // Invalid triangle
-    }
-    pathPoints = [point1, point2, point3, point1]; // Closed path
-  }
-
-  // Create a temporary path object
-  const tempPath: CanvasElements.Path = {
-    points: pathPoints,
-    strokeWidth: 'strokeWidth' in triangle ? triangle.strokeWidth : 1,
-    strokeColor: 'strokeColor' in triangle ? triangle.strokeColor : '#000000',
-  };
-
-  // Use the same logic as path hit detection
-  return isPointNearPath(point, tempPath, rotation, threshold);
-};
-
-// Check if a point is near a rectangle (considering rotation)
-export const isPointNearRectangle = (
-  point: Point,
-  rect: CanvasElements.Rectangle,
-  rotation: number = 0,
-  threshold: number = 5
-): boolean => {
-  const center = getRectangleCenter(rect);
-
-  // Get the four corners of the rectangle
-  const corners = [
-    { x: rect.point.x, y: rect.point.y },
-    { x: rect.point.x + rect.width, y: rect.point.y },
-    { x: rect.point.x + rect.width, y: rect.point.y + rect.height },
-    { x: rect.point.x, y: rect.point.y + rect.height },
-  ];
-
-  // Transform corners if the rectangle is rotated
-  let transformedCorners = corners;
-  if (rotation) {
-    transformedCorners = corners.map(corner =>
-      rotatePoint(corner, center, rotation)
-    );
-  }
-
-  // Check if the point is near any edge
-  for (let i = 0; i < 4; i++) {
-    const start = transformedCorners[i];
-    const end = transformedCorners[(i + 1) % 4];
-
-    const distSq = distanceSqFromPointToSegment(
-      point.x,
-      point.y,
-      start.x,
-      start.y,
-      end.x,
-      end.y
-    );
-
-    if (distSq <= threshold * threshold) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-// Check if a point is near a circle/oval (considering rotation)
-export const isPointNearCircle = (
-  point: Point,
-  circle: CanvasElements.Circle,
-  rotation: number = 0,
-  threshold: number = 5
-): boolean => {
-  const { center, radiusX, radiusY } = circle;
-
-  // For a rotated ellipse, we need to transform the test point
-  if (rotation && radiusX !== radiusY) {
-    // Apply inverse rotation to the test point
-    const cos = Math.cos(-rotation);
-    const sin = Math.sin(-rotation);
-
-    const dx = point.x - center.x;
-    const dy = point.y - center.y;
-
-    const rotatedX = dx * cos - dy * sin;
-    const rotatedY = dx * sin + dy * cos;
-
-    // Calculate normalized distance to ellipse
-    const normalizedDist = Math.sqrt(
-      (rotatedX * rotatedX) / (radiusX * radiusX) +
-        (rotatedY * rotatedY) / (radiusY * radiusY)
-    );
-
-    // Check if point is near the ellipse edge
-    const normalizedThreshold = threshold / Math.min(radiusX, radiusY);
-    return Math.abs(normalizedDist - 1) <= normalizedThreshold;
-  }
-
-  // For circles or non-rotated ellipses
-  const dx = point.x - center.x;
-  const dy = point.y - center.y;
-
-  const normalizedDistSq =
-    (dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY);
-
-  const normalizedThreshold = threshold / Math.min(radiusX, radiusY);
-  return Math.abs(Math.sqrt(normalizedDistSq) - 1) <= normalizedThreshold;
-};
-
-// Check if a point is near a line (considering rotation)
-export const isPointNearLine = (
-  point: Point,
-  line: CanvasElements.Line,
-  rotation: number = 0,
-  threshold: number = 5
-): boolean => {
-  if (!rotation) {
-    // No rotation, just use simple distance check
-    return (
       distanceSqFromPointToSegment(
         point.x,
         point.y,
-        line.startPoint.x,
-        line.startPoint.y,
-        line.endPoint.x,
-        line.endPoint.y
+        smoothedPoints[i].x,
+        smoothedPoints[i].y,
+        smoothedPoints[i + 1].x,
+        smoothedPoints[i + 1].y
       ) <=
-      threshold * threshold
-    );
+      checkRadius * checkRadius
+    ) {
+      return true;
+    }
   }
+  return false;
+};
 
-  // With rotation, transform the point relative to the line's center
-  const center = getLineCenter(line);
-
-  // Apply inverse rotation to the test point
-  const cos = Math.cos(-rotation);
-  const sin = Math.sin(-rotation);
-
-  const dx = point.x - center.x;
-  const dy = point.y - center.y;
-
-  const testPoint = {
-    x: center.x + (dx * cos - dy * sin),
-    y: center.y + (dx * sin + dy * cos),
-  };
-
-  // Now check against the unrotated line
-  const rotatedStart = rotatePoint(line.startPoint, center, -rotation);
-  const rotatedEnd = rotatePoint(line.endPoint, center, -rotation);
-
+// Helper: Check if point is near a line segment
+const isPointNearLine = (
+  point: Point,
+  lineData: CanvasElements.Line,
+  eraserRadius: number
+): boolean => {
+  const checkRadius = eraserRadius + (lineData.strokeWidth || 0) / 2;
   return (
     distanceSqFromPointToSegment(
-      testPoint.x,
-      testPoint.y,
-      rotatedStart.x,
-      rotatedStart.y,
-      rotatedEnd.x,
-      rotatedEnd.y
-    ) <=
-    threshold * threshold
-  );
-};
-
-// Check if a point is near a star (considering rotation)
-export const isPointNearStar = (
-  point: Point,
-  star: CanvasElements.Star,
-  rotation: number = 0,
-  threshold: number = 5
-): boolean => {
-  // Calculate star vertices
-  const vertices = calculateStarVertices(
-    star.point,
-    star.radius,
-    0.5, // innerRadiusRatio (default)
-    star.spikes
-  );
-
-  // Transform vertices if star is rotated
-  let transformedVertices = vertices;
-  if (rotation) {
-    transformedVertices = vertices.map(vertex =>
-      rotatePoint(vertex, star.point, rotation)
-    );
-  }
-
-  // Check if point is near any edge of the star
-  for (let i = 0; i < transformedVertices.length; i++) {
-    const start = transformedVertices[i];
-    const end = transformedVertices[(i + 1) % transformedVertices.length];
-
-    const distSq = distanceSqFromPointToSegment(
       point.x,
       point.y,
-      start.x,
-      start.y,
-      end.x,
-      end.y
-    );
-
-    if (distSq <= threshold * threshold) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-// Check if a point is near a path (considering rotation)
-export const isPointNearPath = (
-  point: Point,
-  path: CanvasElements.Path,
-  rotation: number = 0,
-  threshold: number = 5
-): boolean => {
-  if (!path.points || path.points.length < 2) return false;
-
-  if (!rotation) {
-    // No rotation, check directly against path segments
-    for (let i = 1; i < path.points.length; i++) {
-      const distSq = distanceSqFromPointToSegment(
-        point.x,
-        point.y,
-        path.points[i - 1].x,
-        path.points[i - 1].y,
-        path.points[i].x,
-        path.points[i].y
-      );
-
-      if (distSq <= threshold * threshold) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // For rotated path, transform the test point
-  const center = getPathCenter(path);
-
-  // Apply inverse rotation to the point
-  const cos = Math.cos(-rotation);
-  const sin = Math.sin(-rotation);
-
-  const dx = point.x - center.x;
-  const dy = point.y - center.y;
-
-  const testPoint = {
-    x: center.x + (dx * cos - dy * sin),
-    y: center.y + (dx * sin + dy * cos),
-  };
-
-  // Transform all path points
-  const transformedPoints = path.points.map(pathPoint =>
-    rotatePoint(pathPoint, center, -rotation)
+      lineData.startPoint.x,
+      lineData.startPoint.y,
+      lineData.endPoint.x,
+      lineData.endPoint.y
+    ) <=
+    checkRadius * checkRadius
   );
-
-  // Check against the transformed path
-  for (let i = 1; i < transformedPoints.length; i++) {
-    const distSq = distanceSqFromPointToSegment(
-      testPoint.x,
-      testPoint.y,
-      transformedPoints[i - 1].x,
-      transformedPoints[i - 1].y,
-      transformedPoints[i].x,
-      transformedPoints[i].y
-    );
-
-    if (distSq <= threshold * threshold) {
-      return true;
-    }
-  }
-
-  return false;
 };
 
 // Main function to check if the eraser hit an element
@@ -483,49 +213,17 @@ export const eraserHitTest = (
       );
 
     case Tools.RECTANGLE:
-      return isPointNearRectangle(
-        point,
-        elementData as CanvasElements.Rectangle,
-        rotation,
-        threshold + (elementData as CanvasElements.Rectangle).strokeWidth / 2
-      );
-
-    case Tools.TRIANGLE:
-      // If triangle is stored as Path (new format)
-      if (
-        'points' in elementData &&
-        (elementData as CanvasElements.Path).closed
-      ) {
-        return isPointNearPath(
-          point,
-          elementData as CanvasElements.Path,
-          rotation,
-          threshold
-        );
-      }
-      // Otherwise use triangle hit detection
-      return isPointNearTriangle(
-        point,
-        elementData as any, // Handle both Path and Triangle formats
-        rotation,
-        threshold
-      );
-
     case Tools.CIRCLE:
-      return isPointNearCircle(
-        point,
-        elementData as CanvasElements.Circle,
-        rotation,
-        threshold + (elementData as CanvasElements.Circle).strokeWidth / 2
-      );
-
     case Tools.STAR:
-      return isPointNearStar(
-        point,
-        elementData as CanvasElements.Star,
-        rotation,
-        threshold + (elementData as CanvasElements.Star).strokeWidth / 2
-      );
+    case Tools.TRIANGLE: {
+      const pathData = elementData as CanvasElements.Path;
+      if (!pathData.points || pathData.points.length < 2) return false;
+      // For closed shapes, isPointNearPolygonOutline is more suitable.
+      // It checks proximity to edges and also if the point is inside (for filled region).
+      // The eraser should hit if near the outline.
+      const checkRadius = eraserRadius + (pathData.strokeWidth || 0) / 2;
+      return isPointNearPolygonOutline(point, pathData.points, checkRadius);
+    }
 
     default:
       return false;

@@ -1,85 +1,51 @@
 import { CanvasElements } from '@/constants/CanvasElement';
-import { CanvasElement } from '@/hooks/useCanvas';
-import { Paint, Path, Skia } from '@shopify/react-native-skia';
-import React, { useMemo } from 'react';
+// import { CanvasElement } from '@/hooks/useCanvas'; // Not needed if rotation is baked
+// import { Paint, Path, Skia } from '@shopify/react-native-skia'; // Reduce imports
+// import { SkCanvas, SkPaint, PaintStyle } from '@shopify/react-native-skia'; // For renderTriangle
+import React from 'react';
+import { Path as SkPathRenderer } from './Path'; // Use the generic Path renderer
 
 interface TriangleProps {
-  triangleData: CanvasElements.Path | CanvasElements.Triangle;
-  elementData?: CanvasElement;
+  // triangleData: CanvasElements.Path | CanvasElements.Triangle; // Old type
+  triangleData: CanvasElements.Path; // New type: Triangle is represented as a Path
+  // elementData?: CanvasElement; // Not needed if rotation is baked
 }
 
-export const Triangle: React.FC<TriangleProps> = ({
-  triangleData,
-  elementData,
-}) => {
-  // Extract stroke and fill properties that are common to both Path and Triangle
-  const strokeColor = triangleData.strokeColor;
-  const strokeWidth = triangleData.strokeWidth;
-  const fillColor =
-    'fillColor' in triangleData ? triangleData.fillColor : undefined;
+export const Triangle: React.FC<TriangleProps> = ({ triangleData }) => {
+  // triangleData is now always a CanvasElements.Path
+  // The points define the 3 vertices of the triangle.
+  // Stroke, fill, closed are properties of triangleData (Path).
 
-  // Create a path from either Path or Triangle data
-  const path = useMemo(() => {
-    const path = Skia.Path.Make();
-
-    // Check if we have Path points (new format) or Triangle points (old format)
-    if ('points' in triangleData) {
-      const points = triangleData.points;
-      if (points.length >= 3) {
-        path.moveTo(points[0].x, points[0].y);
-        path.lineTo(points[1].x, points[1].y);
-        path.lineTo(points[2].x, points[2].y);
-        path.close();
-      }
-    } else {
-      // Legacy format - handle as before
-      const { point1, point2, point3 } =
-        triangleData as CanvasElements.Triangle;
-      path.moveTo(point1.x, point1.y);
-      path.lineTo(point2.x, point2.y);
-      path.lineTo(point3.x, point3.y);
-      path.close();
-    }
-
-    return path;
-  }, [triangleData]);
-
-  // Return the triangle as a path
-  return (
-    <Path path={path} style="stroke">
-      {fillColor && <Paint color={fillColor} style="fill" />}
-      <Paint
-        color={strokeColor}
-        style="stroke"
-        strokeWidth={strokeWidth}
-        strokeJoin="miter"
-      />
-    </Path>
-  );
+  return <SkPathRenderer pathData={triangleData} />;
 };
 
+/*
 export const renderTriangle = (
   canvas: SkCanvas,
   paint: SkPaint,
-  triangleData: CanvasElements.Triangle
+  triangleData: CanvasElements.Triangle // This signature needs to change to Path if used
 ) => {
+  // This function would need to be updated to take CanvasElements.Path
+  // and use the generic path rendering logic if it's still required.
   const { point1, point2, point3, strokeColor, strokeWidth, fillColor } =
     triangleData;
 
-  const path = Skia.Path.Make();
-  path.moveTo(point1.x, point1.y);
-  path.lineTo(point2.x, point2.y);
-  path.lineTo(point3.x, point3.y);
-  path.close();
+  // const path = Skia.Path.Make();
+  // path.moveTo(point1.x, point1.y);
+  // path.lineTo(point2.x, point2.y);
+  // path.lineTo(point3.x, point3.y);
+  // path.close();
 
-  if (fillColor) {
-    paint.setStyle(PaintStyle.Fill);
-    paint.setColor(Skia.Color(fillColor));
-    canvas.drawPath(path, paint);
-  }
+  // if (fillColor) {
+  //   paint.setStyle(PaintStyle.Fill);
+  //   paint.setColor(Skia.Color(fillColor));
+  //   canvas.drawPath(path, paint);
+  // }
 
-  paint.setStyle(PaintStyle.Stroke);
-  paint.setStrokeWidth(strokeWidth);
-  paint.setColor(Skia.Color(strokeColor));
-  canvas.drawPath(path, paint);
+  // paint.setStyle(PaintStyle.Stroke);
+  // paint.setStrokeWidth(strokeWidth);
+  // paint.setColor(Skia.Color(strokeColor));
+  // canvas.drawPath(path, paint);
+  // path.dispose();
 };
+*/

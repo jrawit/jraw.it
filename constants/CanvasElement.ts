@@ -1,4 +1,5 @@
 // Types for different canvas elements
+import { Tools } from './Tools'; // Added import for Tools
 
 type Point = {
   x: number;
@@ -20,43 +21,14 @@ export namespace CanvasElements {
     points: Point[];
     capStyle?: 'butt' | 'round' | 'square';
     blendMode?: 'srcOver' | 'clear';
-  } & StrokeProps;
+    closed?: boolean; // Added for closed shapes like rectangles, stars
+  } & StrokeProps &
+    FillProps; // Added FillProps here for consistency, shapes can have fills
 
   export type Line = {
     startPoint: Point;
     endPoint: Point;
   } & StrokeProps;
-
-  export type Rectangle = {
-    point: Point;
-    width: number;
-    height: number;
-    round?: number;
-  } & StrokeProps &
-    FillProps;
-
-  export type Triangle = {
-    point1: Point;
-    point2: Point;
-    point3: Point;
-  } & StrokeProps &
-    FillProps;
-
-  export type Circle = {
-    center: Point;
-    radiusX: number;
-    radiusY: number;
-    strokeWidth: number;
-    strokeColor: string;
-    fillColor?: string;
-  };
-
-  export type Star = {
-    point: Point;
-    radius: number;
-    spikes: number;
-  } & StrokeProps &
-    FillProps;
 
   export type Text = {
     point: Point;
@@ -86,13 +58,13 @@ export namespace CanvasElements {
     uri: any; // Ether load using require('path/to/image.png') or uri from network
   };
 
-  export type Any =
-    | Path
-    | Line
-    | Rectangle
-    | Triangle
-    | Circle
-    | Star
-    | Text
-    | Image;
+  export type Any = Path | Line | Text | Image;
 }
+
+// Moved CanvasElement type definition here
+export type CanvasElement = {
+  id: string;
+  element: CanvasElements.Any;
+  tool: Tools;
+  rotation?: number;
+};

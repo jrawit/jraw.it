@@ -10,10 +10,11 @@ import { Rect } from '@/components/tools/Rectangle';
 import { Star } from '@/components/tools/Star';
 import { Text } from '@/components/tools/Text';
 import { Triangle } from '@/components/tools/Triangle';
-import { CanvasElements } from '@/constants/CanvasElement';
+import { CanvasElement, CanvasElements } from '@/constants/CanvasElement'; // Updated import
 import { ToolData, Tools } from '@/constants/Tools';
-import { CanvasElement, useCanvas } from '@/hooks/useCanvas';
+import { useCanvas } from '@/hooks/useCanvas'; // CanvasElement is no longer imported from here
 import { useFontManager } from '@/hooks/useFontManager';
+import { getCirclePoints, getRectanglePoints } from '@/utils/geometryUtils'; // Added imports
 import {
   AlphaType,
   Canvas,
@@ -489,12 +490,12 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       switch (elementTool) {
         case Tools.PEN:
         case Tools.HIGHLIGHTER:
-        case Tools.ERASER:
+        case Tools.ERASER: // Eraser paths are also just paths
           return (
             <Path
               key={id}
               pathData={element as CanvasElements.Path}
-              elementData={canvasElement}
+              // elementData={canvasElement} // Not needed if rotation is baked in points
             />
           );
         case Tools.LINE:
@@ -502,39 +503,39 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
             <Line
               key={id}
               lineData={element as CanvasElements.Line}
-              elementData={canvasElement}
+              elementData={canvasElement} // Line might still use its own rotation logic if not path-based
             />
           );
         case Tools.RECTANGLE:
           return (
             <Rect
               key={id}
-              rectData={element as CanvasElements.Rectangle}
-              elementData={canvasElement}
+              rectData={element as CanvasElements.Path} // Changed to Path
+              // elementData={canvasElement}
             />
           );
         case Tools.CIRCLE:
           return (
             <Circle
               key={id}
-              circleData={element as CanvasElements.Circle}
-              elementData={canvasElement}
+              circleData={element as CanvasElements.Path} // Changed to Path
+              // elementData={canvasElement}
             />
           );
         case Tools.TRIANGLE:
           return (
             <Triangle
               key={id}
-              triangleData={element as CanvasElements.Triangle}
-              elementData={canvasElement}
+              triangleData={element as CanvasElements.Path} // Changed to Path
+              // elementData={canvasElement}
             />
           );
         case Tools.STAR:
           return (
             <Star
               key={id}
-              starData={element as CanvasElements.Star}
-              elementData={canvasElement}
+              starData={element as CanvasElements.Path} // Changed to Path
+              // elementData={canvasElement}
             />
           );
         case Tools.TEXT:
@@ -695,20 +696,25 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       if (!hoverPoint) return null;
 
       if ([Tools.PEN, Tools.ERASER].includes(tool)) {
+        const radius = strokeWidth / 2;
         return (
           <Circle
             circleData={{
-              center: hoverPoint,
-              radiusX: strokeWidth / 2,
-              radiusY: strokeWidth / 2,
+              points: getCirclePoints(hoverPoint, radius, radius),
               strokeWidth: 1,
               strokeColor: 'black',
+              closed: true,
             }}
           />
         );
       }
 
       if (tool === Tools.HIGHLIGHTER) {
+        const size = ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth);
+        const rectTopLeft = {
+          x: hoverPoint.x - size / 2,
+          y: hoverPoint.y - size / 2,
+        };
         return (
           <Group
             transform={[
@@ -721,19 +727,11 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
           >
             <Rect
               rectData={{
-                point: {
-                  x:
-                    hoverPoint.x -
-                    ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth) / 2,
-                  y:
-                    hoverPoint.y -
-                    ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth) / 2,
-                },
-                width: ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth),
-                height: ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth),
+                points: getRectanglePoints(rectTopLeft, size, size),
                 strokeWidth: 1,
                 strokeColor: 'black',
                 fillColor: 'transparent',
+                closed: true,
               }}
             />
           </Group>
