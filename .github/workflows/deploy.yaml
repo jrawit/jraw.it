@@ -78,4 +78,4 @@ jobs:
           SCRIPT_AFTER: |
             echo "Deployment to /root/jraw.it successful."
             # Optional: If you need to restart a web server (e.g., Nginx, Apache)
-            # sudo systemctl restart nginx
+            sudo systemctl restart nginx
