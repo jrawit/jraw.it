@@ -55,20 +55,16 @@ export default function HomeScreen() {
   const isLoggedIn = !!user && !!token;
 
   // Subscribe to rooms data using ElectricSQL's useShape
-  // The hook will only run/fetch if isLoggedIn is true due to the conditional query params or setup.
-  // If useShape itself had a `disabled` prop, that would be another way.
-  // For now, we rely on ElectricSQL handling (or not) unauthorized requests if isLoggedIn is false.
   const { data: roomsShapeData, isLoading: roomsLoading } = useShape<RoomShape>(
     {
       url: `${ELECTRIC_URL}/v1/shape`,
-      params: isLoggedIn // Conditionally set params to avoid issues if user is not available
+      params: isLoggedIn
         ? {
             table: 'rooms',
-            // Example: Fetch all rooms or filter by owner_id if desired
-            // where: `owner_id = '${user?.id}'`, // Uncomment to fetch only user's rooms
+            where: `owner_id = '${user?.id}'`,
             ...envParams,
           }
-        : { table: 'rooms', ...envParams, where: '1=0' }, // Fetch no rooms if not logged in
+        : { table: 'rooms', ...envParams, where: '1=0' },
     }
   );
 
@@ -78,13 +74,19 @@ export default function HomeScreen() {
       return [];
     }
     // Ensure that the data from useShape is correctly typed before mapping
-    return roomsShapeData.map((shape: RoomShape) => ({
+    const mappedRooms = roomsShapeData.map((shape: RoomShape) => ({
       id: shape.id,
       name: shape.name,
       owner_id: shape.owner_id,
       created_at: shape.created_at,
       updated_at: shape.updated_at,
     }));
+    // Sort by updated_at descending to show most recently updated rooms first
+    mappedRooms.sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+    return mappedRooms;
   }, [roomsShapeData, isLoggedIn]);
 
   useEffect(() => {
