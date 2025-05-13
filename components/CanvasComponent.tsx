@@ -33,6 +33,7 @@ import React, {
 } from 'react';
 import { LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Emoji } from './tools/Emoji';
 
 interface Background {
   color: string;
@@ -74,6 +75,7 @@ interface CanvasComponentProps {
     newOffsetX: number,
     newOffsetY: number
   ) => void; // Added for pinch-to-zoom
+  selectedEmoji?: string; // Added selectedEmoji prop
 }
 
 const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
@@ -92,6 +94,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       zoomScale = 1,
       roomId,
       onZoomChange,
+      selectedEmoji = '👍',
     } = props;
 
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -300,6 +303,18 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       (e: { x: number; y: number }) => {
         const { x: adjustedX, y: adjustedY } = getAdjustedCoordinates(e.x, e.y);
 
+        if (tool === Tools.EMOJI) {
+          addExternalElement(
+            {
+              emoji: selectedEmoji,
+              point: { x: adjustedX - 24, y: adjustedY - 24 },
+              size: 48,
+            },
+            Tools.EMOJI
+          );
+          return;
+        }
+
         if (tool === Tools.EYEDROPPER) {
           const pickedColor = getPixelColorAt(e.x, e.y);
           if (onEyeDropperColor) {
@@ -457,35 +472,32 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     );
 
     // --- Pinch to Zoom Handlers ---
-    const handlePinchBegin = useCallback(
-      (e: { focalX: number; focalY: number }) => {
-        // e.focalX, e.focalY from gesture are not used for zoom center
-        if (!onZoomChange) return;
+    const handlePinchBegin = useCallback(() => {
+      // e.focalX, e.focalY from gesture are not used for zoom center
+      if (!onZoomChange) return;
 
-        const canvasViewCenterX = canvasSize.width / 2;
-        const canvasViewCenterY = canvasSize.height / 2;
+      const canvasViewCenterX = canvasSize.width / 2;
+      const canvasViewCenterY = canvasSize.height / 2;
 
-        // Determine the point in canvas coordinates that is currently at the center of the screen.
-        const canvasPointAtScreenCenter = getAdjustedCoordinates(
-          canvasViewCenterX,
-          canvasViewCenterY
-        );
+      // Determine the point in canvas coordinates that is currently at the center of the screen.
+      const canvasPointAtScreenCenter = getAdjustedCoordinates(
+        canvasViewCenterX,
+        canvasViewCenterY
+      );
 
-        pinchInitialStateRef.current = {
-          zoom: zoomScale,
-          offset: { ...elementsOffset }, // Store initial offset
-          focalPointCanvas: canvasPointAtScreenCenter, // This canvas point should stay at the screen center
-        };
-      },
-      [
-        zoomScale,
-        elementsOffset,
-        getAdjustedCoordinates,
-        onZoomChange,
-        canvasSize.width, // Added dependency
-        canvasSize.height, // Added dependency
-      ]
-    );
+      pinchInitialStateRef.current = {
+        zoom: zoomScale,
+        offset: { ...elementsOffset }, // Store initial offset
+        focalPointCanvas: canvasPointAtScreenCenter, // This canvas point should stay at the screen center
+      };
+    }, [
+      zoomScale,
+      elementsOffset,
+      getAdjustedCoordinates,
+      onZoomChange,
+      canvasSize.width, // Added dependency
+      canvasSize.height, // Added dependency
+    ]);
 
     const handlePinchChange = useCallback(
       (e: { scale: number; focalX: number; focalY: number }) => {
@@ -629,6 +641,8 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
           return <Text key={id} textData={element as CanvasElements.Text} />;
         case Tools.IMAGE:
           return <Image key={id} imageData={element as CanvasElements.Image} />;
+        case Tools.EMOJI:
+          return <Emoji key={id} emojiData={element as CanvasElements.Emoji} />;
         default:
           console.warn(`Unhandled tool type: ${elementTool}`);
           return null;

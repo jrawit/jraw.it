@@ -18,6 +18,7 @@ export enum Tools {
   TEXT = 'text',
   IMAGE = 'image',
   EYEDROPPER = 'eyedropper',
+  EMOJI = 'emoji',
 }
 
 // Get icons from https://icons.expo.fyi/
@@ -90,5 +91,9 @@ export const ToolData = {
   [Tools.EYEDROPPER]: {
     iconComponent: MaterialCommunityIcons,
     iconName: 'eyedropper',
+  },
+  [Tools.EMOJI]: {
+    iconComponent: MaterialCommunityIcons,
+    iconName: 'emoticon-excited-outline',
   },
 };

@@ -77,6 +77,10 @@ export function getFontFile(
         fontFile = require('@/assets/fonts/roboto/Roboto-Regular.ttf');
       }
       break;
+    case 'TwitterColorEmoji':
+      // TwitterColorEmoji is a special case, no weight or style
+      fontFile = require('@/assets/fonts/TwitterColorEmoji.ttf');
+      break;
     default:
       // Default to Roboto Regular for unsupported fonts
       fontFile = require('@/assets/fonts/roboto/Roboto-Regular.ttf');
@@ -125,6 +129,9 @@ export function useFontManager() {
         { default: require('@/assets/fonts/roboto/Roboto-Bold.ttf') },
         { default: require('@/assets/fonts/roboto/Roboto-BoldItalic.ttf') },
       ],
+      TwitterColorEmoji: [
+        { default: require('@/assets/fonts/TwitterColorEmoji.ttf') },
+      ],
     });
   } else {
     // Native platforms version
@@ -153,6 +160,7 @@ export function useFontManager() {
         require('@/assets/fonts/roboto/Roboto-Bold.ttf'),
         require('@/assets/fonts/roboto/Roboto-BoldItalic.ttf'),
       ],
+      TwitterColorEmoji: [require('@/assets/fonts/TwitterColorEmoji.ttf')],
     });
   }
 
