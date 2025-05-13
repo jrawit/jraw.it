@@ -48,6 +48,7 @@ jobs:
         env:
           # This secret needs to be configured in your GitHub repository settings
           EXPO_PUBLIC_ELECTRIC_URL: ${{ secrets.EXPO_PUBLIC_ELECTRIC_URL }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
           # NODE_ENV: production # 'expo export' usually handles this
 
       - name: Deploy to Server via SSH
