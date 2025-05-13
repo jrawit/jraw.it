@@ -1,9 +1,10 @@
 import { Selection } from '@/utils/selectionUtils';
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 export const HANDLE_SIZE = 12;
 export const HANDLE_TOUCH_AREA = 24; // Larger than visible size for easier touch
+const ROTATION_ICON_DIAMETER = 18; // Visual size of the rotation icon
 
 interface SelectionOverlayProps {
   selection: Selection;
@@ -36,8 +37,8 @@ const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
   // Calculate position for rotation handle (bottom middle + offset)
   const rotationHandlePosition = {
-    left: centerX - HANDLE_SIZE / 2,
-    top: height + 30 - HANDLE_SIZE / 2, // Position below the selection
+    left: centerX - ROTATION_ICON_DIAMETER / 2,
+    top: height + 30 - ROTATION_ICON_DIAMETER / 2, // Position below the selection, 30px offset
   };
 
   return (
@@ -72,13 +73,7 @@ const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
       <View style={[styles.handle, styles.bottomLeftHandle]} />
       <View style={[styles.handle, styles.middleLeftHandle]} />
 
-      {/* Rotation handle - at the bottom */}
-      <View
-        style={[
-          styles.rotationHandleLine,
-          { top: height, left: centerX - 1, height: 25 },
-        ]}
-      />
+      {/* Rotation handle - styled as an icon */}
       <View
         style={[
           styles.rotationHandle,
@@ -87,7 +82,9 @@ const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             top: rotationHandlePosition.top,
           },
         ]}
-      />
+      >
+        <Text style={styles.rotationHandleIconText}>↻</Text>
+      </View>
     </View>
   );
 };
@@ -154,18 +151,21 @@ const styles = StyleSheet.create({
   // Rotation handle styles
   rotationHandle: {
     position: 'absolute',
-    width: HANDLE_SIZE,
-    height: HANDLE_SIZE,
-    borderRadius: HANDLE_SIZE / 2,
+    width: ROTATION_ICON_DIAMETER,
+    height: ROTATION_ICON_DIAMETER,
+    borderRadius: ROTATION_ICON_DIAMETER / 2,
     backgroundColor: '#4285F4',
     borderWidth: 1,
     borderColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  rotationHandleLine: {
-    position: 'absolute',
-    width: 2,
-    backgroundColor: '#4285F4',
+  rotationHandleIconText: {
+    color: '#FFF',
+    fontSize: ROTATION_ICON_DIAMETER * 0.7, // Adjust size of the icon character
+    lineHeight: ROTATION_ICON_DIAMETER * 0.75, // Adjust line height for better centering
   },
+  // rotationHandleLine style is removed
 });
 
 export default SelectionOverlay;

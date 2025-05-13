@@ -5,6 +5,72 @@ import { cloneDeep } from 'lodash';
 
 type Point = { x: number; y: number };
 
+// Helper function to calculate distance between two points
+const distance = (p1: Point, p2: Point): number => {
+  return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+};
+
+// Helper function to get the unrotated top-left point
+const getUnrotatedTopLeft = (
+  rotatedTopLeft: Point,
+  width: number,
+  height: number,
+  rotation: number
+): Point => {
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  // Center of the unrotated rectangle if its top-left was (0,0) would be (width/2, height/2)
+  // The offset from the center to the top-left is (-width/2, -height/2)
+  // Rotated offset:
+  // offsetX = (-width/2)*cos - (-height/2)*sin
+  // offsetY = (-width/2)*sin + (-height/2)*cos
+  // The rotatedTopLeft is Center_rotated + RotatedOffset
+  // Center_rotated = rotatedTopLeft - RotatedOffset
+  // UnrotatedTopLeft = Center_rotated - UnrotatedOffset (where UnrotatedOffset is (-width/2, -height/2))
+  // P.x = s_world_tl.x - newWidth/2 + (newWidth/2)*cos(rot) - (newHeight/2)*sin(rot)
+  // P.y = s_world_tl.y - newHeight/2 + (newWidth/2)*sin(rot) + (newHeight/2)*cos(rot)
+  // This formula seems to be for finding the original center from a rotated point, let's re-derive.
+
+  // Let P_unrotated_tl be the point we are looking for.
+  // Center_unrotated = { P_unrotated_tl.x + width/2, P_unrotated_tl.y + height/2 }
+  // rotatedTopLeft is P_unrotated_tl rotated around Center_unrotated by 'rotation'.
+  // To reverse:
+  // 1. Translate rotatedTopLeft so Center_unrotated is at origin:
+  //    temp_rtl_x = rotatedTopLeft.x - Center_unrotated.x
+  //    temp_rtl_y = rotatedTopLeft.y - Center_unrotated.y
+  // 2. Rotate temp_rtl by -rotation:
+  //    unrotated_relative_tl_x = temp_rtl_x * cos(-rotation) - temp_rtl_y * sin(-rotation)
+  //    unrotated_relative_tl_y = temp_rtl_x * sin(-rotation) + temp_rtl_y * cos(-rotation)
+  // This unrotated_relative_tl should be P_unrotated_tl - Center_unrotated.
+  // So, P_unrotated_tl.x = unrotated_relative_tl_x + Center_unrotated.x
+  // P_unrotated_tl.y = unrotated_relative_tl_y + Center_unrotated.y
+
+  // This is simpler: the top-left point of the unrotated rectangle is (X, Y).
+  // Its center is (X + width/2, Y + height/2).
+  // The rotated top-left point (rotatedTopLeft.x, rotatedTopLeft.y) is obtained by:
+  // rotatedTopLeft.x = (X + width/2) + (X - (X + width/2)) * cos(rotation) - (Y - (Y + height/2)) * sin(rotation)
+  // rotatedTopLeft.x = (X + width/2) + (-width/2) * cos - (-height/2) * sin
+  // rotatedTopLeft.y = (Y + height/2) + (-width/2) * sin + (-height/2) * cos
+  // Solving for X:
+  // X = rotatedTopLeft.x - width/2 - (-width/2 * cos - (-height/2) * sin)
+  // X = rotatedTopLeft.x - width/2 + (width/2 * cos) + (height/2 * sin) -> Incorrect derivation somewhere
+  // Correct:
+  const unrotatedOffsetX = -width / 2;
+  const unrotatedOffsetY = -height / 2;
+
+  // Calculate the center based on the rotatedTopLeft and the known offset from center to top-left if it were rotated
+  const centerX =
+    rotatedTopLeft.x - (unrotatedOffsetX * cos - unrotatedOffsetY * sin);
+  const centerY =
+    rotatedTopLeft.y - (unrotatedOffsetX * sin + unrotatedOffsetY * cos);
+
+  // The unrotated top-left is then this center plus the unrotated offset
+  return {
+    x: centerX + unrotatedOffsetX,
+    y: centerY + unrotatedOffsetY,
+  };
+};
+
 // Helper function to scale a point relative to an origin
 const scalePoint = (
   point: Point,
@@ -390,86 +456,70 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       rect.point = { x: rect.point.x + deltaX, y: rect.point.y + deltaY };
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
+    scaleElement: (element, scaleX, scaleY, origin, selectionRotation = 0) => {
       const newElement = cloneDeep(element);
       const rect = newElement.element as CanvasElements.Rectangle;
+      const elementRotation = newElement.rotation || 0;
 
-      // For rectangles with rotation, we need to handle scaling differently
-      if (rotation !== 0) {
-        // Define the four corners
-        const topLeft = rect.point;
-        const topRight = { x: rect.point.x + rect.width, y: rect.point.y };
-        const bottomRight = {
-          x: rect.point.x + rect.width,
-          y: rect.point.y + rect.height,
-        };
-        const bottomLeft = { x: rect.point.x, y: rect.point.y + rect.height };
+      // 1. Get current corners in local unrotated space
+      const local_tl = { x: rect.point.x, y: rect.point.y };
+      const local_tr = { x: rect.point.x + rect.width, y: rect.point.y };
+      const local_bl = { x: rect.point.x, y: rect.point.y + rect.height };
+      const local_center = {
+        x: rect.point.x + rect.width / 2,
+        y: rect.point.y + rect.height / 2,
+      };
 
-        // Scale each corner
-        const newTopLeft = scalePoint(
-          topLeft,
-          origin,
-          scaleX,
-          scaleY,
-          rotation
-        );
-        const newTopRight = scalePoint(
-          topRight,
-          origin,
-          scaleX,
-          scaleY,
-          rotation
-        );
-        const newBottomRight = scalePoint(
-          bottomRight,
-          origin,
-          scaleX,
-          scaleY,
-          rotation
-        );
-        const newBottomLeft = scalePoint(
-          bottomLeft,
-          origin,
-          scaleX,
-          scaleY,
-          rotation
-        );
+      // 2. Transform to world space using element's intrinsic rotation
+      const world_tl = rotatePoint(local_tl, local_center, elementRotation);
+      const world_tr = rotatePoint(local_tr, local_center, elementRotation);
+      const world_bl = rotatePoint(local_bl, local_center, elementRotation);
 
-        // Use the new corners to compute width and height in the rotated space
-        // This is a simplification - we're using straight-line distances
-        const newWidth = Math.sqrt(
-          Math.pow(newTopRight.x - newTopLeft.x, 2) +
-            Math.pow(newTopRight.y - newTopLeft.y, 2)
-        );
+      // 3. Scale these world corners using the selection's scaling logic
+      const s_world_tl = scalePoint(
+        world_tl,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+      const s_world_tr = scalePoint(
+        world_tr,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+      const s_world_bl = scalePoint(
+        world_bl,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
 
-        const newHeight = Math.sqrt(
-          Math.pow(newBottomLeft.x - newTopLeft.x, 2) +
-            Math.pow(newBottomLeft.y - newTopLeft.y, 2)
-        );
+      // 4. Determine new properties from scaled world corners
+      const newElementRotationAngle = Math.atan2(
+        s_world_tr.y - s_world_tl.y,
+        s_world_tr.x - s_world_tl.x
+      );
+      const newWidth = distance(s_world_tl, s_world_tr);
+      const newHeight = distance(s_world_tl, s_world_bl);
 
-        rect.point = newTopLeft;
-        rect.width = newWidth;
-        rect.height = newHeight;
-      } else {
-        // Original scaling code for non-rotated rectangles
-        const initialTopLeft = { x: rect.point.x, y: rect.point.y };
-        const initialBottomRight = {
-          x: rect.point.x + rect.width,
-          y: rect.point.y + rect.height,
-        };
-        const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
-        const newBottomRight = scalePoint(
-          initialBottomRight,
-          origin,
-          scaleX,
-          scaleY
-        );
+      // Ensure width and height are not negative (can happen with extreme scaling/flipping)
+      // Though scaleX/scaleY from useCanvas are usually positive due to handle logic
+      const finalNewWidth = Math.abs(newWidth);
+      const finalNewHeight = Math.abs(newHeight);
 
-        rect.point.x = Math.min(newTopLeft.x, newBottomRight.x);
-        rect.point.y = Math.min(newTopLeft.y, newBottomRight.y);
-        rect.width = Math.abs(newTopLeft.x - newBottomRight.x);
-        rect.height = Math.abs(newTopLeft.y - newBottomRight.y);
-      }
+      newElement.rotation = newElementRotationAngle;
+      rect.width = finalNewWidth;
+      rect.height = finalNewHeight;
+      rect.point = getUnrotatedTopLeft(
+        s_world_tl,
+        finalNewWidth,
+        finalNewHeight,
+        newElementRotationAngle
+      );
 
       return newElement;
     },
@@ -560,20 +610,72 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       };
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
+    scaleElement: (element, scaleX, scaleY, origin, selectionRotation = 0) => {
       const newElement = cloneDeep(element);
       const circle = newElement.element as CanvasElements.Circle;
-      circle.center = scalePoint(
-        circle.center,
+      const elementRotation = newElement.rotation || 0;
+
+      // 1. Define key points in local unrotated space
+      const local_center = { x: circle.center.x, y: circle.center.y };
+      const local_p_radiusX = {
+        x: circle.center.x + circle.radiusX,
+        y: circle.center.y,
+      };
+      const local_p_radiusY = {
+        x: circle.center.x,
+        y: circle.center.y - circle.radiusY,
+      }; // Using -Y for "up"
+
+      // 2. Transform to world space using element's intrinsic rotation
+      // For circle, center is the pivot. If elementRotation is 0, world points are same as local.
+      const world_center = rotatePoint(
+        local_center,
+        local_center,
+        elementRotation
+      ); // Stays same
+      const world_p_radiusX = rotatePoint(
+        local_p_radiusX,
+        local_center,
+        elementRotation
+      );
+      const world_p_radiusY = rotatePoint(
+        local_p_radiusY,
+        local_center,
+        elementRotation
+      );
+
+      // 3. Scale these world points
+      const s_world_center = scalePoint(
+        world_center,
         origin,
         scaleX,
         scaleY,
-        rotation
+        selectionRotation
+      );
+      const s_world_p_radiusX = scalePoint(
+        world_p_radiusX,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+      const s_world_p_radiusY = scalePoint(
+        world_p_radiusY,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
       );
 
-      // Scale both radiuses independently to maintain oval shapes
-      circle.radiusX *= Math.abs(scaleX);
-      circle.radiusY *= Math.abs(scaleY);
+      // 4. Update element properties
+      circle.center = s_world_center;
+      circle.radiusX = distance(s_world_center, s_world_p_radiusX);
+      circle.radiusY = distance(s_world_center, s_world_p_radiusY);
+
+      // Calculate new rotation based on the direction of the scaled radiusX vector
+      const dx = s_world_p_radiusX.x - s_world_center.x;
+      const dy = s_world_p_radiusX.y - s_world_center.y;
+      newElement.rotation = Math.atan2(dy, dx);
 
       return newElement;
     },
@@ -785,11 +887,54 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       star.point = { x: star.point.x + deltaX, y: star.point.y + deltaY };
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
+    scaleElement: (element, scaleX, scaleY, origin, selectionRotation = 0) => {
       const newElement = cloneDeep(element);
       const star = newElement.element as CanvasElements.Star;
-      star.point = scalePoint(star.point, origin, scaleX, scaleY, rotation);
-      star.radius *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale radius proportionally
+      const elementRotation = newElement.rotation || 0;
+
+      // 1. Define key points in local unrotated space
+      const local_center = { x: star.point.x, y: star.point.y };
+      // A primary spike tip, typically pointing upwards (-Y) in local unrotated frame
+      const local_p_tip = { x: star.point.x, y: star.point.y - star.radius };
+
+      // 2. Transform to world space
+      const world_center = rotatePoint(
+        local_center,
+        local_center,
+        elementRotation
+      ); // Stays same
+      const world_p_tip = rotatePoint(
+        local_p_tip,
+        local_center,
+        elementRotation
+      );
+
+      // 3. Scale these world points
+      const s_world_center = scalePoint(
+        world_center,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+      const s_world_p_tip = scalePoint(
+        world_p_tip,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+
+      // 4. Update element properties
+      star.point = s_world_center;
+      star.radius = distance(s_world_center, s_world_p_tip);
+
+      const dx = s_world_p_tip.x - s_world_center.x;
+      const dy = s_world_p_tip.y - s_world_center.y;
+      // Add Math.PI / 2 because original tip was along -Y axis (angle -PI/2 or 3PI/2)
+      // atan2 gives angle relative to +X axis.
+      newElement.rotation = Math.atan2(dy, dx) + Math.PI / 2;
+
       return newElement;
     },
     rotateElement: (element, centerX, centerY, angleDiff) => {
@@ -824,9 +969,68 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
       const newElement = cloneDeep(element);
       const text = newElement.element as CanvasElements.Text;
-      text.point = scalePoint(text.point, origin, scaleX, scaleY, rotation);
-      // Scale font size based on geometric mean of scale factors
-      text.fontSize *= Math.sqrt(Math.abs(scaleX * scaleY));
+      const elementRotation = newElement.rotation || 0;
+
+      // Approximate width for orientation
+      const approx_char_width = text.fontSize * 0.6;
+      const original_approx_width =
+        text.text.length > 0
+          ? text.text.length * approx_char_width
+          : text.fontSize;
+
+      // 1. Define key points in local unrotated space (anchor and a point for orientation)
+      const local_anchor = { x: text.point.x, y: text.point.y };
+      const local_orient_pt = {
+        x: text.point.x + original_approx_width,
+        y: text.point.y,
+      };
+
+      // 2. Transform to world space (rotation is around text.point)
+      const world_anchor = rotatePoint(
+        local_anchor,
+        local_anchor,
+        elementRotation
+      ); // Stays same
+      const world_orient_pt = rotatePoint(
+        local_orient_pt,
+        local_anchor,
+        elementRotation
+      );
+
+      // 3. Scale these world points
+      const s_world_anchor = scalePoint(
+        world_anchor,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+      const s_world_orient_pt = scalePoint(
+        world_orient_pt,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+
+      // 4. Update element properties
+      text.point = s_world_anchor;
+
+      const new_approx_width = distance(s_world_anchor, s_world_orient_pt);
+      if (original_approx_width > 0.1) {
+        // Avoid division by zero or tiny numbers
+        text.fontSize *= new_approx_width / original_approx_width;
+      } else if (new_approx_width > 0.1) {
+        // If original was tiny but new is not, base on average scale
+        text.fontSize *= Math.sqrt(Math.abs(scaleX * scaleY));
+      }
+      // Ensure font size is reasonable
+      text.fontSize = Math.max(1, text.fontSize);
+
+      const dx = s_world_orient_pt.x - s_world_anchor.x;
+      const dy = s_world_orient_pt.y - s_world_anchor.y;
+      newElement.rotation = Math.atan2(dy, dx);
+
       return newElement;
     },
     rotateElement: (element, centerX, centerY, angleDiff) => {
@@ -851,85 +1055,68 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       img.point = { x: img.point.x + deltaX, y: img.point.y + deltaY };
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
+    scaleElement: (element, scaleX, scaleY, origin, selectionRotation = 0) => {
       const newElement = cloneDeep(element);
       const img = newElement.element as CanvasElements.Image;
+      const elementRotation = newElement.rotation || 0;
 
-      // For images with rotation, handle scaling similarly to rectangles
-      if (rotation !== 0) {
-        // Define the four corners
-        const topLeft = img.point;
-        const topRight = { x: img.point.x + img.width, y: img.point.y };
-        const bottomRight = {
-          x: img.point.x + img.width,
-          y: img.point.y + img.height,
-        };
-        const bottomLeft = { x: img.point.x, y: img.point.y + img.height };
+      // 1. Get current corners in local unrotated space
+      const local_tl = { x: img.point.x, y: img.point.y };
+      const local_tr = { x: img.point.x + img.width, y: img.point.y };
+      const local_bl = { x: img.point.x, y: img.point.y + img.height };
+      const local_center = {
+        x: img.point.x + img.width / 2,
+        y: img.point.y + img.height / 2,
+      };
 
-        // Scale each corner
-        const newTopLeft = scalePoint(
-          topLeft,
-          origin,
-          scaleX,
-          scaleY,
-          rotation
-        );
-        const newTopRight = scalePoint(
-          topRight,
-          origin,
-          scaleX,
-          scaleY,
-          rotation
-        );
-        const newBottomRight = scalePoint(
-          bottomRight,
-          origin,
-          scaleX,
-          scaleY,
-          rotation
-        );
-        const newBottomLeft = scalePoint(
-          bottomLeft,
-          origin,
-          scaleX,
-          scaleY,
-          rotation
-        );
+      // 2. Transform to world space
+      const world_tl = rotatePoint(local_tl, local_center, elementRotation);
+      const world_tr = rotatePoint(local_tr, local_center, elementRotation);
+      const world_bl = rotatePoint(local_bl, local_center, elementRotation);
 
-        // Use the new corners to compute width and height in the rotated space
-        const newWidth = Math.sqrt(
-          Math.pow(newTopRight.x - newTopLeft.x, 2) +
-            Math.pow(newTopRight.y - newTopLeft.y, 2)
-        );
+      // 3. Scale these world corners
+      const s_world_tl = scalePoint(
+        world_tl,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+      const s_world_tr = scalePoint(
+        world_tr,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
+      const s_world_bl = scalePoint(
+        world_bl,
+        origin,
+        scaleX,
+        scaleY,
+        selectionRotation
+      );
 
-        const newHeight = Math.sqrt(
-          Math.pow(newBottomLeft.x - newTopLeft.x, 2) +
-            Math.pow(newBottomLeft.y - newTopLeft.y, 2)
-        );
+      // 4. Determine new properties
+      const newElementRotationAngle = Math.atan2(
+        s_world_tr.y - s_world_tl.y,
+        s_world_tr.x - s_world_tl.x
+      );
+      const newWidth = distance(s_world_tl, s_world_tr);
+      const newHeight = distance(s_world_tl, s_world_bl);
 
-        img.point = newTopLeft;
-        img.width = newWidth;
-        img.height = newHeight;
-      } else {
-        // Original scaling for non-rotated images
-        const initialTopLeft = { x: img.point.x, y: img.point.y };
-        const initialBottomRight = {
-          x: img.point.x + img.width,
-          y: img.point.y + img.height,
-        };
-        const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
-        const newBottomRight = scalePoint(
-          initialBottomRight,
-          origin,
-          scaleX,
-          scaleY
-        );
+      const finalNewWidth = Math.abs(newWidth);
+      const finalNewHeight = Math.abs(newHeight);
 
-        img.point.x = Math.min(newTopLeft.x, newBottomRight.x);
-        img.point.y = Math.min(newTopLeft.y, newBottomRight.y);
-        img.width = Math.abs(newTopLeft.x - newBottomRight.x);
-        img.height = Math.abs(newTopLeft.y - newBottomRight.y);
-      }
+      newElement.rotation = newElementRotationAngle;
+      img.width = finalNewWidth;
+      img.height = finalNewHeight;
+      img.point = getUnrotatedTopLeft(
+        s_world_tl,
+        finalNewWidth,
+        finalNewHeight,
+        newElementRotationAngle
+      );
 
       return newElement;
     },
