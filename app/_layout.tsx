@@ -54,6 +54,7 @@ export default function RootLayout() {
     'Roboto-Italic': require('../assets/fonts/roboto/Roboto-Italic.ttf'),
     'Roboto-Bold': require('../assets/fonts/roboto/Roboto-Bold.ttf'),
     'Roboto-BoldItalic': require('../assets/fonts/roboto/Roboto-BoldItalic.ttf'),
+    TwitterColorEmoji: require('../assets/fonts/TwitterColorEmoji.ttf'),
   });
 
   // Hide splash screen once fonts are loaded or if there's an error

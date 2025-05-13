@@ -86,6 +86,12 @@ export namespace CanvasElements {
     uri: any; // Ether load using require('path/to/image.png') or uri from network
   };
 
+  export type Emoji = {
+    point: Point;
+    emoji: string; // The emoji character itself, e.g., "😀"
+    size: number; // Font size for the emoji
+  };
+
   export type Any =
     | Path
     | Line
@@ -94,5 +100,6 @@ export namespace CanvasElements {
     | Circle
     | Star
     | Text
-    | Image;
+    | Image
+    | Emoji; // Add Emoji here
 }

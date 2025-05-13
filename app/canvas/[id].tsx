@@ -94,10 +94,10 @@ export default function CanvasScreen() {
 
   console.log('CanvasScreen', roomId);
 
-  const [socket, setSocket] = useState<any>(null);
   const [tool, setTool] = useState<Tools>(Tools.PEN);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [isShiftDown, setIsShiftDown] = useState<boolean>(false); // <-- Add state for Shift key
+  const [selectedEmoji, setSelectedEmoji] = useState<string>('😀'); // Add selectedEmoji state
   // Keybinds
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
   useEffect(() => {
@@ -594,6 +594,10 @@ export default function CanvasScreen() {
     [roomId, authToken, currentRoom, setTitle, setIsSubmittingTitle] // Added setIsSubmittingTitle
   );
 
+  const handleEmojiChange = useCallback((emoji: string) => {
+    setSelectedEmoji(emoji);
+  }, []);
+
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -648,6 +652,7 @@ export default function CanvasScreen() {
           onEyeDropperColor={updateColorFromEyeDropper}
           roomId={roomId?.toString() ?? ''}
           onZoomChange={handleCanvasZoomChange} // Pass the new callback here
+          selectedEmoji={selectedEmoji} // Pass selectedEmoji
         />
       </View>
 
@@ -732,6 +737,7 @@ export default function CanvasScreen() {
         onColorChange={setSelectedColor}
         isDrawing={isDrawing}
         color={color}
+        onEmojiChange={handleEmojiChange} // Pass handleEmojiChange
       />
 
       <Modal

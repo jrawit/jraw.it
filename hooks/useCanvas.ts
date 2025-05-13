@@ -1142,6 +1142,14 @@ export const useCanvas = ({
       (element as CanvasElements.Image).uri !== undefined
     );
   }
+  function isEmoji(
+    element: CanvasElements.Any
+  ): element is CanvasElements.Emoji {
+    return (
+      (element as CanvasElements.Emoji).point !== undefined &&
+      (element as CanvasElements.Emoji).emoji !== undefined
+    );
+  }
   const duplicateSelection = useCallback(async () => {
     if (selection && selection.ids.length > 0) {
       // Find the elements in the selection
@@ -1216,6 +1224,11 @@ export const useCanvas = ({
               y: newElement.element.point.y + OFFSET,
             };
           } else if (isImage(newElement.element)) {
+            newElement.element.point = {
+              x: newElement.element.point.x + OFFSET,
+              y: newElement.element.point.y + OFFSET,
+            };
+          } else if (isEmoji(newElement.element)) {
             newElement.element.point = {
               x: newElement.element.point.x + OFFSET,
               y: newElement.element.point.y + OFFSET,

@@ -1,4 +1,5 @@
 import { renderCircle } from '@/components/tools/Circle';
+import { renderEmoji } from '@/components/tools/Emoji';
 import { renderImage } from '@/components/tools/Image';
 import { renderLine } from '@/components/tools/Line';
 import { renderPath } from '@/components/tools/Path';
@@ -101,6 +102,13 @@ const drawElementOntoCanvas = async (
       imgData.point.x += offsetX;
       imgData.point.y += offsetY;
       await renderImage(canvas, paint, imgData);
+      break;
+
+    case Tools.EMOJI:
+      const emojiData = elementData as CanvasElements.Emoji;
+      emojiData.point.x += offsetX;
+      emojiData.point.y += offsetY;
+      await renderEmoji(canvas, paint, emojiData);
       break;
 
     default:
