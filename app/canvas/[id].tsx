@@ -4,6 +4,7 @@ import CanvasComponent, {
 import ColorPickerModal from '@/components/ColorPickerModal';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { CanvasElements } from '@/constants/CanvasElement';
 import { processImageForCanvas } from '@/hooks/tool-handlers';
 import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
@@ -242,6 +243,8 @@ export default function CanvasScreen() {
     x: number;
     y: number;
   }>({ x: 0, y: 0 });
+
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 }); // Add this state if not already present
 
   const colorScheme = useColorScheme();
 
@@ -594,6 +597,39 @@ export default function CanvasScreen() {
     [roomId, authToken, currentRoom, setTitle, setIsSubmittingTitle] // Added setIsSubmittingTitle
   );
 
+  const addReactionToCanvas = useCallback(
+    (emoji: string) => {
+      if (!canvasComponentRef.current) return;
+
+      // Create a text element for the emoji
+      const emojiElement: CanvasElements.Text = {
+        text: emoji,
+        point: {
+          // Center the emoji in the canvas
+          x: canvasSize.width / 2,
+          y: canvasSize.height / 2,
+        },
+        fontSize: 64, // Make emoji large
+        fontFamily: 'System',
+        fontWeight: 'normal',
+        fontStyle: 'normal',
+        color: '#000000',
+      };
+
+      // Add the emoji to the canvas as a text element
+      canvasComponentRef.current.addExternalElement(emojiElement, Tools.TEXT);
+    },
+    [canvasSize]
+  );
+
+  // Add this effect to get canvas size from ref
+  useEffect(() => {
+    if (canvasComponentRef.current) {
+      const size = canvasComponentRef.current.getCanvasSize();
+      setCanvasSize(size);
+    }
+  }, [canvasComponentRef.current]);
+
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -732,6 +768,7 @@ export default function CanvasScreen() {
         onColorChange={setSelectedColor}
         isDrawing={isDrawing}
         color={color}
+        onAddReaction={addReactionToCanvas} // Add this line
       />
 
       <Modal

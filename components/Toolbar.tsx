@@ -2,14 +2,16 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { ToolData, Tools } from '@/constants/Tools';
 import AntDesign from '@expo/vector-icons/AntDesign';
+import FontAwesome from '@expo/vector-icons/FontAwesome'; // Add FontAwesome import
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Slider } from '@miblanchard/react-native-slider';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Modal, // Import Modal
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   TouchableOpacity,
   useColorScheme,
   useWindowDimensions,
@@ -38,13 +40,28 @@ const shapeTools = [
   Tools.STAR,
 ];
 
+// Define emojis for reactions
+const REACTION_EMOJIS = [
+  '👍',
+  '❤️',
+  '👏',
+  '🎉',
+  '🔥',
+  '😂',
+  '😮',
+  '👎',
+  '❓',
+  '⭐',
+];
+
 type ToolbarProps = {
   tool: Tools;
   onToolChange: (tool: Tools) => void;
   onStrokeWidthChange: (strokeWidth: number) => void;
   onColorChange: (color: string) => void;
-  isDrawing?: boolean; // Add this prop to detect drawing state
-  color?: string; // Add this prop to receive the current color from parent
+  isDrawing?: boolean;
+  color?: string;
+  onAddReaction?: (emoji: string) => void; // Add this prop for handling reactions
 };
 
 const Toolbar: React.FC<ToolbarProps> = React.memo(
@@ -55,15 +72,17 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
     onColorChange,
     isDrawing = false,
     color,
+    onAddReaction,
   }) => {
     const colorScheme = useColorScheme();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [colorPickerVisible, setColorPickerVisible] = useState(false);
-    const [shapeSelectorVisible, setShapeSelectorVisible] = useState(false); // State for shape selector modal
+    const [shapeSelectorVisible, setShapeSelectorVisible] = useState(false);
+    const [reactionsModalVisible, setReactionsModalVisible] = useState(false); // Add state for reactions modal
     const [initialColor, setInitialColor] = useState('#000000');
     const [strokeWidth, setStrokeWidth] = useState(3);
     const selectedColor = useSharedValue(initialColor);
-    const toggleButtonPosition = useSharedValue(140); // Starting position (matches original bottom: 70)
+    const toggleButtonPosition = useSharedValue(140);
     const toolbarPosition = useSharedValue(0); // Initial position for the toolbar
 
     // Update color picker with the current color value from parent
@@ -174,6 +193,17 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
           toolType !== Tools.EYEDROPPER // Exclude the eye dropper tool from toolbar
       );
     }, []);
+
+    // Handler for emoji selection
+    const handleEmojiSelect = useCallback(
+      (emoji: string) => {
+        if (onAddReaction) {
+          onAddReaction(emoji);
+        }
+        setReactionsModalVisible(false);
+      },
+      [onAddReaction]
+    );
 
     return (
       <>
@@ -292,6 +322,17 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
                     />
                   )}
                 </TouchableOpacity>
+
+                {/* Reactions Button */}
+                <TouchableOpacity
+                  onPress={useCallback(
+                    () => setReactionsModalVisible(true),
+                    [setReactionsModalVisible]
+                  )}
+                  style={styles.button}
+                >
+                  <FontAwesome name="smile-o" size={24} color="black" />
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </Animated.View>
@@ -403,6 +444,34 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+            </ThemedView>
+          </Pressable>
+        </Modal>
+
+        {/* Reactions Modal (remains outside ThemedView) */}
+        <Modal
+          transparent={true}
+          visible={reactionsModalVisible}
+          animationType="fade"
+          onRequestClose={() => setReactionsModalVisible(false)}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setReactionsModalVisible(false)}
+          >
+            <ThemedView style={styles.reactionsModalContent}>
+              <ThemedText style={styles.modalTitle}>Add Reaction</ThemedText>
+              <View style={styles.reactionsGrid}>
+                {REACTION_EMOJIS.map(emoji => (
+                  <TouchableOpacity
+                    key={emoji}
+                    onPress={() => handleEmojiSelect(emoji)}
+                    style={styles.emojiButton}
+                  >
+                    <Text style={styles.emoji}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </ThemedView>
           </Pressable>
@@ -603,6 +672,37 @@ const styles = StyleSheet.create({
   eyeDropperText: {
     fontSize: 12,
     color: '#adadad',
+  },
+  // Styles for Reactions Modal
+  reactionsModalContent: {
+    borderRadius: 10,
+    padding: 15,
+    width: 'auto',
+    minWidth: 200,
+    maxWidth: '90%',
+    alignItems: 'center',
+  },
+  reactionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  emojiButton: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  emoji: {
+    fontSize: 24,
   },
 });
 
