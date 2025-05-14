@@ -64,14 +64,26 @@ export const useCanvas = ({
       : {
           elements: [] as CanvasElement[],
           // Updated mock signature for addElement
-          addElement: async (data: {
-            id: string;
-            room_id: string;
-            tool_type: string;
-            element_data: any;
-          }) => Promise.resolve(null as any),
-          updateElement: async (_id: string, _data: any) => Promise.resolve(),
-          removeElement: async (_id: string) => Promise.resolve(),
+          addElement: async (
+            data: Array<{
+              id: string;
+              room_id: string;
+              tool_type: string;
+              element_data: any;
+            }>
+          ) => Promise.resolve(null as any),
+          updateElement: async (
+            _updatesArray: Array<{
+              id: string;
+              updates: Partial<
+                Omit<
+                  any, // Using 'any' for mock simplicity, replace with CanvasElementRecord if needed
+                  'id' | 'room_id' | 'creator_id' | 'created_at' | 'updated_at'
+                >
+              >;
+            }>
+          ) => Promise.resolve(),
+          removeElement: async (_ids: string[]) => Promise.resolve(),
           isLoading: false,
         };
 
@@ -345,7 +357,7 @@ export const useCanvas = ({
 
           // Immediately remove the element visually
           if (isCollaborative && roomId) {
-            electric.removeElement(touchedElementId);
+            electric.removeElement([touchedElementId]);
           }
           setElements(prev => prev.filter(el => el.id !== touchedElementId));
           // Track the ID of the erased element
@@ -480,7 +492,7 @@ export const useCanvas = ({
 
           elementsToEraseRef.current.add(touchedElementId);
           if (isCollaborative && roomId) {
-            electric.removeElement(touchedElementId);
+            electric.removeElement([touchedElementId]);
           }
           setElements(prev => prev.filter(el => el.id !== touchedElementId));
           if (selection?.ids.includes(touchedElementId)) {
@@ -530,6 +542,10 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // We need to update each moved element via the Electric sync
+              const updatesForElectric: Array<{
+                id: string;
+                updates: { tool_type: string; element_data: string };
+              }> = [];
               for (let i = 0; i < movedElements.length; i++) {
                 const originalElement = initialCanvasElementsRef.current.find(
                   el => el.id === movedElements[i].id
@@ -541,11 +557,17 @@ export const useCanvas = ({
                   JSON.stringify(originalElement) !==
                     JSON.stringify(updatedElement)
                 ) {
-                  await electric.updateElement(updatedElement.id, {
-                    tool_type: updatedElement.tool,
-                    element_data: JSON.stringify(updatedElement.element),
+                  updatesForElectric.push({
+                    id: updatedElement.id,
+                    updates: {
+                      tool_type: updatedElement.tool,
+                      element_data: JSON.stringify(updatedElement.element),
+                    },
                   });
                 }
+              }
+              if (updatesForElectric.length > 0) {
+                await electric.updateElement(updatesForElectric);
               }
             } catch (error) {
               console.error('Failed to sync element movement:', error);
@@ -618,6 +640,10 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // We need to update each scaled element via the Electric sync
+              const updatesForElectric: Array<{
+                id: string;
+                updates: { tool_type: string; element_data: string };
+              }> = [];
               for (let i = 0; i < scaledElements.length; i++) {
                 const originalElement = initialCanvasElementsRef.current.find(
                   el => el.id === scaledElements[i].id
@@ -629,11 +655,17 @@ export const useCanvas = ({
                   JSON.stringify(originalElement) !==
                     JSON.stringify(updatedElement)
                 ) {
-                  await electric.updateElement(updatedElement.id, {
-                    tool_type: updatedElement.tool,
-                    element_data: JSON.stringify(updatedElement.element),
+                  updatesForElectric.push({
+                    id: updatedElement.id,
+                    updates: {
+                      tool_type: updatedElement.tool,
+                      element_data: JSON.stringify(updatedElement.element),
+                    },
                   });
                 }
+              }
+              if (updatesForElectric.length > 0) {
+                await electric.updateElement(updatesForElectric);
               }
             } catch (error) {
               console.error('Failed to sync element scaling:', error);
@@ -714,6 +746,10 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // We need to update each moved element via the Electric sync
+              const updatesForElectric: Array<{
+                id: string;
+                updates: { tool_type: string; element_data: string };
+              }> = [];
               for (let i = 0; i < finalElements.length; i++) {
                 const originalElement = initialCanvasElementsRef.current.find(
                   el => el.id === finalElements[i].id
@@ -725,11 +761,17 @@ export const useCanvas = ({
                   JSON.stringify(originalElement) !==
                     JSON.stringify(updatedElement)
                 ) {
-                  await electric.updateElement(updatedElement.id, {
-                    tool_type: updatedElement.tool,
-                    element_data: JSON.stringify(updatedElement.element),
+                  updatesForElectric.push({
+                    id: updatedElement.id,
+                    updates: {
+                      tool_type: updatedElement.tool,
+                      element_data: JSON.stringify(updatedElement.element),
+                    },
                   });
                 }
+              }
+              if (updatesForElectric.length > 0) {
+                await electric.updateElement(updatesForElectric);
               }
               addToHistory({
                 type: 'MODIFY_ELEMENT',
@@ -784,6 +826,10 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // We need to update each scaled element via the Electric sync
+              const updatesForElectric: Array<{
+                id: string;
+                updates: { tool_type: string; element_data: string };
+              }> = [];
               for (let i = 0; i < finalElements.length; i++) {
                 const originalElement = initialCanvasElementsRef.current.find(
                   el => el.id === finalElements[i].id
@@ -795,11 +841,17 @@ export const useCanvas = ({
                   JSON.stringify(originalElement) !==
                     JSON.stringify(updatedElement)
                 ) {
-                  await electric.updateElement(updatedElement.id, {
-                    tool_type: updatedElement.tool,
-                    element_data: JSON.stringify(updatedElement.element),
+                  updatesForElectric.push({
+                    id: updatedElement.id,
+                    updates: {
+                      tool_type: updatedElement.tool,
+                      element_data: JSON.stringify(updatedElement.element),
+                    },
                   });
                 }
+              }
+              if (updatesForElectric.length > 0) {
+                await electric.updateElement(updatesForElectric);
               }
               addToHistory({
                 type: 'MODIFY_ELEMENT',
@@ -836,7 +888,6 @@ export const useCanvas = ({
           scalingOriginRef.current = null;
           return;
         }
-
         // --- Selecting End ---
         else if (selectionStateRef.current === 'selecting') {
           const finalSelection = calculateSelectionBounds(
@@ -863,12 +914,14 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // Add the element through Electric sync, passing the ID
-              await electric.addElement({
-                id: finalElement.id, // Pass the ID generated in useCanvas
-                room_id: roomId,
-                tool_type: finalElement.tool,
-                element_data: JSON.stringify(finalElement.element),
-              });
+              await electric.addElement([
+                {
+                  id: finalElement.id, // Pass the ID generated in useCanvas
+                  room_id: roomId,
+                  tool_type: finalElement.tool,
+                  element_data: JSON.stringify(finalElement.element),
+                },
+              ]);
             } catch (error) {
               console.error('Failed to sync new element:', error);
             }
@@ -930,12 +983,14 @@ export const useCanvas = ({
       } else if (roomId) {
         try {
           // Sync with Electric in collaborative mode, passing the ID
-          await electric.addElement({
-            id: newElementData.id, // Pass the ID for external elements
-            room_id: roomId,
-            tool_type: newElementData.tool,
-            element_data: JSON.stringify(newElementData.element),
-          });
+          await electric.addElement([
+            {
+              id: newElementData.id, // Pass the ID for external elements
+              room_id: roomId,
+              tool_type: newElementData.tool,
+              element_data: JSON.stringify(newElementData.element),
+            },
+          ]);
         } catch (error) {
           console.error('Failed to sync element addition:', error);
         }
@@ -1025,13 +1080,18 @@ export const useCanvas = ({
       } else if (roomId) {
         // Sync with Electric in collaborative mode
         try {
-          await electric.updateElement(id, {
-            tool_type: elementToModify.tool,
-            element_data: JSON.stringify({
-              ...elementToModify.element,
-              ...updates,
-            }),
-          });
+          await electric.updateElement([
+            {
+              id,
+              updates: {
+                tool_type: elementToModify.tool,
+                element_data: JSON.stringify({
+                  ...elementToModify.element,
+                  ...updates,
+                }),
+              },
+            },
+          ]);
 
           // Update selection if needed (selection UI is still managed locally)
           if (selection && selection.ids.includes(id)) {
@@ -1257,13 +1317,14 @@ export const useCanvas = ({
         } else if (roomId) {
           // Add each duplicated element through Electric sync
           try {
-            for (const newElement of newElements) {
-              await electric.addElement({
-                id: newElement.id, // Pass the ID generated in useCanvas
-                room_id: roomId,
-                tool_type: newElement.tool,
-                element_data: JSON.stringify(newElement.element),
-              });
+            const elementsToAdd = newElements.map(newElement => ({
+              id: newElement.id, // Pass the ID generated in useCanvas
+              room_id: roomId,
+              tool_type: newElement.tool,
+              element_data: JSON.stringify(newElement.element),
+            }));
+            if (elementsToAdd.length > 0) {
+              await electric.addElement(elementsToAdd);
             }
             // Update selection to include the new duplicated elements
           } catch (error) {
@@ -1327,8 +1388,9 @@ export const useCanvas = ({
           // Handle collaborative deletion
           try {
             // Delete each element through Electric sync
-            for (const element of elementsToDelete) {
-              await electric.removeElement(element.id);
+            const idsToDelete = elementsToDelete.map(element => element.id);
+            if (idsToDelete.length > 0) {
+              await electric.removeElement(idsToDelete);
             }
           } catch (error) {
             console.error('Failed to sync element deletion:', error);
@@ -1366,27 +1428,10 @@ export const useCanvas = ({
         // Handle collaborative clear
         try {
           // Group elements to delete for more efficient processing
-          const batchSize = 10; // Process elements in batches to improve performance
-          const elementBatches = [];
-
-          // Create batches of elements to process
-          for (let i = 0; i < elements.length; i += batchSize) {
-            elementBatches.push(elements.slice(i, i + batchSize));
+          const idsToClear = elements.map(element => element.id);
+          if (idsToClear.length > 0) {
+            await electric.removeElement(idsToClear);
           }
-
-          // Process each batch sequentially
-          for (const batch of elementBatches) {
-            // Process elements in each batch concurrently
-            await Promise.all(
-              batch.map(element =>
-                electric.removeElement(element.id).catch(err => {
-                  console.error(`Failed to remove element ${element.id}:`, err);
-                  throw err; // Rethrow to fail the entire operation
-                })
-              )
-            );
-          }
-
           console.log('Successfully cleared all elements from the canvas');
         } catch (error) {
           console.error('Failed to sync canvas clear:', error);

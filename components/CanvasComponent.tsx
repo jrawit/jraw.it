@@ -259,7 +259,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     }, [tool, pendingTextCreation, addExternalElement]);
 
     const selectedCanvasElements = useMemo(() => {
-      if (!selection || !selection.selected) {
+      if (!selection || !selection.selected || !selection.ids) {
         return [];
       }
       return elements.filter(element => selection.ids.includes(element.id));

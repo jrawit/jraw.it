@@ -44,7 +44,7 @@ function useCustomOptimistic<T>(
       // Return a function to remove this update from pending once confirmed by server
       return () => {
         pendingUpdates.current = pendingUpdates.current.filter(
-          u => u !== update
+          u => u.value.id !== update.value.id // Compare by ID for removal
         );
         // If serverState doesn't change after this, optimisticState might not auto-revert.
         // ElectricSQL sync should eventually correct the state.
@@ -204,160 +204,184 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
 
   const addElement = useCallback(
     async (
-      // Ensure elementData includes the id, room_id, tool_type, and element_data
-      elementData: Pick<
-        CanvasElementRecord,
-        'id' | 'room_id' | 'tool_type' | 'element_data'
+      elementsData: Array<
+        Pick<
+          CanvasElementRecord,
+          'id' | 'room_id' | 'tool_type' | 'element_data'
+        >
       >
-    ): Promise<CanvasElementRecord | null> => {
-      console.log('Adding element (useElectric):', elementData);
+    ): Promise<CanvasElementRecord[] | null> => {
+      if (!elementsData || elementsData.length === 0) {
+        return [];
+      }
+      console.log('Adding elements (useElectric):', elementsData);
 
-      // The ID now comes from elementData.id, passed from useCanvas
-      const optimisticElement: CanvasElementRecord = {
-        id: elementData.id, // Use the provided ID
-        room_id: elementData.room_id,
-        creator_id: userId, // Set by the hook/server
-        tool_type: elementData.tool_type,
-        element_data: elementData.element_data,
-        created_at: new Date(), // Optimistic, server might override
-        updated_at: new Date(), // Optimistic, server might override
-      };
+      const removeOptimisticInserts: Array<() => void> = [];
+      const optimisticElements: CanvasElementRecord[] = [];
 
-      const removeOptimisticInsert = addOptimisticUpdate({
-        operation: 'insert',
-        value: optimisticElement,
+      elementsData.forEach(elementData => {
+        const optimisticElement: CanvasElementRecord = {
+          id: elementData.id,
+          room_id: elementData.room_id,
+          creator_id: userId,
+          tool_type: elementData.tool_type,
+          element_data: elementData.element_data,
+          created_at: new Date(),
+          updated_at: new Date(),
+        };
+        optimisticElements.push(optimisticElement);
+        removeOptimisticInserts.push(
+          addOptimisticUpdate({
+            operation: 'insert',
+            value: optimisticElement,
+          })
+        );
       });
 
       try {
-        const newElementFromServer = (await api.request(
+        const elementsToCreate = elementsData.map(elementData => ({
+          id: elementData.id,
+          room_id: elementData.room_id,
+          tool_type: elementData.tool_type,
+          element_data: elementData.element_data,
+        }));
+
+        const createdElementsFromServer = (await api.request(
           '/canvas/elements',
           'POST',
-          {
-            id: elementData.id, // Send the client-generated ID to the server
-            room_id: elementData.room_id,
-            tool_type: elementData.tool_type,
-            element_data: elementData.element_data,
-            // creator_id will be set by the server based on the auth token
-          }
-        )) as CanvasElementRecord | null;
+          elementsToCreate
+        )) as CanvasElementRecord[] | null;
 
-        // ElectricSQL sync will eventually provide the authoritative state.
-        // No explicit removeOptimisticInsert() call needed on success if relying on sync.
-
-        if (
-          newElementFromServer &&
-          newElementFromServer.id === elementData.id
-        ) {
-          // Server confirmed and returned the element with the same ID.
-          return newElementFromServer;
-        } else if (newElementFromServer) {
-          // This case implies server returned an element but ID doesn't match,
-          // which is unexpected if the server is configured to use the client's ID.
-          console.warn(
-            'Add element: Server returned element with mismatched ID.',
-            newElementFromServer
-          );
-          removeOptimisticInsert(); // Rollback optimistic if ID mismatch and server is source of truth for ID.
-          return newElementFromServer;
+        if (createdElementsFromServer && createdElementsFromServer.length > 0) {
+          // Basic check, assumes server returns elements in the same order or all succeed/fail
+          // More sophisticated matching might be needed if IDs can change or partial success is possible
+          return createdElementsFromServer;
         } else {
-          // Server did not return the element, or creation failed silently on server.
           console.warn(
-            'Add element: Server did not return a valid element. Relying on optimistic data or sync.'
+            'Add elements: Server did not return valid elements. Relying on optimistic data or sync.'
           );
-          // If the API call itself was successful (not an exception),
-          // we might assume the optimistic update is fine until ElectricSQL says otherwise.
-          return optimisticElement; // Or null if creation is uncertain and API doesn't confirm.
+          return optimisticElements; // Return optimistic elements if server response is not as expected but no error thrown
         }
       } catch (error) {
-        console.error('Failed to add element:', error);
-        removeOptimisticInsert(); // Rollback optimistic update on API error
+        console.error('Failed to add elements:', error);
+        removeOptimisticInserts.forEach(remove => remove()); // Rollback all optimistic updates on API error
         return null;
       }
     },
-    [addOptimisticUpdate, userId, roomId] // roomId might be implicitly used via API_URL or other context
+    [addOptimisticUpdate, userId, roomId]
   );
 
   const updateElement = useCallback(
     async (
-      id: string,
-      updates: Partial<
-        Omit<
-          CanvasElementRecord,
-          'id' | 'room_id' | 'creator_id' | 'created_at' | 'updated_at'
-        >
-      >
+      updatesArray: Array<{
+        id: string;
+        updates: Partial<
+          Omit<
+            CanvasElementRecord,
+            'id' | 'room_id' | 'creator_id' | 'created_at' | 'updated_at'
+          >
+        >;
+      }>
     ) => {
-      const currentElement = elements.find(el => el.id === id);
-      if (!currentElement) {
-        console.error('Element not found for update:', id);
+      if (!updatesArray || updatesArray.length === 0) {
         return;
       }
 
-      // Assuming CanvasElement (currentElement) has camelCase properties
-      // corresponding to CanvasElementRecord's snake_case properties.
-      // And that CanvasElement has: id, roomId, creatorId, toolType, elementData, createdAt, updatedAt
-      const optimisticUpdateData: CanvasElementRecord = {
-        id: currentElement.id,
-        room_id: (currentElement as any).roomId,
-        creator_id: (currentElement as any).creatorId,
-        tool_type: updates.tool_type ?? (currentElement as any).toolType,
-        element_data:
-          updates.element_data ?? (currentElement as any).elementData,
-        created_at: (currentElement as any).createdAt,
-        updated_at: new Date(), // Update timestamp for the optimistic update
-      };
+      const removeOptimisticUpdates: Array<() => void> = [];
+      const elementsToUpdateForApi: any[] = [];
 
-      const removeOptimisticUpdate = addOptimisticUpdate({
-        operation: 'update',
-        value: optimisticUpdateData,
-      });
+      for (const { id, updates } of updatesArray) {
+        const currentElement = elements.find(el => el.id === id);
+        if (!currentElement) {
+          console.warn('Element not found for update:', id);
+          continue; // Skip this update if element not found
+        }
 
-      try {
-        // API expects tool_type, element_data for update
-        await api.request(`/canvas/elements/${id}`, 'PUT', {
+        const optimisticUpdateData: CanvasElementRecord = {
+          id: currentElement.id,
+          room_id: (currentElement as any).roomId,
+          creator_id: (currentElement as any).creatorId,
+          tool_type: updates.tool_type ?? (currentElement as any).toolType,
+          element_data:
+            updates.element_data ?? (currentElement as any).elementData,
+          created_at: (currentElement as any).createdAt,
+          updated_at: new Date(),
+        };
+
+        removeOptimisticUpdates.push(
+          addOptimisticUpdate({
+            operation: 'update',
+            value: optimisticUpdateData,
+          })
+        );
+
+        elementsToUpdateForApi.push({
+          id: id,
           tool_type: updates.tool_type,
           element_data: updates.element_data,
         });
+      }
+
+      if (elementsToUpdateForApi.length === 0) {
+        return; // No valid elements to update
+      }
+
+      try {
+        await api.request(`/canvas/elements`, 'PUT', elementsToUpdateForApi);
         // ElectricSQL sync should handle the update from the server.
       } catch (error) {
-        console.error('Failed to update element:', error);
-        removeOptimisticUpdate();
+        console.error('Failed to update elements:', error);
+        removeOptimisticUpdates.forEach(remove => remove());
       }
     },
     [elements, addOptimisticUpdate]
   );
 
   const removeElement = useCallback(
-    async (id: string) => {
-      const elementToRemove = elements.find(el => el.id === id);
-      if (!elementToRemove) {
-        console.warn('Element not found for removal:', id);
+    async (ids: string[]) => {
+      if (!ids || ids.length === 0) {
         return;
       }
 
-      // Assuming CanvasElement (elementToRemove) has camelCase properties
-      // corresponding to CanvasElementRecord's snake_case properties.
-      const recordToDelete: CanvasElementRecord = {
-        id: elementToRemove.id,
-        room_id: (elementToRemove as any).roomId,
-        creator_id: (elementToRemove as any).creatorId,
-        tool_type: (elementToRemove as any).toolType,
-        element_data: (elementToRemove as any).elementData,
-        created_at: (elementToRemove as any).createdAt,
-        updated_at: (elementToRemove as any).updatedAt, // Use last known updatedAt
-      };
+      const removeOptimisticDeletes: Array<() => void> = [];
+      const recordsToDelete: CanvasElementRecord[] = [];
 
-      const removeOptimisticUpdate = addOptimisticUpdate({
-        operation: 'delete',
-        value: recordToDelete,
-      });
+      for (const id of ids) {
+        const elementToRemove = elements.find(el => el.id === id);
+        if (!elementToRemove) {
+          console.warn('Element not found for removal:', id);
+          continue; // Skip if element not found
+        }
+
+        const recordToDelete: CanvasElementRecord = {
+          id: elementToRemove.id,
+          room_id: (elementToRemove as any).roomId,
+          creator_id: (elementToRemove as any).creatorId,
+          tool_type: (elementToRemove as any).toolType,
+          element_data: (elementToRemove as any).elementData,
+          created_at: (elementToRemove as any).createdAt,
+          updated_at: (elementToRemove as any).updatedAt,
+        };
+        recordsToDelete.push(recordToDelete);
+
+        removeOptimisticDeletes.push(
+          addOptimisticUpdate({
+            operation: 'delete',
+            value: recordToDelete,
+          })
+        );
+      }
+
+      if (recordsToDelete.length === 0) {
+        return; // No valid elements to delete
+      }
 
       try {
-        await api.request(`/canvas/elements/${id}`, 'DELETE');
+        await api.request(`/canvas/elements`, 'DELETE', { ids });
         // ElectricSQL sync should handle the update from the server.
       } catch (error) {
-        console.error('Failed to delete element:', error);
-        removeOptimisticUpdate();
+        console.error('Failed to delete elements:', error);
+        removeOptimisticDeletes.forEach(remove => remove());
       }
     },
     [elements, addOptimisticUpdate]
