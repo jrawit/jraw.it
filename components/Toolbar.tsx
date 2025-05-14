@@ -29,6 +29,19 @@ import ColorPicker, {
   Panel2,
 } from 'reanimated-color-picker';
 
+const REACTION_EMOJIS = [
+  '👍',
+  '❤️',
+  '👏',
+  '🎉',
+  '🔥',
+  '😂',
+  '😮',
+  '👎',
+  '❓',
+  '⭐',
+];
+
 // Define the shape tools
 const shapeTools = [
   Tools.LINE,
@@ -45,6 +58,7 @@ type ToolbarProps = {
   onColorChange: (color: string) => void;
   isDrawing?: boolean; // Add this prop to detect drawing state
   color?: string; // Add this prop to receive the current color from parent
+  onEmojiChange: (emoji: string) => void; // New prop for emoji selection
 };
 
 const Toolbar: React.FC<ToolbarProps> = React.memo(
@@ -55,11 +69,14 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
     onColorChange,
     isDrawing = false,
     color,
+    onEmojiChange, // New prop
   }) => {
     const colorScheme = useColorScheme();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [colorPickerVisible, setColorPickerVisible] = useState(false);
     const [shapeSelectorVisible, setShapeSelectorVisible] = useState(false); // State for shape selector modal
+    const [selectedEmoji, setSelectedEmoji] = useState('👍'); // State for selected emoji
+    const [emojiSelectorVisible, setEmojiSelectorVisible] = useState(false); // State for emoji selector modal
     const [initialColor, setInitialColor] = useState('#000000');
     const [strokeWidth, setStrokeWidth] = useState(3);
     const selectedColor = useSharedValue(initialColor);
@@ -121,11 +138,20 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
     });
 
     useEffect(() => {
-      if (isDrawing && (colorPickerVisible || shapeSelectorVisible)) {
+      if (
+        isDrawing &&
+        (colorPickerVisible || shapeSelectorVisible || emojiSelectorVisible)
+      ) {
         setColorPickerVisible(false);
         setShapeSelectorVisible(false); // Close shape selector too
+        setEmojiSelectorVisible(false); // Close emoji selector too
       }
-    }, [isDrawing, colorPickerVisible, shapeSelectorVisible]);
+    }, [
+      isDrawing,
+      colorPickerVisible,
+      shapeSelectorVisible,
+      emojiSelectorVisible,
+    ]);
 
     // Animated style for the color preview button
     const colorButtonStyle = useAnimatedStyle(() => {
@@ -171,7 +197,8 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
       return Object.entries(ToolData).filter(
         ([toolType]) =>
           !shapeTools.includes(toolType as Tools) &&
-          toolType !== Tools.EYEDROPPER // Exclude the eye dropper tool from toolbar
+          toolType !== Tools.EYEDROPPER && // Exclude the eye dropper tool from toolbar
+          toolType !== Tools.EMOJI // Exclude EMOJI tool from main toolbar items, will have its own button
       );
     }, []);
 
@@ -292,6 +319,27 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
                     />
                   )}
                 </TouchableOpacity>
+
+                {/* Emoji Selector Button */}
+                <TouchableOpacity
+                  onPress={useCallback(
+                    () => setEmojiSelectorVisible(true),
+                    [setEmojiSelectorVisible]
+                  )}
+                  style={[
+                    styles.button,
+                    tool === Tools.EMOJI && styles.activeButton,
+                  ]}
+                >
+                  <ThemedText
+                    style={{
+                      fontFamily: 'TwitterColorEmoji',
+                      fontSize: 24,
+                    }}
+                  >
+                    {selectedEmoji}
+                  </ThemedText>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </Animated.View>
@@ -403,6 +451,39 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+            </ThemedView>
+          </Pressable>
+        </Modal>
+
+        {/* Emoji Selector Modal */}
+        <Modal
+          transparent={true}
+          visible={emojiSelectorVisible}
+          animationType="fade"
+          onRequestClose={() => setEmojiSelectorVisible(false)}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setEmojiSelectorVisible(false)} // Close on overlay press
+          >
+            <ThemedView style={styles.emojiSelectorModalContent}>
+              <ThemedText style={styles.modalTitle}>Select Emoji</ThemedText>
+              <View style={styles.emojiSelectorGrid}>
+                {REACTION_EMOJIS.map(emoji => (
+                  <TouchableOpacity
+                    key={emoji}
+                    onPress={() => {
+                      onToolChange(Tools.EMOJI);
+                      onEmojiChange(emoji);
+                      setSelectedEmoji(emoji);
+                      setEmojiSelectorVisible(false);
+                    }}
+                    style={styles.emojiButton}
+                  >
+                    <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                  </TouchableOpacity>
+                ))}
               </View>
             </ThemedView>
           </Pressable>
@@ -603,6 +684,38 @@ const styles = StyleSheet.create({
   eyeDropperText: {
     fontSize: 12,
     color: '#adadad',
+  },
+  // Styles for Emoji Selector Modal
+  emojiSelectorModalContent: {
+    borderRadius: 10,
+    padding: 15,
+    width: 'auto',
+    minWidth: 200,
+    maxWidth: '90%',
+    alignItems: 'center',
+  },
+  emojiSelectorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  emojiButton: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  emojiText: {
+    fontFamily: 'TwitterColorEmoji',
+    fontSize: 24,
   },
 });
 

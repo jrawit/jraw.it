@@ -176,6 +176,15 @@ export const calculateBoundingBox = (
         width: imageWidth,
         height: imageHeight,
       };
+    case Tools.EMOJI:
+      const { point: emojiPoint, size: emojiSize } =
+        data as CanvasElements.Emoji;
+      return {
+        x: emojiPoint.x,
+        y: emojiPoint.y,
+        width: emojiSize,
+        height: emojiSize * 1.1,
+      };
     default:
       return null;
   }

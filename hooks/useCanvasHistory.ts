@@ -1,5 +1,7 @@
+import { CanvasElement } from '@/hooks/useCanvas';
 import { useCallback, useState } from 'react';
-import { CanvasElement } from './useCanvas'; // Adjust import path if needed
+import { useElectricCanvas } from './useElectric';
+// Assuming CanvasElementRecord might be co-located or defined in a shared types file
 
 // Define Action Types
 export type AddAction = { type: 'ADD_ELEMENT'; elements: CanvasElement[] };
@@ -19,7 +21,9 @@ export type HistoryAction = AddAction | DeleteAction | ModifyAction;
 
 export const useCanvasHistory = (
   setElements: React.Dispatch<React.SetStateAction<CanvasElement[]>>,
-  clearSelection: () => void
+  clearSelection: () => void,
+  electricActions: ReturnType<typeof useElectricCanvas>,
+  roomId: string | undefined // Add roomId as a parameter
 ) => {
   const [undoStack, setUndoStack] = useState<HistoryAction[]>([]);
   const [redoStack, setRedoStack] = useState<HistoryAction[]>([]);
@@ -48,10 +52,25 @@ export const useCanvasHistory = (
             el => !lastAction.elements.some(added => added.id === el.id)
           )
         );
+        // Call electric remove for each element
+        lastAction.elements.forEach(element => {
+          electricActions.removeElement(element.id);
+        });
         break;
       case 'DELETE_ELEMENT':
         // Re-add the deleted elements
         setElements(prev => [...prev, ...lastAction.elements]);
+        // Call electric add for each element
+        if (roomId) {
+          lastAction.elements.forEach(element => {
+            electricActions.addElement({
+              id: element.id,
+              room_id: roomId,
+              tool_type: String(element.tool),
+              element_data: JSON.stringify(element.element),
+            });
+          });
+        }
         break;
       case 'MODIFY_ELEMENT':
         // Restore previous state for modified elements (partial update)
@@ -64,6 +83,15 @@ export const useCanvasHistory = (
             currentEl => originalMap.get(currentEl.id) || currentEl
           );
         });
+        // Call electric update for each original element state
+        if (roomId) {
+          lastAction.originalElements.forEach(originalElement => {
+            electricActions.updateElement(originalElement.id, {
+              tool_type: String(originalElement.tool),
+              element_data: JSON.stringify(originalElement.element),
+            });
+          });
+        }
         break;
     }
 
@@ -71,7 +99,7 @@ export const useCanvasHistory = (
     setRedoStack(prev => [lastAction, ...prev]);
     setUndoStack(newUndoStack);
     clearSelection(); // Clear selection after undo/redo
-  }, [undoStack, setElements, clearSelection]);
+  }, [undoStack, setElements, clearSelection, electricActions]); // Added electricActions
 
   const redo = useCallback(() => {
     if (redoStack.length === 0) return;
@@ -87,6 +115,17 @@ export const useCanvasHistory = (
       case 'ADD_ELEMENT':
         // Re-add the elements
         setElements(prev => [...prev, ...nextAction.elements]);
+        // Call electric add for each element
+        if (roomId) {
+          nextAction.elements.forEach(element => {
+            electricActions.addElement({
+              id: element.id,
+              room_id: roomId,
+              tool_type: String(element.tool),
+              element_data: JSON.stringify(element.element),
+            });
+          });
+        }
         break;
       case 'DELETE_ELEMENT':
         // Re-delete the elements
@@ -95,6 +134,10 @@ export const useCanvasHistory = (
             el => !nextAction.elements.some(deleted => deleted.id === el.id)
           )
         );
+        // Call electric remove for each element
+        nextAction.elements.forEach(element => {
+          electricActions.removeElement(element.id);
+        });
         break;
       case 'MODIFY_ELEMENT':
         // Apply new state for modified elements (partial update)
@@ -103,6 +146,15 @@ export const useCanvasHistory = (
           // Map over previous state, replacing elements found in the newMap
           return prev.map(currentEl => newMap.get(currentEl.id) || currentEl);
         });
+        // Call electric update for each new element state
+        if (roomId) {
+          nextAction.newElements.forEach(newElement => {
+            electricActions.updateElement(newElement.id, {
+              tool_type: String(newElement.tool),
+              element_data: JSON.stringify(newElement.element),
+            });
+          });
+        }
         break;
     }
 
@@ -110,7 +162,7 @@ export const useCanvasHistory = (
     setUndoStack(prev => [...prev, nextAction]);
     setRedoStack(newRedoStack);
     clearSelection(); // Clear selection after undo/redo
-  }, [redoStack, setElements, clearSelection]);
+  }, [redoStack, setElements, clearSelection, electricActions]); // Added electricActions
 
   // Optional: Function to clear the history stacks
   const clear = useCallback(() => {

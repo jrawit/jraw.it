@@ -914,10 +914,27 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     },
     finalizeElement: element => element, // No finalization typically needed
   },
+  [Tools.EMOJI]: {
+    moveElement: (element, deltaX, deltaY) => {
+      const newElement = cloneDeep(element);
+      const emoji = newElement.element as CanvasElements.Emoji;
+      emoji.point = { x: emoji.point.x + deltaX, y: emoji.point.y + deltaY };
+      return newElement;
+    },
+    scaleElement: (element, scaleX, scaleY) => {
+      // Scaling an image scales its position and dimensions
+      const newElement = cloneDeep(element);
+      const emoji = newElement.element as CanvasElements.Emoji;
+      // Change scaling by changing size
+      emoji.size *= Math.sqrt(Math.abs(scaleX * scaleY));
+      return newElement;
+    },
+    finalizeElement: element => element, // No finalization typically needed
+  },
   // Tools that don't create persistent elements
   [Tools.SELECT]: {},
   [Tools.PAN]: {},
-  [Tools.EYEDROPPER]: {}, // Added missing EYEDROPPER placeholder
+  [Tools.EYEDROPPER]: {},
 };
 
 // Modify initElement for Circle and Star to store temporary center/spikes

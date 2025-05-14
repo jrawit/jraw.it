@@ -7,7 +7,11 @@ import { ThemedView } from '@/components/ThemedView';
 import { processImageForCanvas } from '@/hooks/tool-handlers';
 import { useFontManager } from '@/hooks/useFontManager';
 import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
+import { API_URL, useAuthStore } from '@/utils/auth.store';
+import { ELECTRIC_URL, envParams } from '@/utils/electric';
 import { renderElementsOffscreen } from '@/utils/offscreenRenderer';
+import { Row } from '@electric-sql/client/model';
+import { useShape } from '@electric-sql/react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -31,7 +35,6 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { io } from 'socket.io-client';
 import Toolbar from '../../components/Toolbar';
 import { Tools } from '../../constants/Tools';
 
@@ -43,11 +46,58 @@ interface Background {
   textureOpacity: number;
 }
 
+// Define an interface for the Room shape
+interface Room extends Row {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string; // Assuming string representation from ElectricSQL
+  updated_at: string; // Assuming string representation from ElectricSQL
+  // Add index signature for compatibility with ElectricSQL Row type
+  [key: string]: any;
+}
+
 export default function CanvasScreen() {
-  const [socket, setSocket] = useState<any>(null);
+  // Get the roomId from the URL /canvas/[id]/
+  const { id: roomId } = useLocalSearchParams<{ id: string }>();
+  const { token: authToken } = useAuthStore();
+
+  // Subscribe to room data for real-time updates to the name
+  const { data: roomData, isLoading: isRoomLoading } = useShape<Room>({
+    url: `${ELECTRIC_URL}/v1/shape`,
+    params: {
+      table: 'rooms',
+      where: `id = '${roomId}'`,
+      ...envParams,
+    },
+  });
+
+  const currentRoom = roomData?.[0];
+  const [title, setTitle] = useState<string>(
+    currentRoom?.name ?? roomId?.toString() ?? 'Untitled'
+  );
+  const [isTitleInputFocused, setIsTitleInputFocused] =
+    useState<boolean>(false);
+  const [isSubmittingTitle, setIsSubmittingTitle] = useState<boolean>(false);
+
+  // Effect to update local title when roomData changes from ElectricSQL
+  useEffect(() => {
+    if (
+      !isTitleInputFocused &&
+      !isSubmittingTitle &&
+      currentRoom &&
+      currentRoom.name !== title
+    ) {
+      setTitle(currentRoom.name as string);
+    }
+  }, [currentRoom, title, isTitleInputFocused, isSubmittingTitle, setTitle]);
+
+  console.log('CanvasScreen', roomId);
+
   const [tool, setTool] = useState<Tools>(Tools.PEN);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [isShiftDown, setIsShiftDown] = useState<boolean>(false); // <-- Add state for Shift key
+  const [selectedEmoji, setSelectedEmoji] = useState<string>('😀'); // Add selectedEmoji state
   // Keybinds
   const { keyEvent, startListening, stopListening } = useKeyEvent(false);
   useEffect(() => {
@@ -57,6 +107,7 @@ export default function CanvasScreen() {
 
   const skiaCanvasRef = useCanvasRef();
   const canvasComponentRef = useRef<CanvasComponentHandle>(null);
+  const canvasWrapperRef = useRef<any>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -135,10 +186,14 @@ export default function CanvasScreen() {
     ) {
       switch (keyEvent.key) {
         case 'KeyZ':
-          canvasComponentRef.current?.undo();
+          canvasComponentRef.current
+            ?.undo()
+            .catch(e => console.error('Error during undo:', e));
           break;
         case 'KeyY':
-          canvasComponentRef.current?.redo();
+          canvasComponentRef.current
+            ?.redo()
+            .catch(e => console.error('Error during redo:', e));
           break;
         case 'Digit1':
           setTool(Tools.PEN);
@@ -177,16 +232,18 @@ export default function CanvasScreen() {
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
   const [color, setSelectedColor] = useState<string>('#000000');
 
+  const [isMiddleMouseDown, setIsMiddleMouseDown] = useState<boolean>(false);
+  const [lastPanPosition, setLastPanPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
   const [elementsOffset, setElementsOffset] = useState<{
     x: number;
     y: number;
   }>({ x: 0, y: 0 });
 
   const colorScheme = useColorScheme();
-
-  const { id } = useLocalSearchParams();
-
-  const [title, setTitle] = useState(id?.toString() ?? '');
 
   const {
     isPermissionModalVisible,
@@ -205,14 +262,6 @@ export default function CanvasScreen() {
     gridSize: 20,
     textureOpacity: 0.1,
   });
-
-  useEffect(() => {
-    setSocket(io('http://localhost:3000/room'));
-
-    return () => {
-      socket?.emit('leaveRoom', { roomId: id });
-    };
-  }, []);
 
   const fontManager = useFontManager();
 
@@ -368,6 +417,112 @@ export default function CanvasScreen() {
     setZoomLevel(1); //resets zoom level to 100%
   };
 
+  const handleCanvasZoomChange = useCallback(
+    (newScale: number) => {
+      setZoomLevel(newScale);
+    },
+    [setZoomLevel]
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !canvasWrapperRef.current) {
+      return;
+    }
+
+    const canvasDiv = canvasWrapperRef.current as HTMLElement; // More specific type for web
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.ctrlKey) {
+        // Pinch-to-zoom or Ctrl + Scroll
+        const delta = event.deltaY;
+        const scaleAmount = 1.05; // Factor for multiplicative zoom
+
+        let newZoomLevel = zoomLevel;
+        if (delta < 0) {
+          // Zoom In (pinch out / scroll wheel up)
+          newZoomLevel = zoomLevel * scaleAmount;
+        } else if (delta > 0) {
+          // Zoom Out (pinch in / scroll wheel down)
+          newZoomLevel = zoomLevel / scaleAmount;
+        }
+
+        newZoomLevel = Math.max(0.1, Math.min(newZoomLevel, 2.5)); // Clamp zoom level
+
+        if (newZoomLevel !== zoomLevel) {
+          handleCanvasZoomChange(newZoomLevel);
+        }
+      } else {
+        // Two-finger pan (comes as wheel events without ctrlKey on touchpads)
+        const panSensitivity = 1; // Adjust sensitivity as needed
+        const newOffsetX = elementsOffset.x - event.deltaX * panSensitivity;
+        const newOffsetY = elementsOffset.y - event.deltaY * panSensitivity;
+        // Here, we directly set elementsOffset, or we could adapt handleCanvasZoomChange
+        // or create a new specific handler if pan should also affect zoom (which is not typical for this case)
+        setElementsOffset({ x: newOffsetX, y: newOffsetY });
+      }
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button === 1) {
+        // Middle mouse button
+        event.preventDefault();
+        setIsMiddleMouseDown(true);
+        setLastPanPosition({ x: event.clientX, y: event.clientY });
+        canvasDiv.style.cursor = 'grabbing'; // Optional: change cursor
+      }
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (isMiddleMouseDown && lastPanPosition) {
+        event.preventDefault();
+        const deltaX = event.clientX - lastPanPosition.x;
+        const deltaY = event.clientY - lastPanPosition.y;
+
+        setElementsOffset(prevOffset => ({
+          x: prevOffset.x + deltaX,
+          y: prevOffset.y + deltaY,
+        }));
+        setLastPanPosition({ x: event.clientX, y: event.clientY });
+      }
+    };
+
+    const handleMouseUp = (event: MouseEvent) => {
+      if (event.button === 1 && isMiddleMouseDown) {
+        // Middle mouse button
+        event.preventDefault();
+        setIsMiddleMouseDown(false);
+        setLastPanPosition(null);
+        canvasDiv.style.cursor = 'default'; // Optional: reset cursor
+      }
+    };
+
+    // Add event listener with passive: false to allow preventDefault
+    canvasDiv.addEventListener('wheel', handleWheel, { passive: false });
+    canvasDiv.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove); // Listen on window for smoother panning
+    window.addEventListener('mouseup', handleMouseUp); // Listen on window
+
+    return () => {
+      canvasDiv.removeEventListener('wheel', handleWheel);
+      canvasDiv.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      if (canvasDiv) {
+        canvasDiv.style.cursor = 'default'; // Ensure cursor is reset on unmount
+      }
+    };
+  }, [
+    zoomLevel,
+    elementsOffset,
+    handleCanvasZoomChange,
+    setElementsOffset,
+    isMiddleMouseDown,
+    lastPanPosition,
+  ]); // Dependencies
+
   const updateColorFromEyeDropper = useCallback(
     (pickedColor: string) => {
       // Pass the picked color to the appropriate state or callback
@@ -381,6 +536,68 @@ export default function CanvasScreen() {
     [setSelectedColor, tool, setTool]
   );
 
+  const updateRoomNameAPI = useCallback(
+    async (newName: string) => {
+      if (!roomId || !newName.trim()) {
+        console.warn('Room ID or new name is missing, skipping update.');
+        return;
+      }
+      // Prevent API call if the name hasn't changed from the synced version
+      // relative to the currentRoom state at the time of this function call.
+      if (currentRoom && newName.trim() === currentRoom.name) {
+        console.log('Room name has not changed, skipping update.');
+        return;
+      }
+
+      const originalNameFromServer = currentRoom?.name as string | undefined;
+      setIsSubmittingTitle(true);
+
+      try {
+        const response = await fetch(`${API_URL}/room/${roomId}/name`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({ name: newName.trim() }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`API Error (${response.status}): ${errorText}`);
+          if (originalNameFromServer !== undefined) {
+            setTitle(originalNameFromServer);
+          } else {
+            // Fallback if there was no known server name (e.g. initial load error)
+            setTitle(roomId?.toString() ?? 'Untitled');
+          }
+          throw new Error(
+            `API error: ${response.status} ${response.statusText}`
+          );
+        }
+        // On successful API call, the local `title` is already the optimistic newName.
+        // ElectricSQL will sync, and the useEffect might align it if there was any discrepancy,
+        // but typically currentRoom.name will become newName.
+        console.log('Room name updated successfully via API.');
+      } catch (error) {
+        console.error('Failed to update room name:', error);
+        // Revert to original server name on any error if it was known
+        if (originalNameFromServer !== undefined) {
+          setTitle(originalNameFromServer);
+        } else {
+          setTitle(roomId?.toString() ?? 'Untitled');
+        }
+      } finally {
+        setIsSubmittingTitle(false);
+      }
+    },
+    [roomId, authToken, currentRoom, setTitle, setIsSubmittingTitle] // Added setIsSubmittingTitle
+  );
+
+  const handleEmojiChange = useCallback((emoji: string) => {
+    setSelectedEmoji(emoji);
+  }, []);
+
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
       <Stack.Screen
@@ -389,6 +606,19 @@ export default function CanvasScreen() {
             <TextInput
               value={title}
               onChangeText={setTitle}
+              onFocus={() => setIsTitleInputFocused(true)}
+              onBlur={() => {
+                const currentTitleOnBlur = title; // Capture the optimistic title
+                setIsTitleInputFocused(false);
+                updateRoomNameAPI(currentTitleOnBlur);
+              }}
+              onEndEditing={() => {
+                // onEndEditing can also trigger the update.
+                // Ensure isTitleInputFocused is false if this is the primary submission action.
+                // However, onBlur will likely handle most cases.
+                setIsTitleInputFocused(false); // Ensure focus state is correct
+                updateRoomNameAPI(title);
+              }}
               style={[
                 styles.headerTitleInput,
                 { color: colorScheme === 'dark' ? 'white' : 'black' },
@@ -403,20 +633,28 @@ export default function CanvasScreen() {
           headerTintColor: colorScheme === 'dark' ? 'white' : 'black',
         }}
       />
-      <CanvasComponent
-        zoomScale={zoomLevel}
-        ref={canvasComponentRef}
-        canvasRef={skiaCanvasRef}
-        tool={tool}
-        strokeWidth={strokeWidth}
-        color={color}
-        background={background}
-        elementsOffset={elementsOffset}
-        setElementsOffset={setElementsOffset}
-        onDrawingStateChange={setIsDrawing}
-        isShiftDown={isShiftDown}
-        onEyeDropperColor={updateColorFromEyeDropper}
-      />
+      <View
+        ref={canvasWrapperRef}
+        style={{ flex: 1, overflow: 'hidden' }} // Added a wrapper View for event handling
+      >
+        <CanvasComponent
+          zoomScale={zoomLevel}
+          ref={canvasComponentRef}
+          canvasRef={skiaCanvasRef}
+          tool={tool}
+          strokeWidth={strokeWidth}
+          color={color}
+          background={background}
+          elementsOffset={elementsOffset}
+          setElementsOffset={setElementsOffset} // For one-finger pan and direct manipulation in CanvasComponent
+          onDrawingStateChange={setIsDrawing}
+          isShiftDown={isShiftDown}
+          onEyeDropperColor={updateColorFromEyeDropper}
+          roomId={roomId?.toString() ?? ''}
+          onZoomChange={handleCanvasZoomChange} // Pass the new callback here
+          selectedEmoji={selectedEmoji} // Pass selectedEmoji
+        />
+      </View>
 
       <View style={styles.controlsContainer}>
         <View style={styles.buttonRow}>
@@ -439,13 +677,21 @@ export default function CanvasScreen() {
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            onPress={() => canvasComponentRef.current?.undo()}
+            onPress={() =>
+              canvasComponentRef.current
+                ?.undo()
+                .catch(e => console.error('Error during undo:', e))
+            }
             style={styles.controlButton}
           >
             <MaterialIcons name="undo" size={24} color="black" />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => canvasComponentRef.current?.redo()}
+            onPress={() =>
+              canvasComponentRef.current
+                ?.redo()
+                .catch(e => console.error('Error during redo:', e))
+            }
             style={styles.controlButton}
           >
             <MaterialIcons name="redo" size={24} color="black" />
@@ -471,7 +717,11 @@ export default function CanvasScreen() {
             />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => canvasComponentRef.current?.clear()}
+            onPress={() =>
+              canvasComponentRef.current
+                ?.clear()
+                .catch(e => console.error('Error during clear:', e))
+            }
             style={[styles.controlButton, styles.clearButton]}
           >
             <FontAwesome name="trash" size={24} color="black" />
@@ -487,6 +737,7 @@ export default function CanvasScreen() {
         onColorChange={setSelectedColor}
         isDrawing={isDrawing}
         color={color}
+        onEmojiChange={handleEmojiChange} // Pass handleEmojiChange
       />
 
       <Modal

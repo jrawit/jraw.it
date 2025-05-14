@@ -4,22 +4,42 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { UserAuthHeader } from '@/components/UserAuthHeader';
 import { useAuthStore } from '@/utils/auth.store';
+import { ELECTRIC_URL, envParams } from '@/utils/electric';
+import { createRoom, deleteRoom, renameRoom } from '@/utils/room.service';
+import { Row } from '@electric-sql/client/model'; // Correct import for Row
+import { useShape } from '@electric-sql/react';
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react'; // Added useMemo
 import {
+  Alert,
   Button,
   FlatList,
+  Platform, // Added Platform
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   useColorScheme,
   useWindowDimensions,
 } from 'react-native';
-import { io } from 'socket.io-client';
 
-interface CreateRoomResponse {
-  success: boolean;
-  roomId: string;
+// Interface for the data structure returned by ElectricSQL useShape
+interface RoomShape extends Row {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
+  // Add index signature for compatibility with ElectricSQL Row type
+  [key: string]: any;
+}
+
+// App-specific Room interface used by components like RoomCard
+interface Room {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function HomeScreen() {
@@ -31,66 +51,209 @@ export default function HomeScreen() {
     Math.max(1, Math.floor(width / 220))
   );
 
-  // Get user from auth store
   const { user, token } = useAuthStore();
   const isLoggedIn = !!user && !!token;
 
+  // Subscribe to rooms data using ElectricSQL's useShape
+  const { data: roomsShapeData, isLoading: roomsLoading } = useShape<RoomShape>(
+    {
+      url: `${ELECTRIC_URL}/v1/shape`,
+      params: isLoggedIn
+        ? {
+            table: 'rooms',
+            where: `owner_id = '${user?.id}'`,
+            ...envParams,
+          }
+        : { table: 'rooms', ...envParams, where: '1=0' },
+    }
+  );
+
+  // Transform RoomShapeData (from ElectricSQL) to Room[] (for the app)
+  const rooms: Room[] = useMemo(() => {
+    if (!isLoggedIn || !roomsShapeData) {
+      return [];
+    }
+    // Ensure that the data from useShape is correctly typed before mapping
+    const mappedRooms = roomsShapeData.map((shape: RoomShape) => ({
+      id: shape.id,
+      name: shape.name,
+      owner_id: shape.owner_id,
+      created_at: shape.created_at,
+      updated_at: shape.updated_at,
+    }));
+    // Sort by updated_at descending to show most recently updated rooms first
+    mappedRooms.sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+    return mappedRooms;
+  }, [roomsShapeData, isLoggedIn]);
+
   useEffect(() => {
-    // Ensure we have at least 1 column and account for proper padding
+    // Recalculate number of columns when screen width changes
     setNumColumns(Math.max(1, Math.floor(width / 220)));
   }, [width]);
 
-  const handleCreateRoom = () => {
-    const socket = io('http://localhost:3000/room');
-
-    socket.emit('checkRoomExists', { roomId: roomId }, (response: any) => {
-      console.log('Room exists:', response);
-
-      if (response.success) {
-        const roomExists = response.exists;
-
-        if (roomExists) {
-          console.log('Room already exists');
-          router.push(`/canvas/${roomId}`);
-        } else {
-          console.log('Creating room:', roomId);
-          socket.emit(
-            'createRoom',
-            { name: roomId },
-            (response: CreateRoomResponse) => {
-              console.log('Room created:', response);
-
-              if (response.success) {
-                console.log(`Room created with ID: ${response.roomId}`);
-                router.push(`/canvas/${response.roomId}`);
-              }
-            }
-          );
-        }
+  const handleCreateRoom = async () => {
+    if (!isLoggedIn || !user) {
+      if (Platform.OS === 'web') {
+        window.alert(
+          'Authentication Required: You need to login to create a room'
+        );
+      } else {
+        Alert.alert(
+          'Authentication Required',
+          'You need to login to create a room'
+        );
       }
-    });
+      return;
+    }
+
+    if (!roomId.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Room Name Required: Please enter a name for your room');
+      } else {
+        Alert.alert('Room Name Required', 'Please enter a name for your room');
+      }
+      return;
+    }
+
+    try {
+      const response = await createRoom(roomId, user.id);
+      router.push(`/canvas/${response.roomId}`);
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.message || 'Failed to create room';
+      if (Platform.OS === 'web') {
+        window.alert(`Error: ${errorMessage}`);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
+    }
   };
 
-  const dummyData = [
-    { id: '1', title: 'Title 1', edited: '2025-03-24' },
-    { id: '2', title: 'Title 2', edited: '2025-03-23' },
-    { id: '3', title: 'Title 3', edited: '2025-03-22' },
-  ];
+  const handleDeleteRoom = async (roomId: string) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this room?')) {
+        try {
+          await deleteRoom(roomId);
+          // Optionally, trigger a refresh of the rooms list if not handled by ElectricSQL automatically
+          // e.g., by refetching or updating the local state if roomsShapeData is not reactive enough
+        } catch (error: any) {
+          const errorMessage =
+            error.response?.data?.message || 'Failed to delete room';
+          window.alert(`Error: ${errorMessage}`);
+        }
+      }
+    } else {
+      Alert.alert(
+        'Confirm Deletion',
+        'Are you sure you want to delete this room?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Delete',
+            onPress: async () => {
+              try {
+                await deleteRoom(roomId);
+                Alert.alert('Success', 'Room deleted successfully');
+                // Optionally, trigger a refresh of the rooms list if not handled by ElectricSQL automatically
+                // e.g., by refetching or updating the local state if roomsShapeData is not reactive enough
+              } catch (error: any) {
+                const errorMessage =
+                  error.response?.data?.message || 'Failed to delete room';
+                Alert.alert('Error', errorMessage);
+              }
+            },
+            style: 'destructive',
+          },
+        ]
+      );
+    }
+  };
 
-  const renderItem = ({
-    item,
-  }: {
-    item: { id: string; title: string; edited: string };
-  }) => {
-    // Calculate card width with proper margins to prevent cutoff
-    const cardWidth = (width - 40) / numColumns - 16; // 40px for container padding, 16px for card margins
+  const handleRenameRoom = async (roomId: string, currentName: string) => {
+    if (Platform.OS === 'web') {
+      const newName = window.prompt(
+        'Enter the new name for the room:',
+        currentName
+      );
+      if (newName === null) {
+        // User pressed Cancel
+        return;
+      }
+      const newNameTrimmed = newName.trim();
+      if (newNameTrimmed === '') {
+        window.alert('Room name cannot be empty.');
+        return;
+      }
+      if (newNameTrimmed === currentName) {
+        return;
+      }
+      try {
+        await renameRoom(roomId, newNameTrimmed);
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message || 'Failed to rename room';
+        window.alert(`Error: ${errorMessage}`);
+      }
+    } else {
+      // Native platforms
+      Alert.prompt(
+        'Rename Room',
+        'Enter the new name for the room:',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {}, // Do nothing on cancel
+          },
+          {
+            text: 'Rename',
+            onPress: async (textFromPrompt?: string) => {
+              const newName = textFromPrompt || ''; // Default to empty string if undefined
+              const newNameTrimmed = newName.trim();
 
+              if (newNameTrimmed === '') {
+                Alert.alert('Error', 'Room name cannot be empty.');
+                return;
+              }
+              if (newNameTrimmed === currentName) {
+                // Alert.alert('Info', 'Room name is the same.'); // Optional
+                return;
+              }
+              try {
+                await renameRoom(roomId, newNameTrimmed);
+                Alert.alert('Success', 'Room renamed successfully');
+                // Optionally, trigger a refresh of the rooms list
+              } catch (error: any) {
+                const errorMessage =
+                  error.response?.data?.message || 'Failed to rename room';
+                Alert.alert('Error', errorMessage);
+              }
+            },
+          },
+        ],
+        'plain-text',
+        currentName
+      );
+    }
+  };
+
+  const renderItem = ({ item }: { item: Room }) => {
+    const cardWidth = (width - 40) / numColumns - 16;
     return (
       <RoomCard
-        title={item.title}
-        edited={item.edited}
+        title={item.name}
+        edited={new Date(item.updated_at).toLocaleDateString()}
         width={cardWidth}
         isDark={isDark}
+        onPress={() => router.push(`/canvas/${item.id}`)}
+        onDelete={() => handleDeleteRoom(item.id)}
+        onRename={() => handleRenameRoom(item.id, item.name)}
       />
     );
   };
@@ -173,13 +336,25 @@ export default function HomeScreen() {
           </ThemedText>
 
           <FlatList
-            data={dummyData}
+            data={rooms} // Use the transformed rooms
             renderItem={renderItem}
             keyExtractor={item => item.id}
             numColumns={numColumns}
-            key={numColumns}
+            key={numColumns} // Important for re-rendering when numColumns changes
             contentContainerStyle={styles.grid}
-            scrollEnabled={false} // Disable scrolling in the FlatList, use the main ScrollView instead
+            scrollEnabled={false} // Main ScrollView handles scrolling
+            refreshing={roomsLoading} // Use isLoading from useShape
+            ListEmptyComponent={
+              !roomsLoading && isLoggedIn ? (
+                <ThemedText style={{ textAlign: 'center', marginTop: 20 }}>
+                  No rooms found. Create one above!
+                </ThemedText>
+              ) : !isLoggedIn && !roomsLoading ? (
+                <ThemedText style={{ textAlign: 'center', marginTop: 20 }}>
+                  Please log in to see your rooms.
+                </ThemedText>
+              ) : null
+            }
           />
         </ThemedView>
       </ScrollView>

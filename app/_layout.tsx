@@ -21,7 +21,6 @@ function AuthenticationGuard({ children }: { children: React.ReactNode }) {
       // If no token and not on auth screens, redirect to login
       if (!token && !inAuthGroup) {
         router.replace('/login');
-        router.replace('/canvas/test');
       } else if (token && inAuthGroup) {
         // If authenticated and on auth screens, redirect to home
         router.replace('/');
@@ -55,6 +54,7 @@ export default function RootLayout() {
     'Roboto-Italic': require('../assets/fonts/roboto/Roboto-Italic.ttf'),
     'Roboto-Bold': require('../assets/fonts/roboto/Roboto-Bold.ttf'),
     'Roboto-BoldItalic': require('../assets/fonts/roboto/Roboto-BoldItalic.ttf'),
+    TwitterColorEmoji: require('../assets/fonts/TwitterColorEmoji.ttf'),
   });
 
   // Hide splash screen once fonts are loaded or if there's an error

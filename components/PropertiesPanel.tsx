@@ -39,7 +39,11 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   style,
 }) => {
   if (selectedElements.length !== 1) return null;
-  if (selectedElements[0].tool === Tools.IMAGE) return null;
+  if (
+    selectedElements[0].tool === Tools.IMAGE ||
+    selectedElements[0].tool === Tools.EMOJI
+  )
+    return null;
 
   const selectedElement = selectedElements[0];
   const element = selectedElement.element;
