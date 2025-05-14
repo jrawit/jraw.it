@@ -1,68 +1,51 @@
 import { CanvasElements } from '@/constants/CanvasElement';
-import {
-  Paint,
-  PaintStyle,
-  SkCanvas,
-  Skia,
-  SkPaint,
-  Path as SkPath,
-} from '@shopify/react-native-skia';
-import React, { useMemo } from 'react';
+// import { CanvasElement } from '@/hooks/useCanvas'; // Not needed if rotation is baked
+// import { Paint, Path, Skia } from '@shopify/react-native-skia'; // Reduce imports
+// import { SkCanvas, SkPaint, PaintStyle } from '@shopify/react-native-skia'; // For renderTriangle
+import React from 'react';
+import { Path as SkPathRenderer } from './Path'; // Use the generic Path renderer
 
 interface TriangleProps {
-  triangleData: CanvasElements.Triangle;
+  // triangleData: CanvasElements.Path | CanvasElements.Triangle; // Old type
+  triangleData: CanvasElements.Path; // New type: Triangle is represented as a Path
+  // elementData?: CanvasElement; // Not needed if rotation is baked
 }
 
-export const Triangle: React.FC<TriangleProps> = React.memo(
-  ({ triangleData: triangleData }) => {
-    const { point1, point2, point3, strokeColor, strokeWidth, fillColor } =
-      triangleData;
+export const Triangle: React.FC<TriangleProps> = ({ triangleData }) => {
+  // triangleData is now always a CanvasElements.Path
+  // The points define the 3 vertices of the triangle.
+  // Stroke, fill, closed are properties of triangleData (Path).
 
-    const path = useMemo(() => {
-      const path = Skia.Path.Make();
-      path.moveTo(point1.x, point1.y);
-      path.lineTo(point2.x, point2.y);
-      path.lineTo(point3.x, point3.y);
-      path.close();
-      return path;
-    }, [point1, point2, point3, strokeWidth]);
+  return <SkPathRenderer pathData={triangleData} />;
+};
 
-    return (
-      <SkPath path={path} style="stroke">
-        {fillColor && <Paint color={fillColor} />}
-        <Paint
-          color={strokeColor}
-          style="stroke"
-          strokeWidth={strokeWidth}
-          strokeJoin="miter"
-        />
-      </SkPath>
-    );
-  }
-);
-
+/*
 export const renderTriangle = (
   canvas: SkCanvas,
   paint: SkPaint,
-  triangleData: CanvasElements.Triangle
+  triangleData: CanvasElements.Triangle // This signature needs to change to Path if used
 ) => {
+  // This function would need to be updated to take CanvasElements.Path
+  // and use the generic path rendering logic if it's still required.
   const { point1, point2, point3, strokeColor, strokeWidth, fillColor } =
     triangleData;
 
-  const path = Skia.Path.Make();
-  path.moveTo(point1.x, point1.y);
-  path.lineTo(point2.x, point2.y);
-  path.lineTo(point3.x, point3.y);
-  path.close();
+  // const path = Skia.Path.Make();
+  // path.moveTo(point1.x, point1.y);
+  // path.lineTo(point2.x, point2.y);
+  // path.lineTo(point3.x, point3.y);
+  // path.close();
 
-  if (fillColor) {
-    paint.setStyle(PaintStyle.Fill);
-    paint.setColor(Skia.Color(fillColor));
-    canvas.drawPath(path, paint);
-  }
+  // if (fillColor) {
+  //   paint.setStyle(PaintStyle.Fill);
+  //   paint.setColor(Skia.Color(fillColor));
+  //   canvas.drawPath(path, paint);
+  // }
 
-  paint.setStyle(PaintStyle.Stroke);
-  paint.setStrokeWidth(strokeWidth);
-  paint.setColor(Skia.Color(strokeColor));
-  canvas.drawPath(path, paint);
+  // paint.setStyle(PaintStyle.Stroke);
+  // paint.setStrokeWidth(strokeWidth);
+  // paint.setColor(Skia.Color(strokeColor));
+  // canvas.drawPath(path, paint);
+  // path.dispose();
 };
+*/

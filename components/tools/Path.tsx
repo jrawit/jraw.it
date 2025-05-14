@@ -5,99 +5,155 @@ import {
   SkCanvas,
   Skia,
   SkPaint,
-  Path as SkPath,
+  Path as SkPathType, // Renamed to avoid conflict
   StrokeCap,
 } from '@shopify/react-native-skia';
 import React, { useMemo } from 'react';
 
 interface PathProps {
   pathData: CanvasElements.Path;
+  // elementData is not used here if rotation is baked into points
 }
 
-const createPath = (points: { x: number; y: number }[]) => {
-  const newPath = Skia.Path.Make();
+// Updated createPath to handle smoothed (pen/highlighter) vs polygonal paths
+const createSkiaPath = (
+  points: { x: number; y: number }[],
+  isSmoothed: boolean, // True for PEN/HIGHLIGHTER
+  isClosed?: boolean // True for RECTANGLE, STAR, CIRCLE, TRIANGLE
+): SkPathType => {
+  const skPath = Skia.Path.Make();
+  if (points.length === 0) return skPath;
 
-  if (points.length < 2) return newPath;
+  skPath.moveTo(points[0].x, points[0].y);
 
-  // Start the path at the first point
-  newPath.moveTo(points[0].x, points[0].y);
-
-  // For just 2 points, draw a straight line
-  if (points.length === 2) {
-    newPath.lineTo(points[1].x, points[1].y);
-    return newPath;
+  if (isSmoothed) {
+    if (points.length === 2) {
+      skPath.lineTo(points[1].x, points[1].y);
+    } else if (points.length > 2) {
+      for (let i = 1; i < points.length - 1; i++) {
+        const curr = points[i];
+        const next = points[i + 1];
+        const mid = { x: (curr.x + next.x) / 2, y: (curr.y + next.y) / 2 };
+        skPath.quadTo(curr.x, curr.y, mid.x, mid.y);
+      }
+      const last = points[points.length - 1];
+      const secondLast = points[points.length - 2];
+      skPath.quadTo(secondLast.x, secondLast.y, last.x, last.y);
+    }
+  } else {
+    // Polygonal path
+    for (let i = 1; i < points.length; i++) {
+      skPath.lineTo(points[i].x, points[i].y);
+    }
+    if (isClosed && points.length > 1) {
+      skPath.close();
+    }
   }
-
-  // For 3+ points, use cubic bezier curves for smoothing
-  for (let i = 1; i < points.length - 1; i++) {
-    // Calculate control points
-    const curr = points[i];
-    const next = points[i + 1];
-
-    // Calculate midpoint between points
-    const mid = { x: (curr.x + next.x) / 2, y: (curr.y + next.y) / 2 };
-
-    // Draw a smooth curve from mid1 to mid2 using curr as control point
-    newPath.quadTo(
-      curr.x,
-      curr.y, // control point
-      mid.x,
-      mid.y // destination
-    );
-  }
-
-  // Add the last point
-  const last = points[points.length - 1];
-  const secondLast = points[points.length - 2];
-  newPath.quadTo(secondLast.x, secondLast.y, last.x, last.y);
-  return newPath;
+  return skPath;
 };
 
 export const Path: React.FC<PathProps> = React.memo(({ pathData }) => {
-  const { points, capStyle, blendMode, strokeWidth, strokeColor } = pathData;
+  const {
+    points,
+    capStyle,
+    blendMode,
+    strokeWidth,
+    strokeColor,
+    fillColor, // Added fillColor
+    closed, // Added closed
+  } = pathData;
 
-  const path = useMemo(() => {
-    return createPath(points);
-  }, [points]);
+  // Determine if smoothing should be applied (e.g., for PEN tool, not for RECTANGLE)
+  // This logic might need to be based on the tool type if pathData doesn't specify smoothing.
+  // For now, assume 'closed' paths are not smoothed. This is a heuristic.
+  // A more robust way would be to pass the tool type or a 'smoothed' flag.
+  const isSmoothed = !closed && capStyle === 'round'; // Heuristic: pen/highlighter are smoothed
+
+  const skPathInstance = useMemo(() => {
+    return createSkiaPath(points, isSmoothed, closed);
+  }, [points, isSmoothed, closed]);
 
   return (
-    <SkPath
-      path={path}
-      style="stroke"
-      strokeWidth={strokeWidth}
-      color={strokeColor}
-      strokeCap={capStyle}
-      blendMode={blendMode}
-    />
+    <>
+      {fillColor && closed && (
+        <SkPathType
+          path={skPathInstance}
+          style="fill"
+          color={fillColor}
+          blendMode={blendMode} // Blend mode might apply to fill too
+        />
+      )}
+      <SkPathType
+        path={skPathInstance}
+        style="stroke"
+        strokeWidth={strokeWidth}
+        color={strokeColor}
+        strokeCap={capStyle}
+        blendMode={blendMode}
+      />
+    </>
   );
 });
 
 export const renderPath = (
   canvas: SkCanvas,
   paint: SkPaint,
-  pathData: CanvasElements.Path
+  pathData: CanvasElements.Path,
+  toolType?: Tools // Optional: to decide smoothing, though pathData.closed is better
 ) => {
-  const { points, capStyle, blendMode, strokeWidth, strokeColor } = pathData;
+  const {
+    points,
+    capStyle,
+    blendMode,
+    strokeWidth,
+    strokeColor,
+    fillColor,
+    closed,
+  } = pathData;
 
-  const path = createPath(points);
+  // Heuristic for smoothing, similar to the component
+  const isSmoothed = !closed && capStyle === 'round';
+  const skPathInstance = createSkiaPath(points, isSmoothed, closed);
 
+  // Fill
+  if (fillColor && closed) {
+    paint.setStyle(PaintStyle.Fill);
+    paint.setColor(Skia.Color(fillColor));
+    if (blendMode) {
+      paint.setBlendMode(
+        blendMode === 'clear' ? BlendMode.Clear : BlendMode.SrcOver
+      );
+    } else {
+      paint.setBlendMode(BlendMode.SrcOver); // Default for fill
+    }
+    canvas.drawPath(skPathInstance, paint);
+  }
+
+  // Stroke
   paint.setStyle(PaintStyle.Stroke);
   paint.setStrokeWidth(strokeWidth);
   paint.setColor(Skia.Color(strokeColor));
 
-  // Set stroke cap style
   if (capStyle) {
     paint.setStrokeCap(
-      capStyle === 'round' ? StrokeCap.Round : StrokeCap.Square
+      capStyle === 'butt'
+        ? StrokeCap.Butt
+        : capStyle === 'round'
+          ? StrokeCap.Round
+          : StrokeCap.Square
     );
+  } else {
+    paint.setStrokeCap(StrokeCap.Butt); // Default
   }
 
-  // Apply blend mode if specified (e.g., for highlighter/eraser)
   if (blendMode) {
     paint.setBlendMode(
       blendMode === 'clear' ? BlendMode.Clear : BlendMode.SrcOver
     );
+  } else {
+    paint.setBlendMode(BlendMode.SrcOver); // Default for stroke
   }
 
-  canvas.drawPath(path, paint);
+  canvas.drawPath(skPathInstance, paint);
+  // skPathInstance.dispose(); // If created locally and not memoized/managed by Skia view
 };

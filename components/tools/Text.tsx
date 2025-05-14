@@ -1,77 +1,56 @@
 import { CanvasElements } from '@/constants/CanvasElement';
-import { getFontFile, useFontManager } from '@/hooks/useFontManager';
+import { CanvasElement } from '@/hooks/useCanvas';
+import { getFontFile } from '@/hooks/useFontManager';
 import {
+  Group,
   PaintStyle,
   SkCanvas,
   Skia,
+  Text as SkiaText,
   SkPaint,
-  Paragraph as SkParagraph,
-  TextAlign,
 } from '@shopify/react-native-skia';
-import React, { useMemo } from 'react';
+import React from 'react';
 
 interface TextProps {
   textData: CanvasElements.Text;
+  elementData?: CanvasElement;
 }
 
-export const Text: React.FC<TextProps> = React.memo(
-  ({ textData: textData }) => {
-    const { point, text, fontFamily, fontSize, fontStyle, fontWeight, color } =
-      textData;
+export const Text: React.FC<TextProps> = ({ textData, elementData }) => {
+  const rotation = elementData?.rotation || 0;
 
-    const fontManager = useFontManager();
+  // Calculate center for rotation transform
+  const fontSize = textData.fontSize || 20;
+  const approximateWidth = textData.text.length * fontSize * 0.6; // Estimate width
+  const approximateHeight = fontSize * 1.2; // Estimate height
 
-    const paragraph = useMemo(() => {
-      if (!fontManager) {
-        return null;
+  const centerX = textData.point.x + approximateWidth / 2;
+  const centerY = textData.point.y + approximateHeight / 2;
+
+  return (
+    <Group
+      transform={
+        rotation
+          ? [
+              { translateX: centerX },
+              { translateY: centerY },
+              { rotate: rotation },
+              { translateX: -centerX },
+              { translateY: -centerY },
+            ]
+          : undefined
       }
-
-      // Convert string weight values to numeric values that Skia understands
-      let numericWeight = 400; // Default to regular (400)
-      if (fontWeight === 'bold') {
-        numericWeight = 700;
-      } else if (fontWeight === 'normal') {
-        numericWeight = 400;
-      } else if (fontWeight && !isNaN(Number(fontWeight))) {
-        // If it's already a numeric string like '500', convert to number
-        numericWeight = Number(fontWeight);
-      }
-
-      const paragraph = Skia.ParagraphBuilder.Make(
-        { textAlign: TextAlign.Left },
-        fontManager
-      )
-        .pushStyle({
-          fontFamilies: [fontFamily],
-          fontSize: fontSize,
-          fontStyle: {
-            weight: numericWeight,
-            slant: fontStyle === 'italic' ? 1 : 0,
-          },
-          color: Skia.Color(color),
-        })
-        .addText(text)
-        .build();
-      return paragraph;
-    }, [fontFamily, fontSize, fontStyle, fontWeight, text, fontManager, color]);
-
-    const width = useMemo(() => {
-      if (!paragraph) {
-        return 0;
-      }
-      paragraph.layout(1000);
-      return paragraph.getLongestLine() + 10;
-    }, [paragraph]);
-    return (
-      <SkParagraph
-        paragraph={paragraph}
-        x={point.x}
-        y={point.y}
-        width={width}
+    >
+      <SkiaText
+        x={textData.point.x}
+        y={textData.point.y + fontSize} // Add fontSize to y to position correctly
+        text={textData.text}
+        font={{ family: textData.fontFamily, size: fontSize }}
+        color={textData.color}
       />
-    );
-  }
-);
+    </Group>
+  );
+};
 
 export const renderText = async (
   canvas: SkCanvas,

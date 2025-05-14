@@ -1,7 +1,6 @@
 import { HANDLE_TOUCH_AREA } from '@/components/SelectionOverlay';
-import { CanvasElements } from '@/constants/CanvasElement';
+import { CanvasElement, CanvasElements } from '@/constants/CanvasElement';
 import {
-  calculateStarVertices,
   distanceSqFromPointToSegment,
   getPointsOnSmoothedPathQuadratic,
   isPointNearPolygonOutline,
@@ -22,6 +21,8 @@ import { Tools } from '../constants/Tools';
 import toolHandlers from './tool-handlers';
 // Import the action types and the hook itself
 import { HistoryAction, useCanvasHistory } from './useCanvasHistory';
+// Import the new eraser hit detection utility
+import { eraserHitTest } from '@/utils/eraserHitDetection';
 import { useElectricCanvas } from './useElectric';
 
 export type CanvasElement = {
@@ -40,7 +41,13 @@ export type CanvasProps = {
   isCollaborative?: boolean;
 };
 
-type SelectionState = 'selecting' | 'moving' | 'selected' | 'scaling' | null;
+type SelectionState =
+  | 'selecting'
+  | 'moving'
+  | 'selected'
+  | 'scaling'
+  | 'rotating'
+  | null;
 
 export const useCanvas = ({
   tool,
@@ -109,6 +116,10 @@ export const useCanvas = ({
   const initialCanvasElementsRef = useRef<CanvasElement[]>([]); // For move/scale original state
   const scalingHandleIndexRef = useRef<number | null>(null);
   const scalingOriginRef = useRef<{ x: number; y: number } | null>(null);
+  // New refs for rotation
+  const rotationHandleRef = useRef<boolean>(false);
+  const rotationStartAngleRef = useRef<number>(0);
+  const initialAngleRef = useRef<number>(0);
 
   // --- Utility Functions ---
   const generateId = () => uuidv4();
@@ -122,6 +133,9 @@ export const useCanvas = ({
     initialCanvasElementsRef.current = [];
     scalingHandleIndexRef.current = null;
     scalingOriginRef.current = null;
+    rotationHandleRef.current = false;
+    rotationStartAngleRef.current = 0;
+    initialAngleRef.current = 0;
   }, []);
 
   // --- History Hook ---
@@ -142,14 +156,32 @@ export const useCanvas = ({
       fm?: any
     ): string | null => {
       const point = { x, y };
-      // Start with a moderate tolerance, adjust if needed after confirming base functionality
 
+      // For eraser tool, use the specialized hit detection
+      if (tool === Tools.ERASER) {
+        for (let i = elementsToCheck.length - 1; i >= 0; i--) {
+          const element = elementsToCheck[i];
+          if (!element) continue;
+
+          // Get eraser radius (half of stroke width)
+          const eraserRadius = strokeWidth / 2;
+
+          // Use the specialized eraser hit test
+          if (eraserHitTest(point, element, eraserRadius)) {
+            return element.id;
+          }
+        }
+        return null;
+      }
+
+      // For other tools, use existing hit detection
       for (let i = elementsToCheck.length - 1; i >= 0; i--) {
         const element = elementsToCheck[i];
         if (!element) continue;
 
         const elementData = element.element;
         const elementTool = element.tool;
+        const elementRotation = element.rotation || 0;
         const elementStrokeWidth = (elementData as any).strokeWidth;
         const actualElementStrokeWidth =
           elementStrokeWidth === undefined || elementStrokeWidth === null
@@ -162,73 +194,84 @@ export const useCanvas = ({
         // Calculate Single Effective Radius - important to match visual size
         const effectiveCheckRadius =
           actualElementStrokeWidth / 2 + eraserRadius;
-        const effectiveCheckRadiusSq = effectiveCheckRadius ** 2;
+        const effectiveCheckRadiusSq = effectiveCheckRadius ** 2; // Only for distanceSq checks
 
-        // --- DEBUG LOG (Optional) ---
-        // if (tool === Tools.ERASER && [Tools.RECTANGLE, Tools.TRIANGLE, Tools.STAR, Tools.PEN, Tools.HIGHLIGHTER, Tools.LINE, Tools.CIRCLE].includes(elementTool)) {
-        //   console.log(`[findElementAtPoint] Element ${element.id} (${elementTool}):`);
-        //   console.log(`  EraserRadius=${eraserRadius.toFixed(2)}, ElemStroke=${actualElementStrokeWidth.toFixed(2)}, TouchTol=${touchTolerance}`);
-        //   console.log(`  => effectiveCheckRadius=${effectiveCheckRadius.toFixed(2)} (Sq=${effectiveCheckRadiusSq.toFixed(2)})`);
-        // }
-        // --- END DEBUG LOG ---
+        // For Path-based elements (PEN, HIGHLIGHTER, RECTANGLE, CIRCLE, STAR, TRIANGLE)
+        // their rotation should be 0, and points are in world space.
+        // If elementRotation is used, points need to be transformed first.
+        // Assuming for these new path-based shapes, elementRotation is 0.
 
-        // Broad phase check
-        const bboxPadding =
-          tool === Tools.ERASER ? effectiveCheckRadius : effectiveCheckRadius;
+        const bboxPadding = effectiveCheckRadius; // Simplified padding
         const bbox = calculateElementBoundingBox(element, bboxPadding, fm);
         if (!bbox || !isPointInsideBox(point, bbox)) {
           continue;
         }
 
-        // Precise phase: Use the single effectiveCheckRadius or its square
+        // Precise phase
         switch (elementTool) {
-          // Around line 126-139
-
           case Tools.PEN:
           case Tools.HIGHLIGHTER: {
             const pathData = elementData as CanvasElements.Path;
             if (!pathData?.points || pathData.points.length < 1) break;
 
-            // Calculate a more precise radius specifically for pen/highlighter
-            // Remove the extra tolerance by reducing the effective radius
+            // PEN/HIGHLIGHTER might have their own rotation if not baked into points by their specific rotateElement
+            // The PEN.rotateElement now bakes it, so elementRotation should be 0.
+            // If elementRotation is not 0, transform points:
+            let transformedPoints = pathData.points;
+            if (elementRotation) {
+              let minPathX = Infinity,
+                minPathY = Infinity,
+                maxPathX = -Infinity,
+                maxPathY = -Infinity;
+              pathData.points.forEach(pt => {
+                minPathX = Math.min(minPathX, pt.x);
+                minPathY = Math.min(minPathY, pt.y);
+                maxPathX = Math.max(maxPathX, pt.x);
+                maxPathY = Math.max(maxPathY, pt.y);
+              });
+              const pathCenterX = (minPathX + maxPathX) / 2;
+              const pathCenterY = (minPathY + maxPathY) / 2;
+              const cosR = Math.cos(elementRotation);
+              const sinR = Math.sin(elementRotation);
+              transformedPoints = pathData.points.map(pt => {
+                const dx = pt.x - pathCenterX;
+                const dy = pt.y - pathCenterY;
+                return {
+                  x: pathCenterX + (dx * cosR - dy * sinR),
+                  y: pathCenterY + (dx * sinR + dy * cosR),
+                };
+              });
+            }
+
             const penPrecisionFactor = tool === Tools.ERASER ? 0.75 : 1.0;
             const penCheckRadius = effectiveCheckRadius * penPrecisionFactor;
 
             const smoothedPoints = getPointsOnSmoothedPathQuadratic(
-              pathData.points,
+              transformedPoints, // Use potentially rotated points
               10
             );
-            // Use the reduced radius for more precise detection
+
             if (isPointNearPolyline(point, smoothedPoints, penCheckRadius)) {
               return element.id;
             }
             break;
           }
-          case Tools.CIRCLE: {
-            const circleData = elementData as CanvasElements.Circle;
-            if (!circleData?.center) break;
-
-            const dx = x - circleData.center.x;
-            const dy = y - circleData.center.y;
-
-            // For ellipses, normalize the point to convert to the equation (x/a)² + (y/b)² = 1
-            const normalizedDistSq =
-              (dx * dx) / (circleData.radiusX * circleData.radiusX) +
-              (dy * dy) / (circleData.radiusY * circleData.radiusY);
-
-            // Calculate the precise threshold by accounting for the stroke width
-            // and converting the linear distance to the normalized ellipse space
-            const strokeFactor =
-              effectiveCheckRadius /
-              Math.min(circleData.radiusX, circleData.radiusY);
-
-            const outerThreshold = strokeFactor * 2; // Allow detection slightly outside
-            const innerThreshold = strokeFactor * 2; // Allow detection slightly inside
-
-            // Check if the point is near the ellipse outline
+          case Tools.CIRCLE:
+          case Tools.RECTANGLE:
+          case Tools.STAR:
+          case Tools.TRIANGLE: {
+            // All these are now CanvasElements.Path
+            const pathData = elementData as CanvasElements.Path;
+            if (!pathData?.points || pathData.points.length < 2) break;
+            // These shapes should have elementRotation = 0 as rotation is baked into points.
+            // If elementRotation is present, points would need transformation.
+            // For now, assume points are world-space.
             if (
-              normalizedDistSq <= 1 + outerThreshold &&
-              normalizedDistSq >= 1 - innerThreshold
+              isPointNearPolygonOutline(
+                point,
+                pathData.points,
+                effectiveCheckRadius
+              )
             ) {
               return element.id;
             }
@@ -237,72 +280,56 @@ export const useCanvas = ({
           case Tools.LINE: {
             const lineData = elementData as CanvasElements.Line;
             if (!lineData?.startPoint || !lineData?.endPoint) break;
+
+            // Transform line points according to rotation
+            let startPoint = { ...lineData.startPoint };
+            let endPoint = { ...lineData.endPoint };
+
+            if (elementRotation) {
+              // Calculate the center of the line for rotation
+              const centerX = (startPoint.x + endPoint.x) / 2;
+              const centerY = (startPoint.y + endPoint.y) / 2;
+
+              // Apply rotation to start point
+              const startDx = startPoint.x - centerX;
+              const startDy = startPoint.y - centerY;
+              const cos = Math.cos(elementRotation);
+              const sin = Math.sin(elementRotation);
+
+              startPoint = {
+                x: centerX + (startDx * cos - startDy * sin),
+                y: centerX + (startDx * sin + startDy * cos),
+              };
+
+              // Apply rotation to end point
+              const endDx = endPoint.x - centerX;
+              const endDy = endPoint.y - centerY;
+
+              endPoint = {
+                x: centerX + (endDx * cos - endDy * sin),
+                y: centerX + (endDx * sin + endDy * cos),
+              };
+            }
+
             const lineDistSq = distanceSqFromPointToSegment(
               x,
               y,
-              lineData.startPoint.x,
-              lineData.startPoint.y,
-              lineData.endPoint.x,
-              lineData.endPoint.y
+              startPoint.x,
+              startPoint.y,
+              endPoint.x,
+              endPoint.y
             );
-            // Use the single effective radius squared
+
             if (lineDistSq <= effectiveCheckRadiusSq) {
               return element.id;
             }
             break;
           }
-          case Tools.RECTANGLE:
-          case Tools.TRIANGLE:
-          case Tools.STAR: {
-            let vertices: Array<{ x: number; y: number }> = [];
-
-            if (elementTool === Tools.RECTANGLE) {
-              const rectData = elementData as CanvasElements.Rectangle;
-              if (rectData?.point) {
-                const x = rectData.point.x;
-                const y = rectData.point.y;
-                const w = rectData.width;
-                const h = rectData.height;
-
-                // Rectangle corners
-                vertices = [
-                  { x, y }, // top-left
-                  { x: x + w, y }, // top-right
-                  { x: x + w, y: y + h }, // bottom-right
-                  { x, y: y + h }, // bottom-left
-                ];
-              }
-            } else if (elementTool === Tools.TRIANGLE) {
-              const triData = elementData as CanvasElements.Triangle;
-              if (triData?.point1 && triData?.point2 && triData?.point3) {
-                // Use the three points of the triangle
-                vertices = [triData.point1, triData.point2, triData.point3];
-              }
-            } else if (elementTool === Tools.STAR) {
-              const starData = elementData as CanvasElements.Star;
-              if (starData?.point && starData?.radius && starData?.spikes) {
-                // Calculate star vertices using the existing utility function
-                vertices = calculateStarVertices(
-                  starData.point,
-                  starData.radius,
-                  0.5, // innerRadiusRatio (default)
-                  starData.spikes
-                );
-              }
-            }
-
-            // Only test if we have vertices
-            if (
-              vertices.length > 0 &&
-              isPointNearPolygonOutline(point, vertices, effectiveCheckRadius)
-            ) {
-              return element.id;
-            }
-            break;
-          }
           case Tools.IMAGE:
-          case Tools.TEXT:
-            return element.id;
+          case Tools.TEXT: // Text and Image have their own bounding box logic / simple point
+            // For Text/Image, bbox check might be enough, or add specific logic if needed.
+            // If bbox passed, consider it a hit for simplicity for now.
+            return element.id; // Fallback to bbox for these
         }
       }
       return null;
@@ -356,13 +383,51 @@ export const useCanvas = ({
 
       // --- Selection Interaction Start ---
       if (selection && selectionStateRef.current === 'selected') {
-        const { x: selX, y: selY, width: selW, height: selH } = selection;
+        const {
+          x: selX,
+          y: selY,
+          width: selW,
+          height: selH,
+          rotation = 0,
+        } = selection;
         const normX = selW < 0 ? selX + selW : selX;
         const normY = selH < 0 ? selY + selH : selY;
         const normW = Math.abs(selW);
         const normH = Math.abs(selH);
         const halfW = normW / 2;
         const halfH = normH / 2;
+
+        // Check for rotation handle first (positioned at the bottom-center + offset)
+        const rotationHandleX = normX + halfW;
+        const rotationHandleY = normY + normH + 30; // Positioned below the bottom edge
+        const rotationHandleTouchRadiusSq = (HANDLE_TOUCH_AREA / 1.5) ** 2;
+
+        const rotHandleDx = x - rotationHandleX;
+        const rotHandleDy = y - rotationHandleY;
+        if (
+          rotHandleDx * rotHandleDx + rotHandleDy * rotHandleDy <
+          rotationHandleTouchRadiusSq
+        ) {
+          // Start Rotating
+          selectionStateRef.current = 'rotating';
+          rotationHandleRef.current = true;
+
+          // Calculate center of selection for rotation pivot
+          const centerX = normX + halfW;
+          const centerY = normY + halfH;
+
+          // Calculate starting rotation angle
+          rotationStartAngleRef.current = Math.atan2(y - centerY, x - centerX);
+          initialAngleRef.current = rotation || 0;
+
+          initialSelectionRef.current = cloneDeep(selection);
+          initialCanvasElementsRef.current = cloneDeep(
+            elements.filter(el => selection.ids.includes(el.id))
+          );
+          return;
+        }
+
+        // Regular scaling handles check
         const handles = [
           { x: normX, y: normY },
           { x: normX + halfW, y: normY },
@@ -373,11 +438,33 @@ export const useCanvas = ({
           { x: normX, y: normY + normH },
           { x: normX, y: normY + halfH },
         ];
+
+        // If selection is rotated, we need to transform the handle positions
+        const rotatedHandles = rotation
+          ? handles.map(handle => {
+              // Calculate position relative to selection center
+              const relativeX = handle.x - (normX + halfW);
+              const relativeY = handle.y - (normY + halfH);
+
+              // Apply rotation
+              const cos = Math.cos(rotation);
+              const sin = Math.sin(rotation);
+              const rotatedX = relativeX * cos - relativeY * sin;
+              const rotatedY = relativeX * sin + relativeY * cos;
+
+              // Return absolute position
+              return {
+                x: rotatedX + (normX + halfW),
+                y: rotatedY + (normY + halfH),
+              };
+            })
+          : handles;
+
         const touchRadiusSq = (HANDLE_TOUCH_AREA / 2) ** 2;
         let touchedHandleIndex: number | null = null;
-        for (let i = 0; i < handles.length; i++) {
-          const dx = x - handles[i].x;
-          const dy = y - handles[i].y;
+        for (let i = 0; i < rotatedHandles.length; i++) {
+          const dx = x - rotatedHandles[i].x;
+          const dy = y - rotatedHandles[i].y;
           if (dx * dx + dy * dy < touchRadiusSq) {
             touchedHandleIndex = i;
             break;
@@ -389,7 +476,7 @@ export const useCanvas = ({
           selectionStateRef.current = 'scaling';
           scalingHandleIndexRef.current = touchedHandleIndex;
           const oppositeHandleIndex = (touchedHandleIndex + 4) % 8;
-          scalingOriginRef.current = handles[oppositeHandleIndex];
+          scalingOriginRef.current = rotatedHandles[oppositeHandleIndex];
           initialSelectionRef.current = cloneDeep(selection);
           initialCanvasElementsRef.current = cloneDeep(
             elements.filter(el => selection.ids.includes(el.id))
@@ -397,12 +484,41 @@ export const useCanvas = ({
           return;
         }
 
-        if (
-          x >= normX &&
-          x <= normX + normW &&
-          y >= normY &&
-          y <= normY + normH
-        ) {
+        // Check if clicked inside the selection (for moving)
+        // For rotated selections, we need to check if the point is inside the rotated box
+        let isPointInside = false;
+
+        if (rotation) {
+          // For rotated bounding box, we transform the point to the selection's local coordinates
+          const centerX = normX + halfW;
+          const centerY = normY + halfH;
+
+          // Calculate relative position
+          const relX = x - centerX;
+          const relY = y - centerY;
+
+          // Rotate point in the opposite direction
+          const cos = Math.cos(-rotation);
+          const sin = Math.sin(-rotation);
+          const rotatedX = relX * cos - relY * sin;
+          const rotatedY = relX * sin + relY * cos;
+
+          // Check if point is inside the non-rotated box
+          isPointInside =
+            rotatedX >= -halfW &&
+            rotatedX <= halfW &&
+            rotatedY >= -halfH &&
+            rotatedY <= halfH;
+        } else {
+          // Non-rotated case: simple box check
+          isPointInside =
+            x >= normX &&
+            x <= normX + normW &&
+            y >= normY &&
+            y <= normY + normH;
+        }
+
+        if (isPointInside) {
           // Start Moving
           selectionStateRef.current = 'moving';
           initialSelectionRef.current = cloneDeep(selection);
@@ -417,7 +533,15 @@ export const useCanvas = ({
 
       // --- Select Tool Start ---
       if (tool === Tools.SELECT) {
-        setSelection({ ids: [], x, y, width: 0, height: 0, selected: false });
+        setSelection({
+          ids: [],
+          x,
+          y,
+          width: 0,
+          height: 0,
+          selected: false,
+          rotation: 0,
+        });
         selectionStateRef.current = 'selecting';
         return;
       }
@@ -558,6 +682,95 @@ export const useCanvas = ({
           );
           return;
         }
+        // --- Rotation Move ---
+        else if (selectionStateRef.current === 'rotating') {
+          if (
+            !initialPointRef.current ||
+            !initialSelectionRef.current ||
+            !initialCanvasElementsRef.current
+          )
+            return;
+
+          // Calculate center of selection for rotation pivot
+          const {
+            x: selX,
+            y: selY,
+            width: selW,
+            height: selH,
+          } = initialSelectionRef.current;
+          const normX = selW < 0 ? selX + selW : selX;
+          const normY = selH < 0 ? selY + selH : selY;
+          const normW = Math.abs(selW);
+          const normH = Math.abs(selH);
+          const centerX = normX + normW / 2;
+          const centerY = normY + normH / 2;
+
+          // Calculate new angle based on current cursor position relative to center
+          const newAngle = Math.atan2(y - centerY, x - centerX);
+
+          // Calculate angle difference from start
+          const angleDiff = newAngle - rotationStartAngleRef.current;
+
+          // Update all selected elements by rotating them
+          const rotatedElements = initialCanvasElementsRef.current.map(
+            initialElement => {
+              const handler = toolHandlers[initialElement.tool];
+              return handler?.rotateElement
+                ? handler.rotateElement(
+                    initialElement,
+                    centerX, // Pivot for element rotation
+                    centerY, // Pivot for element rotation
+                    angleDiff // Angle to rotate elements by
+                  )
+                : {
+                    // Fallback if no specific rotateElement handler
+                    ...initialElement,
+                    rotation: (initialElement.rotation || 0) + angleDiff,
+                  };
+            }
+          );
+
+          setElements(prevElements =>
+            prevElements.map(
+              el => rotatedElements.find(rotEl => rotEl.id === el.id) || el
+            )
+          );
+
+          // Recalculate the axis-aligned bounding box for the selection
+          // based on the actual rotated elements.
+          const newCombinedBox = calculateCombinedBoundingBox(
+            rotatedElements,
+            10, // Standard margin for selection box
+            fontManager
+          );
+
+          if (newCombinedBox) {
+            setSelection({
+              ...initialSelectionRef.current, // Keep ids, selected status
+              ...newCombinedBox, // new x, y, width, height
+              rotation: 0, // Box is now axis-aligned
+              selected: true,
+            });
+          } else {
+            // Fallback if box calculation fails.
+            // Keep selection with original IDs, but mark as axis-aligned.
+            setSelection(prev =>
+              prev && initialSelectionRef.current
+                ? {
+                    ...prev, // or ...initialSelectionRef.current
+                    ids: initialSelectionRef.current.ids,
+                    x: initialSelectionRef.current.x, // Keep old bounds as a fallback
+                    y: initialSelectionRef.current.y,
+                    width: initialSelectionRef.current.width,
+                    height: initialSelectionRef.current.height,
+                    selected: true,
+                    rotation: 0,
+                  }
+                : null
+            );
+          }
+          return;
+        }
         // --- Scaling Move ---
         else if (selectionStateRef.current === 'scaling') {
           if (
@@ -568,8 +781,11 @@ export const useCanvas = ({
             !scalingOriginRef.current
           )
             return;
+
+          // For rotated selections, the scaling needs to work in the rotated coordinate system
           const origin = scalingOriginRef.current;
           const handleIndex = scalingHandleIndexRef.current;
+          const rotation = initialSelectionRef.current.rotation || 0;
           const {
             x: iSelX,
             y: iSelY,
@@ -582,6 +798,10 @@ export const useCanvas = ({
           const iNormH = Math.abs(iSelH);
           const iHalfW = iNormW / 2;
           const iHalfH = iNormH / 2;
+          const centerX = iNormX + iHalfW;
+          const centerY = iNormY + iHalfH;
+
+          // Get the initial handle position
           const iHandles = [
             { x: iNormX, y: iNormY },
             { x: iNormX + iHalfW, y: iNormY },
@@ -592,25 +812,82 @@ export const useCanvas = ({
             { x: iNormX, y: iNormY + iNormH },
             { x: iNormX, y: iNormY + iHalfH },
           ];
-          const initialHandlePos = iHandles[handleIndex];
+
+          // If rotated, transform the handle positions
+          const rotatedInitialHandles = rotation
+            ? iHandles.map(handle => {
+                // Calculate position relative to selection center
+                const relativeX = handle.x - centerX;
+                const relativeY = handle.y - centerY;
+
+                // Apply rotation
+                const cos = Math.cos(rotation);
+                const sin = Math.sin(rotation);
+                const rotatedX = relativeX * cos - relativeY * sin;
+                const rotatedY = relativeX * sin + relativeY * cos;
+
+                // Return absolute position
+                return {
+                  x: rotatedX + centerX,
+                  y: rotatedY + centerY,
+                };
+              })
+            : iHandles;
+
+          const initialHandlePos = rotatedInitialHandles[handleIndex];
+
+          // Convert the current point to the rotated coordinate system
+          let currentRotatedPoint = { x, y };
+
+          if (rotation) {
+            // Calculate relative position to center
+            const relX = x - centerX;
+            const relY = y - centerY;
+
+            // Apply inverse rotation
+            const cos = Math.cos(-rotation);
+            const sin = Math.sin(-rotation);
+            const rotatedX = relX * cos - relY * sin;
+            const rotatedY = relX * sin + relY * cos;
+
+            currentRotatedPoint = {
+              x: rotatedX + centerX,
+              y: rotatedY + centerY,
+            };
+          }
+
+          // Calculate scale factors in the rotated coordinate system
           const initialDeltaX = initialHandlePos.x - origin.x;
           const initialDeltaY = initialHandlePos.y - origin.y;
-          const currentDeltaX = x - origin.x;
-          const currentDeltaY = y - origin.y;
+
+          // Get the correct delta based on the rotated coordinate system
+          const currentDeltaX = currentRotatedPoint.x - origin.x;
+          const currentDeltaY = currentRotatedPoint.y - origin.y;
+
           let scaleX = initialDeltaX === 0 ? 1 : currentDeltaX / initialDeltaX;
           let scaleY = initialDeltaY === 0 ? 1 : currentDeltaY / initialDeltaY;
+
           if ([1, 5].includes(handleIndex)) scaleX = 1;
           if ([3, 7].includes(handleIndex)) scaleY = 1;
+
           const MIN_SCALE = 0.01;
           if (Math.abs(scaleX) < MIN_SCALE)
             scaleX = Math.sign(scaleX || 1) * MIN_SCALE;
           if (Math.abs(scaleY) < MIN_SCALE)
             scaleY = Math.sign(scaleY || 1) * MIN_SCALE;
+
+          // Scale elements in the rotated coordinate system
           const scaledElements = initialCanvasElementsRef.current.map(
             initialElement => {
               const handler = toolHandlers[initialElement.tool];
               return handler?.scaleElement
-                ? handler.scaleElement(initialElement, scaleX, scaleY, origin)
+                ? handler.scaleElement(
+                    initialElement,
+                    scaleX,
+                    scaleY,
+                    origin,
+                    rotation
+                  )
                 : initialElement;
             }
           );
@@ -645,16 +922,21 @@ export const useCanvas = ({
               el => scaledElements.find(scaledEl => scaledEl.id === el.id) || el
             )
           );
+
+          // Calculate the new bounding box after scaling
           const newCombinedBox = calculateCombinedBoundingBox(
             scaledElements,
             10,
             fontManager
           );
+
           if (newCombinedBox) {
             setSelection({
               ...initialSelectionRef.current,
               ...newCombinedBox,
               selected: true,
+              // Preserve rotation
+              rotation: initialSelectionRef.current.rotation || 0,
             });
           }
           return;
@@ -765,7 +1047,48 @@ export const useCanvas = ({
           initialCanvasElementsRef.current = [];
           return;
         }
+        // --- Rotation End ---
+        else if (selectionStateRef.current === 'rotating') {
+          if (
+            !initialCanvasElementsRef.current ||
+            !initialSelectionRef.current
+          ) {
+            selectionStateRef.current = selection.selected ? 'selected' : null;
+            rotationHandleRef.current = false;
+            rotationStartAngleRef.current = 0;
+            initialAngleRef.current = 0;
+            return;
+          }
 
+          const finalElements = elements.filter(el =>
+            initialSelectionRef.current!.ids.includes(el.id)
+          );
+
+          // Add history only if elements actually changed
+          if (
+            initialCanvasElementsRef.current.length > 0 &&
+            finalElements.length > 0 &&
+            JSON.stringify(initialCanvasElementsRef.current) !==
+              JSON.stringify(finalElements)
+          ) {
+            const action: HistoryAction = {
+              type: 'MODIFY_ELEMENT',
+              elementIds: initialSelectionRef.current.ids,
+              originalElements: initialCanvasElementsRef.current,
+              newElements: finalElements,
+            };
+            addToHistory(action);
+          }
+
+          selectionStateRef.current = 'selected';
+          initialPointRef.current = null;
+          initialSelectionRef.current = null;
+          initialCanvasElementsRef.current = [];
+          rotationHandleRef.current = false;
+          rotationStartAngleRef.current = 0;
+          initialAngleRef.current = 0;
+          return;
+        }
         // --- Scaling End ---
         else if (selectionStateRef.current === 'scaling') {
           if (
@@ -1090,40 +1413,6 @@ export const useCanvas = ({
     );
   }
 
-  function isRectangle(
-    element: CanvasElements.Any
-  ): element is CanvasElements.Rectangle {
-    return (
-      (element as CanvasElements.Rectangle).point !== undefined &&
-      (element as CanvasElements.Rectangle).width !== undefined &&
-      (element as CanvasElements.Rectangle).height !== undefined
-    );
-  }
-
-  function isTriangle(
-    element: CanvasElements.Any
-  ): element is CanvasElements.Triangle {
-    return (
-      (element as CanvasElements.Triangle).point1 !== undefined &&
-      (element as CanvasElements.Triangle).point2 !== undefined &&
-      (element as CanvasElements.Triangle).point3 !== undefined
-    );
-  }
-
-  function isCircle(
-    element: CanvasElements.Any
-  ): element is CanvasElements.Circle {
-    return 'center' in element && 'radiusX' in element && 'radiusY' in element;
-  }
-
-  function isStar(element: CanvasElements.Any): element is CanvasElements.Star {
-    return (
-      (element as CanvasElements.Star).point !== undefined &&
-      (element as CanvasElements.Star).radius !== undefined &&
-      (element as CanvasElements.Star).spikes !== undefined
-    );
-  }
-
   function isText(element: CanvasElements.Any): element is CanvasElements.Text {
     return (
       (element as CanvasElements.Text).point !== undefined &&
@@ -1165,7 +1454,8 @@ export const useCanvas = ({
           // Assign new unique ID
           newElement.id = generateId();
 
-          // Offset position based on element type
+          // Check element type and apply appropriate offset
+          // Rectangle, Circle, Star, Triangle are now Paths, handled by isPath
           if (isPath(newElement.element)) {
             newElement.element.points = newElement.element.points.map(
               point => ({
@@ -1181,42 +1471,6 @@ export const useCanvas = ({
             newElement.element.endPoint = {
               x: newElement.element.endPoint.x + OFFSET,
               y: newElement.element.endPoint.y + OFFSET,
-            };
-          } else if (isRectangle(newElement.element)) {
-            newElement.element.point = {
-              x: newElement.element.point.x + OFFSET,
-              y: newElement.element.point.y + OFFSET,
-            };
-          } else if (isTriangle(newElement.element)) {
-            newElement.element.point1 = {
-              x: newElement.element.point1.x + OFFSET,
-              y: newElement.element.point1.y + OFFSET,
-            };
-            newElement.element.point2 = {
-              x: newElement.element.point2.x + OFFSET,
-              y: newElement.element.point2.y + OFFSET,
-            };
-            newElement.element.point3 = {
-              x: newElement.element.point3.x + OFFSET,
-              y: newElement.element.point3.y + OFFSET,
-            };
-          } else if (isCircle(newElement.element)) {
-            // Add debug log to verify type guard is working
-            console.log('Duplicating Circle:', newElement.element);
-
-            // Ensure we're modifying a properly typed object
-            const circleElement = newElement.element as CanvasElements.Circle;
-            circleElement.center = {
-              x: circleElement.center.x + OFFSET,
-              y: circleElement.center.y + OFFSET,
-            };
-
-            // Log after modification to verify changes
-            console.log('After duplication:', circleElement.center);
-          } else if (isStar(newElement.element)) {
-            newElement.element.point = {
-              x: newElement.element.point.x + OFFSET,
-              y: newElement.element.point.y + OFFSET,
             };
           } else if (isText(newElement.element)) {
             newElement.element.point = {
@@ -1289,6 +1543,7 @@ export const useCanvas = ({
             ids: newElements.map(el => el.id),
             ...combinedBox,
             selected: true,
+            rotation: 0, // Ensure duplicated selection box is axis-aligned
           });
           selectionStateRef.current = 'selected';
         }
@@ -1470,5 +1725,11 @@ function calculateSelectionBounds(
   if (!combinedBox) {
     return null;
   }
-  return { ids: selectedIds, ...combinedBox, selected: true };
+  return {
+    ids: selectedIds,
+    ...combinedBox,
+    selected: true,
+    // Preserve rotation if it exists, otherwise default to 0
+    rotation: selection.rotation || 0,
+  };
 }

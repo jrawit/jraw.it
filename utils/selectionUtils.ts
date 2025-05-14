@@ -21,6 +21,7 @@ export type Selection = {
   width: number;
   height: number;
   selected: boolean;
+  rotation?: number; // Add rotation property
 };
 
 export const isPointInsideBox = (
@@ -48,19 +49,22 @@ export const calculateBoundingBox = (
     case Tools.PEN:
     case Tools.HIGHLIGHTER:
       const { points, strokeWidth = 0 } = data as CanvasElements.Path;
+      if (!points || points.length === 0) return null; // Guard against empty points
       const minX = Math.min(...points.map(point => point.x));
       const minY = Math.min(...points.map(point => point.y));
       const maxX = Math.max(...points.map(point => point.x));
       const maxY = Math.max(...points.map(point => point.y));
 
-      // Expand the bounding box by half the stroke width in all directions
-      const halfStrokeWidth = strokeWidth / 2;
+      // Be more generous with stroke allowance for paths to account for miter joins and caps.
+      // Skia's default miter limit is 4. A miter can extend by `miterLimit * strokeWidth / 2`.
+      // Using strokeWidth directly (instead of strokeWidth/2) as padding on each side should be safer.
+      const pathStrokeAllowance = strokeWidth; // Increased from strokeWidth / 2
 
       return {
-        x: minX - halfStrokeWidth,
-        y: minY - halfStrokeWidth,
-        width: maxX - minX + strokeWidth,
-        height: maxY - minY + strokeWidth,
+        x: minX - pathStrokeAllowance,
+        y: minY - pathStrokeAllowance,
+        width: maxX - minX + 2 * pathStrokeAllowance,
+        height: maxY - minY + 2 * pathStrokeAllowance,
       };
     case Tools.LINE:
       const {
@@ -76,93 +80,29 @@ export const calculateBoundingBox = (
         height: Math.abs(startPoint.y - endPoint.y) + lineStrokeWidth,
       };
     case Tools.RECTANGLE:
-      const {
-        point,
-        width,
-        height,
-        strokeWidth: rectStrokeWidth = 0,
-      } = data as CanvasElements.Rectangle;
-      const halfRectStrokeWidth = rectStrokeWidth / 2;
-      // Normalize coordinates and dimensions for bounding box calculation
-      const actualX = width < 0 ? point.x + width : point.x;
-      const actualY = height < 0 ? point.y + height : point.y;
-      const actualWidth = Math.abs(width);
-      const actualHeight = Math.abs(height);
-
-      return {
-        x: actualX - halfRectStrokeWidth,
-        y: actualY - halfRectStrokeWidth,
-        width: actualWidth + rectStrokeWidth,
-        height: actualHeight + rectStrokeWidth,
-      };
-    case Tools.TRIANGLE:
-      const {
-        point1,
-        point2,
-        point3,
-        strokeWidth: triangleStrokeWidth,
-      } = data as CanvasElements.Triangle;
-      const minXTriangle = Math.min(point1.x, point2.x, point3.x);
-      const minYTriangle = Math.min(point1.y, point2.y, point3.y);
-      const maxXTriangle = Math.max(point1.x, point2.x, point3.x);
-      const maxYTriangle = Math.max(point1.y, point2.y, point3.y);
-      return {
-        x: minXTriangle - triangleStrokeWidth / 2,
-        y: minYTriangle - triangleStrokeWidth / 2,
-        width: maxXTriangle - minXTriangle + triangleStrokeWidth,
-        height: maxYTriangle - minYTriangle + triangleStrokeWidth,
-      };
     case Tools.CIRCLE:
-      const {
-        center,
-        radiusX,
-        radiusY,
-        strokeWidth: circleStrokeWidth = 0,
-      } = data as CanvasElements.Circle;
-      const halfCircleStrokeWidth = circleStrokeWidth / 2;
-      return {
-        x: center.x - radiusX - halfCircleStrokeWidth,
-        y: center.y - radiusY - halfCircleStrokeWidth,
-        width: radiusX * 2 + circleStrokeWidth,
-        height: radiusY * 2 + circleStrokeWidth,
-      };
-    case Tools.STAR:
-      const {
-        point: pointStar,
-        radius: radiusStar,
-        spikes,
-        strokeWidth: starStrokeWidth = 0,
-      } = data as CanvasElements.Star;
+    case Tools.TRIANGLE:
+    case Tools.STAR: {
+      // All these shapes are now CanvasElements.Path
+      const pathData = data as CanvasElements.Path;
+      if (!pathData.points || pathData.points.length === 0) return null;
 
-      const path = Skia.Path.Make();
+      const { points, strokeWidth = 0 } = pathData;
+      const minX = Math.min(...points.map(point => point.x));
+      const minY = Math.min(...points.map(point => point.y));
+      const maxX = Math.max(...points.map(point => point.x));
+      const maxY = Math.max(...points.map(point => point.y));
 
-      const angle = (Math.PI * 2) / spikes;
-      const halfAngle = angle / 2;
-      const innerRadius = radiusStar / 2;
-      path.moveTo(pointStar.x, pointStar.y - radiusStar);
-      for (let i = 0; i < spikes; i++) {
-        const x = pointStar.x + radiusStar * Math.sin(i * angle);
-        const y = pointStar.y - radiusStar * Math.cos(i * angle);
-        path.lineTo(x, y);
-        const innerX =
-          pointStar.x + innerRadius * Math.sin(i * angle + halfAngle);
-        const innerY =
-          pointStar.y - innerRadius * Math.cos(i * angle + halfAngle);
-        path.lineTo(innerX, innerY);
-      }
-      path.lineTo(pointStar.x, pointStar.y - radiusStar);
-
-      path.close();
-
-      const bounds = path.getBounds();
-      path.dispose();
+      // Consistent stroke allowance for all path-based shapes
+      const pathStrokeAllowance = strokeWidth;
 
       return {
-        x: bounds.x - starStrokeWidth,
-        y: bounds.y - starStrokeWidth,
-        width: bounds.width + starStrokeWidth * 2,
-        height: bounds.height + starStrokeWidth * 2,
+        x: minX - pathStrokeAllowance,
+        y: minY - pathStrokeAllowance,
+        width: maxX - minX + 2 * pathStrokeAllowance,
+        height: maxY - minY + 2 * pathStrokeAllowance,
       };
+    }
     case Tools.TEXT:
       const {
         text,
@@ -259,22 +199,21 @@ export const findElementsInSelection = (
   fontManager?: any
 ) => {
   return elements.filter(element => {
-    const boundingBox = calculateBoundingBox(
-      element.tool,
-      element.element,
-      fontManager
-    );
+    // Use calculateElementBoundingBox to get the AABB of the potentially rotated element
+    const elementAABB = calculateElementBoundingBox(element, 0, fontManager); // Use 0 margin for precise check
 
-    if (!boundingBox) return false;
+    if (!elementAABB) return false;
 
-    // Check if element is completely inside selection box
-    return (
-      boundingBox.x >= selectionBox.x &&
-      boundingBox.x + boundingBox.width <=
-        selectionBox.x + selectionBox.width &&
-      boundingBox.y >= selectionBox.y &&
-      boundingBox.y + boundingBox.height <= selectionBox.y + selectionBox.height
-    );
+    // Check for intersection between the element's AABB and the selection box.
+    // The selectionBox is already normalized (positive width/height) when this function is called
+    // from calculateSelectionBounds.
+    const intersects =
+      elementAABB.x < selectionBox.x + selectionBox.width &&
+      elementAABB.x + elementAABB.width > selectionBox.x &&
+      elementAABB.y < selectionBox.y + selectionBox.height &&
+      elementAABB.y + elementAABB.height > selectionBox.y;
+
+    return intersects;
   });
 };
 
@@ -288,7 +227,9 @@ export const calculateCombinedBoundingBox = (
 ) => {
   const boundingBoxes = elements
     .map(element =>
-      calculateBoundingBox(element.tool, element.element, fontManager)
+      // Use calculateElementBoundingBox to get the AABB of potentially rotated elements
+      // Pass 0 for margin here, as the overall margin is added by this function later
+      calculateElementBoundingBox(element, 0, fontManager)
     )
     .filter(Boolean) as {
     x: number;
@@ -333,9 +274,37 @@ export const calculateElementBoundingBox = (
     fontManager
   );
   if (!boundingBox) return null;
-  boundingBox.x -= margin;
-  boundingBox.y -= margin;
-  boundingBox.width += margin * 2;
-  boundingBox.height += margin * 2;
-  return boundingBox;
+  // The margin is applied to the unrotated bounding box first.
+  // This was identified as potentially problematic if margin should be an outer shell to the final rotated AABB.
+  // However, the previous logic (applying margin before calculating rotated AABB dimensions)
+  // often results in a LARGER final box, which is safer against "poking out".
+  // Reverting to applying margin to the unrotated box before calculating rotated AABB dimensions,
+  // as the primary fix is now targeted at calculateBoundingBox's stroke allowance.
+
+  const marginedBox = {
+    x: boundingBox.x - margin,
+    y: boundingBox.y - margin,
+    width: boundingBox.width + margin * 2,
+    height: boundingBox.height + margin * 2,
+  };
+
+  if (element.rotation && marginedBox) {
+    // Calculate a bounding box that encompasses the rotated margined box
+    const centerX = marginedBox.x + marginedBox.width / 2;
+    const centerY = marginedBox.y + marginedBox.height / 2;
+
+    const cos = Math.abs(Math.cos(element.rotation));
+    const sin = Math.abs(Math.sin(element.rotation));
+    const newWidth = marginedBox.width * cos + marginedBox.height * sin;
+    const newHeight = marginedBox.width * sin + marginedBox.height * cos;
+
+    return {
+      x: centerX - newWidth / 2,
+      y: centerY - newHeight / 2,
+      width: newWidth,
+      height: newHeight,
+    };
+  }
+
+  return marginedBox; // Return margined unrotated box if no rotation
 };

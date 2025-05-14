@@ -1,20 +1,139 @@
-import { CanvasElements } from '@/constants/CanvasElement';
+import { CanvasElement, CanvasElements } from '@/constants/CanvasElement'; // Updated import
 import { ToolData, Tools } from '@/constants/Tools';
-import { CanvasElement } from '@/hooks/useCanvas'; // Assuming useCanvas exports this type
+// import { CanvasElement } from '@/hooks/useCanvas'; // Old import removed
+import { calculateStarVertices, getCirclePoints } from '@/utils/geometryUtils'; // For Star tool & Circle, Updated import
 import { cloneDeep } from 'lodash';
 
 type Point = { x: number; y: number };
+
+// Helper function to calculate distance between two points
+const distance = (p1: Point, p2: Point): number => {
+  return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+};
+
+// Helper function to get the unrotated top-left point
+const getUnrotatedTopLeft = (
+  rotatedTopLeft: Point,
+  width: number,
+  height: number,
+  rotation: number
+): Point => {
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  // Center of the unrotated rectangle if its top-left was (0,0) would be (width/2, height/2)
+  // The offset from the center to the top-left is (-width/2, -height/2)
+  // Rotated offset:
+  // offsetX = (-width/2)*cos - (-height/2)*sin
+  // offsetY = (-width/2)*sin + (-height/2)*cos
+  // The rotatedTopLeft is Center_rotated + RotatedOffset
+  // Center_rotated = rotatedTopLeft - RotatedOffset
+  // UnrotatedTopLeft = Center_rotated - UnrotatedOffset (where UnrotatedOffset is (-width/2, -height/2))
+  // P.x = s_world_tl.x - newWidth/2 + (newWidth/2)*cos(rot) - (newHeight/2)*sin(rot)
+  // P.y = s_world_tl.y - newHeight/2 + (newWidth/2)*sin(rot) + (newHeight/2)*cos(rot)
+  // This formula seems to be for finding the original center from a rotated point, let's re-derive.
+
+  // Let P_unrotated_tl be the point we are looking for.
+  // Center_unrotated = { P_unrotated_tl.x + width/2, P_unrotated_tl.y + height/2 }
+  // rotatedTopLeft is P_unrotated_tl rotated around Center_unrotated by 'rotation'.
+  // To reverse:
+  // 1. Translate rotatedTopLeft so Center_unrotated is at origin:
+  //    temp_rtl_x = rotatedTopLeft.x - Center_unrotated.x
+  //    temp_rtl_y = rotatedTopLeft.y - Center_unrotated.y
+  // 2. Rotate temp_rtl by -rotation:
+  //    unrotated_relative_tl_x = temp_rtl_x * cos(-rotation) - temp_rtl_y * sin(-rotation)
+  //    unrotated_relative_tl_y = temp_rtl_x * sin(-rotation) + temp_rtl_y * cos(-rotation)
+  // This unrotated_relative_tl should be P_unrotated_tl - Center_unrotated.
+  // So, P_unrotated_tl.x = unrotated_relative_tl_x + Center_unrotated.x
+  // P_unrotated_tl.y = unrotated_relative_tl_y + Center_unrotated.y
+
+  // This is simpler: the top-left point of the unrotated rectangle is (X, Y).
+  // Its center is (X + width/2, Y + height/2).
+  // The rotated top-left point (rotatedTopLeft.x, rotatedTopLeft.y) is obtained by:
+  // rotatedTopLeft.x = (X + width/2) + (X - (X + width/2)) * cos(rotation) - (Y - (Y + height/2)) * sin(rotation)
+  // rotatedTopLeft.x = (X + width/2) + (-width/2) * cos - (-height/2) * sin
+  // rotatedTopLeft.y = (Y + height/2) + (-width/2) * sin + (-height/2) * cos
+  // Solving for X:
+  // X = rotatedTopLeft.x - width/2 - (-width/2 * cos - (-height/2) * sin)
+  // X = rotatedTopLeft.x - width/2 + (width/2 * cos) + (height/2 * sin) -> Incorrect derivation somewhere
+  // Correct:
+  const unrotatedOffsetX = -width / 2;
+  const unrotatedOffsetY = -height / 2;
+
+  // Calculate the center based on the rotatedTopLeft and the known offset from center to top-left if it were rotated
+  const centerX =
+    rotatedTopLeft.x - (unrotatedOffsetX * cos - unrotatedOffsetY * sin);
+  const centerY =
+    rotatedTopLeft.y - (unrotatedOffsetX * sin + unrotatedOffsetY * cos);
+
+  // The unrotated top-left is then this center plus the unrotated offset
+  return {
+    x: centerX + unrotatedOffsetX,
+    y: centerY + unrotatedOffsetY,
+  };
+};
 
 // Helper function to scale a point relative to an origin
 const scalePoint = (
   point: Point,
   origin: Point,
   scaleX: number,
-  scaleY: number
+  scaleY: number,
+  rotation: number = 0
 ): Point => {
+  if (rotation === 0) {
+    return {
+      x: origin.x + (point.x - origin.x) * scaleX,
+      y: origin.y + (point.y - origin.y) * scaleY,
+    };
+  }
+
+  // For rotated scaling, we need to:
+  // 1. Translate so origin is at (0,0)
+  // 2. Rotate by -rotation to align with axes
+  // 3. Scale
+  // 4. Rotate back by rotation
+  // 5. Translate back
+
+  // Step 1: Translate
+  let x = point.x - origin.x;
+  let y = point.y - origin.y;
+
+  // Step 2: Rotate to align with axes
+  const cos = Math.cos(-rotation);
+  const sin = Math.sin(-rotation);
+  const xRot = x * cos - y * sin;
+  const yRot = x * sin + y * cos;
+
+  // Step 3: Scale
+  const xScaled = xRot * scaleX;
+  const yScaled = yRot * scaleY;
+
+  // Step 4 & 5: Rotate back and translate
+  const cosBack = Math.cos(rotation);
+  const sinBack = Math.sin(rotation);
+
   return {
-    x: origin.x + (point.x - origin.x) * scaleX,
-    y: origin.y + (point.y - origin.y) * scaleY,
+    x: origin.x + (xScaled * cosBack - yScaled * sinBack),
+    y: origin.y + (xScaled * sinBack + yScaled * cosBack),
+  };
+};
+
+// Helper to rotate a point around an origin
+const rotatePoint = (point: Point, origin: Point, angle: number): Point => {
+  // Translate point to origin
+  const translatedX = point.x - origin.x;
+  const translatedY = point.y - origin.y;
+
+  // Rotate
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const rotatedX = translatedX * cos - translatedY * sin;
+  const rotatedY = translatedX * sin + translatedY * cos;
+
+  // Translate back
+  return {
+    x: rotatedX + origin.x,
+    y: rotatedY + origin.y,
   };
 };
 
@@ -41,7 +160,14 @@ interface ToolHandler {
     element: CanvasElement,
     scaleX: number,
     scaleY: number,
-    origin: Point
+    origin: Point,
+    rotation?: number
+  ) => CanvasElement;
+  rotateElement?: (
+    element: CanvasElement,
+    centerX: number,
+    centerY: number,
+    angleDiff: number
   ) => CanvasElement;
   // Optional method to finalize an element after drawing/modification
   // Can return null to indicate the element should be discarded (e.g., zero size)
@@ -51,6 +177,50 @@ interface ToolHandler {
 const snapAngle = (angle: number): number => {
   const snapIncrement = Math.PI / 4; // 45 degrees
   return Math.round(angle / snapIncrement) * snapIncrement;
+};
+
+const penMoveElement = (
+  element: CanvasElement,
+  deltaX: number,
+  deltaY: number
+): CanvasElement => {
+  const newElement = cloneDeep(element);
+  const path = newElement.element as CanvasElements.Path;
+  path.points = path.points.map(p => ({
+    x: p.x + deltaX,
+    y: p.y + deltaY,
+  }));
+  return newElement;
+};
+
+const penScaleElement = (
+  element: CanvasElement,
+  scaleX: number,
+  scaleY: number,
+  origin: Point,
+  rotation: number = 0
+): CanvasElement => {
+  const newElement = cloneDeep(element);
+  const path = newElement.element as CanvasElements.Path;
+  path.points = path.points.map(p =>
+    scalePoint(p, origin, scaleX, scaleY, rotation)
+  );
+  return newElement;
+};
+
+const penRotateElement = (
+  element: CanvasElement,
+  centerX: number,
+  centerY: number,
+  angleDiff: number
+): CanvasElement => {
+  const newElement = cloneDeep(element);
+  const path = newElement.element as CanvasElements.Path;
+  path.points = path.points.map(p =>
+    rotatePoint(p, { x: centerX, y: centerY }, angleDiff)
+  );
+  newElement.rotation = 0; // Ensure rotation is baked into points
+  return newElement;
 };
 
 const toolHandlers: Record<Tools, ToolHandler> = {
@@ -72,23 +242,9 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       path.points.push({ x, y });
       return newElement;
     },
-    moveElement: (element, deltaX, deltaY) => {
-      const newElement = cloneDeep(element);
-      const path = newElement.element as CanvasElements.Path;
-      path.points = path.points.map(p => ({
-        x: p.x + deltaX,
-        y: p.y + deltaY,
-      }));
-      return newElement;
-    },
-    scaleElement: (element, scaleX, scaleY, origin) => {
-      const newElement = cloneDeep(element);
-      const path = newElement.element as CanvasElements.Path;
-      path.points = path.points.map(p => scalePoint(p, origin, scaleX, scaleY));
-      // Optionally scale strokeWidth? Depends on desired behavior.
-      // path.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY));
-      return newElement;
-    },
+    moveElement: penMoveElement,
+    scaleElement: penScaleElement,
+    rotateElement: penRotateElement,
     finalizeElement: element => {
       const path = element.element as CanvasElements.Path;
       // Discard paths with less than 2 points (just a dot)
@@ -129,11 +285,21 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       }));
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin) => {
+    scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
       const newElement = cloneDeep(element);
       const path = newElement.element as CanvasElements.Path;
-      path.points = path.points.map(p => scalePoint(p, origin, scaleX, scaleY));
-      // path.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
+      path.points = path.points.map(p =>
+        scalePoint(p, origin, scaleX, scaleY, rotation)
+      );
+      return newElement;
+    },
+    rotateElement: (element, centerX, centerY, angleDiff) => {
+      const newElement = cloneDeep(element);
+      const path = newElement.element as CanvasElements.Path;
+      path.points = path.points.map(p =>
+        rotatePoint(p, { x: centerX, y: centerY }, angleDiff)
+      );
+      newElement.rotation = 0; // Ensure rotation is baked into points
       return newElement;
     },
     finalizeElement: element => {
@@ -172,6 +338,7 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     // Moving/Scaling an eraser path doesn't make sense in typical usage
     moveElement: element => element,
     scaleElement: element => element,
+    rotateElement: element => element, // Eraser doesn't need rotation
     finalizeElement: element => {
       // An eraser path itself might always be considered valid if > 1 point
       const path = element.element as CanvasElements.Path;
@@ -226,12 +393,39 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       };
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin) => {
+    scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
       const newElement = cloneDeep(element);
       const line = newElement.element as CanvasElements.Line;
-      line.startPoint = scalePoint(line.startPoint, origin, scaleX, scaleY);
-      line.endPoint = scalePoint(line.endPoint, origin, scaleX, scaleY);
-      // line.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
+      line.startPoint = scalePoint(
+        line.startPoint,
+        origin,
+        scaleX,
+        scaleY,
+        rotation
+      );
+      line.endPoint = scalePoint(
+        line.endPoint,
+        origin,
+        scaleX,
+        scaleY,
+        rotation
+      );
+      return newElement;
+    },
+    rotateElement: (element, centerX, centerY, angleDiff) => {
+      const newElement = cloneDeep(element);
+      const line = newElement.element as CanvasElements.Line;
+      line.startPoint = rotatePoint(
+        line.startPoint,
+        { x: centerX, y: centerY },
+        angleDiff
+      );
+      line.endPoint = rotatePoint(
+        line.endPoint,
+        { x: centerX, y: centerY },
+        angleDiff
+      );
+      newElement.rotation = 0; // Ensure rotation is baked into points
       return newElement;
     },
     finalizeElement: element => {
@@ -250,78 +444,64 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     initElement: (x, y, strokeWidth, color, generateId) => ({
       id: generateId(),
       element: {
-        point: { x, y }, // Top-left corner
-        width: 0,
-        height: 0,
+        points: [
+          { x, y },
+          { x, y },
+          { x, y },
+          { x, y },
+        ], // Initial points for a rectangle (top-left, top-right, bottom-right, bottom-left)
         strokeWidth,
         strokeColor: color,
-        // Add fill properties if needed
-        // fillColor: 'rgba(0,0,0,0)',
-      } as CanvasElements.Rectangle,
+        fillColor: undefined, // Default no fill
+        closed: true,
+      } as CanvasElements.Path,
       tool: Tools.RECTANGLE,
+      rotation: 0,
     }),
     updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
-      const rect = newElement.element as CanvasElements.Rectangle;
-      const startPoint = rect.point;
-      const dx = x - startPoint.x;
-      const dy = y - startPoint.y;
+      const path = newElement.element as CanvasElements.Path;
+      const startPoint = path.points[0]; // Anchor point
+
+      let width = x - startPoint.x;
+      let height = y - startPoint.y;
 
       if (isShiftDown) {
-        const maxDim = Math.max(Math.abs(dx), Math.abs(dy));
-        rect.width = Math.sign(dx || 1) * maxDim; // Use sign(dx || 1) to handle dx=0
-        rect.height = Math.sign(dy || 1) * maxDim; // Use sign(dy || 1) to handle dy=0
-      } else {
-        rect.width = dx;
-        rect.height = dy;
+        const absWidth = Math.abs(width);
+        const absHeight = Math.abs(height);
+        const side = Math.max(absWidth, absHeight);
+        width = Math.sign(width || 1) * side;
+        height = Math.sign(height || 1) * side;
       }
+
+      path.points = [
+        startPoint,
+        { x: startPoint.x + width, y: startPoint.y },
+        { x: startPoint.x + width, y: startPoint.y + height },
+        { x: startPoint.x, y: startPoint.y + height },
+      ];
       return newElement;
     },
-    moveElement: (element, deltaX, deltaY) => {
-      const newElement = cloneDeep(element);
-      const rect = newElement.element as CanvasElements.Rectangle;
-      rect.point = { x: rect.point.x + deltaX, y: rect.point.y + deltaY };
-      return newElement;
-    },
-    scaleElement: (element, scaleX, scaleY, origin) => {
-      const newElement = cloneDeep(element);
-      const rect = newElement.element as CanvasElements.Rectangle;
-      // Scale top-left and bottom-right corners relative to origin
-      const initialTopLeft = { x: rect.point.x, y: rect.point.y };
-      const initialBottomRight = {
-        x: rect.point.x + rect.width,
-        y: rect.point.y + rect.height,
-      };
-      const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
-      const newBottomRight = scalePoint(
-        initialBottomRight,
-        origin,
-        scaleX,
-        scaleY
-      );
-      // Recalculate top-left, width, and height based on scaled corners
-      rect.point.x = Math.min(newTopLeft.x, newBottomRight.x);
-      rect.point.y = Math.min(newTopLeft.y, newBottomRight.y);
-      rect.width = Math.abs(newTopLeft.x - newBottomRight.x);
-      rect.height = Math.abs(newTopLeft.y - newBottomRight.y);
-      // rect.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
-      return newElement;
-    },
+    moveElement: penMoveElement, // Use pre-defined function
+    scaleElement: penScaleElement, // Use pre-defined function
+    rotateElement: penRotateElement, // Use pre-defined function
     finalizeElement: element => {
-      const rect = element.element as CanvasElements.Rectangle;
-      // Discard zero-size rectangles
-      if (Math.abs(rect.width) < 1 && Math.abs(rect.height) < 1) {
-        return null;
+      const path = element.element as CanvasElements.Path;
+      if (path.points.length < 4) return null; // Should not happen for rect
+
+      const [p0, p1, , p3] = path.points; // p2 is p1.x, p3.y
+      const width = Math.abs(p1.x - p0.x);
+      const height = Math.abs(p3.y - p0.y);
+
+      if (width < 1 || height < 1) {
+        return null; // Discard zero-size rectangles
       }
-      // Normalize rectangle (positive width/height, adjust point)
-      if (rect.width < 0) {
-        rect.point.x += rect.width;
-        rect.width = Math.abs(rect.width);
-      }
-      if (rect.height < 0) {
-        rect.point.y += rect.height;
-        rect.height = Math.abs(rect.height);
-      }
+      // Normalize points to ensure p0 is top-left, p1 top-right, etc.
+      // For simplicity, assume drawing creates them in a somewhat standard order.
+      // The PEN scale/rotate handlers should maintain relative positions.
+      // If width/height were negative during drawing, points are already set.
+      // We might need to re-order points if scaling flips them.
+      // For now, rely on PEN's scaling.
       return element;
     },
   },
@@ -329,63 +509,65 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     initElement: (x, y, strokeWidth, color, generateId) => ({
       id: generateId(),
       element: {
-        center: { x, y },
-        radiusX: 0,
-        radiusY: 0,
+        // Store center as the first point, radius info in custom props if needed for re-editing
+        // Or directly compute initial small circle points
+        points: getCirclePoints({ x, y }, 0.1, 0.1), // Initial tiny circle
         strokeWidth,
         strokeColor: color,
-      } as CanvasElements.Circle,
+        fillColor: undefined,
+        closed: true,
+        // Custom properties to store original creation data if needed for specific editing later
+        // _center: { x, y },
+      } as CanvasElements.Path,
       tool: Tools.CIRCLE,
+      rotation: 0,
     }),
     updateElement: (element, x, y, isShiftDown) => {
       const newElement = cloneDeep(element);
-      const circle = newElement.element as CanvasElements.Circle;
+      const path = newElement.element as CanvasElements.Path;
+      // Assuming the "center" is implicitly the average of initial points or stored if needed
+      // For simplicity, let's use the first point of the initial tiny circle as center.
+      // A better approach for init might be to store the center temporarily.
+      // Let's assume path.points[0] from initElement was the intended center for this update.
+      // This is a bit of a hack. A proper way would be to store center during initElement phase.
+      // For now, let's use the first point of the current path as a reference for the center.
+      // This won't work well if the path is already complex.
+      // Let's assume the initial point of the path is the center for drawing.
+      const initialCenter =
+        (newElement.element as any)._center || path.points[0];
 
-      // Calculate dx and dy from center point to current mouse position
-      const dx = Math.abs(x - circle.center.x);
-      const dy = Math.abs(y - circle.center.y);
+      let radiusX = Math.abs(x - initialCenter.x);
+      let radiusY = Math.abs(y - initialCenter.y);
 
       if (isShiftDown) {
-        // When shift is pressed, create a perfect circle (both radiuses equal)
-        const radius = Math.max(dx, dy);
-        circle.radiusX = radius;
-        circle.radiusY = radius;
-        console.log('Circle with Shift:', radius); // Debug
-      } else {
-        // Default: create an oval with independent radiuses
-        circle.radiusX = dx;
-        circle.radiusY = dy;
-        console.log('Oval (no shift):', dx, dy); // Debug
+        const radius = Math.max(radiusX, radiusY);
+        radiusX = radius;
+        radiusY = radius;
       }
-
+      path.points = getCirclePoints(initialCenter, radiusX, radiusY);
       return newElement;
     },
-    moveElement: (element, deltaX, deltaY) => {
-      const newElement = cloneDeep(element);
-      const circle = newElement.element as CanvasElements.Circle;
-      circle.center = {
-        x: circle.center.x + deltaX,
-        y: circle.center.y + deltaY,
-      };
-      return newElement;
-    },
-    scaleElement: (element, scaleX, scaleY, origin) => {
-      const newElement = cloneDeep(element);
-      const circle = newElement.element as CanvasElements.Circle;
-      circle.center = scalePoint(circle.center, origin, scaleX, scaleY);
-
-      // Scale both radiuses independently to maintain oval shapes
-      circle.radiusX *= Math.abs(scaleX);
-      circle.radiusY *= Math.abs(scaleY);
-
-      return newElement;
-    },
+    moveElement: penMoveElement, // Use pre-defined function
+    scaleElement: penScaleElement, // Use pre-defined function
+    rotateElement: penRotateElement, // Use pre-defined function
     finalizeElement: element => {
-      const circle = element.element as CanvasElements.Circle;
-      // Discard tiny circles/ovals
-      if (circle.radiusX < 1 && circle.radiusY < 1) {
-        return null;
-      }
+      const path = element.element as CanvasElements.Path;
+      // Check for degenerate circle (e.g., too few points or very small area)
+      // For a circle, radiusX/Y were used to generate points.
+      // We can check distance between points or bounding box.
+      if (path.points.length < 3) return null; // Need at least 3 points for a polygon
+      // A simple check: if bounding box is too small
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      path.points.forEach(p => {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      });
+      if (maxX - minX < 2 && maxY - minY < 2) return null;
       return element;
     },
   },
@@ -393,22 +575,26 @@ const toolHandlers: Record<Tools, ToolHandler> = {
     initElement: (x, y, strokeWidth, color, generateId) => ({
       id: generateId(),
       element: {
-        point1: { x, y }, // Anchor point
-        point2: { x, y }, // Second point (defines base width)
-        point3: { x, y }, // Third point (defines height/apex)
+        points: [
+          { x, y }, // First point (anchor)
+          { x, y }, // Second point (will be updated)
+          { x, y }, // Third point (will be updated)
+        ],
         strokeWidth,
         strokeColor: color,
-        // fillColor: 'rgba(0,0,0,0)',
-      } as CanvasElements.Triangle,
+        fillColor: undefined,
+        closed: true,
+      } as CanvasElements.Path,
       tool: Tools.TRIANGLE,
+      rotation: 0,
     }),
     updateElement: (element, x, y, isShiftDown) => {
-      // Add isShiftDown
       const newElement = cloneDeep(element);
-      const triangle = newElement.element as CanvasElements.Triangle;
-      const startPoint = triangle.point1; // Alias for clarity
+      const path = newElement.element as CanvasElements.Path;
 
-      let currentX = x; // Use temporary variables for potential snapping
+      // First point is anchor
+      const startPoint = path.points[0];
+      let currentX = x;
       let currentY = y;
 
       if (isShiftDown) {
@@ -442,21 +628,20 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         // Recalculate dx, dy, and angle after potential snapping
         dx = currentX - startPoint.x;
         dy = currentY - startPoint.y;
-        angle = Math.atan2(dy, dx); // Recalculate angle based on snapped coordinates
-        // --- End Axis Snapping ---
+        angle = Math.atan2(dy, dx);
 
         // Calculate points for an equilateral triangle based on (potentially snapped) currentX, currentY
         const sideLength = Math.sqrt(dx * dx + dy * dy);
 
         if (sideLength === 0) {
           // Avoid division by zero if start and end points are the same
-          triangle.point2 = { ...startPoint };
-          triangle.point3 = { ...startPoint };
+          path.points[1] = { ...startPoint };
+          path.points[2] = { ...startPoint };
           return newElement;
         }
 
         // Point 2 is the (potentially snapped) current cursor position
-        triangle.point2 = { x: currentX, y: currentY };
+        path.points[1] = { x: currentX, y: currentY };
 
         // Calculate Point 3 for equilateral triangle
         const height = sideLength * (Math.sqrt(3) / 2);
@@ -464,104 +649,96 @@ const toolHandlers: Record<Tools, ToolHandler> = {
         const midY = (startPoint.y + currentY) / 2;
         const perpendicularAngle = angle - Math.PI / 2;
 
-        triangle.point3 = {
+        path.points[2] = {
           x: midX + height * Math.cos(perpendicularAngle),
           y: midY + height * Math.sin(perpendicularAngle),
         };
       } else {
         // Original logic: Isosceles triangle
-        triangle.point2 = { x: currentX, y: startPoint.y };
-        triangle.point3 = {
+        // Point 1 is startPoint (path.points[0])
+        // Point 2 is (currentX, startPoint.y)
+        // Point 3 is (startPoint.x + (currentX - startPoint.x) / 2, currentY)
+        path.points[1] = { x: currentX, y: startPoint.y };
+        path.points[2] = {
           x: startPoint.x + (currentX - startPoint.x) / 2,
           y: currentY,
         };
       }
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin) => {
-      const newElement = cloneDeep(element);
-      const triangle = newElement.element as CanvasElements.Triangle;
-      triangle.point1 = scalePoint(triangle.point1, origin, scaleX, scaleY);
-      triangle.point2 = scalePoint(triangle.point2, origin, scaleX, scaleY);
-      triangle.point3 = scalePoint(triangle.point3, origin, scaleX, scaleY);
-      // triangle.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
-      return newElement;
-    },
+    moveElement: penMoveElement, // Use pre-defined function
+    scaleElement: penScaleElement, // Use pre-defined function
+    rotateElement: penRotateElement, // Use pre-defined function
     finalizeElement: element => {
-      // Add validation if needed (e.g., check if points are collinear)
+      const path = element.element as CanvasElements.Path;
+      if (path.points.length < 3) {
+        return null;
+      }
+
+      const [p1, p2, p3] = path.points;
+      const area = Math.abs(
+        (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y)) / 2
+      );
+
+      if (area < 10) {
+        return null;
+      }
       return element;
-    },
-    moveElement: (element, deltaX, deltaY) => {
-      // Create a deep clone first to avoid reference issues
-      const newElement = cloneDeep(element);
-      const triangle = newElement.element as CanvasElements.Triangle;
-
-      // Explicitly create new point objects for each point
-      triangle.point1 = {
-        x: triangle.point1.x + deltaX,
-        y: triangle.point1.y + deltaY,
-      };
-      triangle.point2 = {
-        x: triangle.point2.x + deltaX,
-        y: triangle.point2.y + deltaY,
-      };
-      triangle.point3 = {
-        x: triangle.point3.x + deltaX,
-        y: triangle.point3.y + deltaY,
-      };
-
-      // Add debug log to verify the movement
-      console.log('Moving Triangle:', {
-        before: element.element,
-        after: triangle,
-        delta: { deltaX, deltaY },
-      });
-
-      return newElement;
     },
   },
   [Tools.STAR]: {
     initElement: (x, y, strokeWidth, color, generateId) => ({
       id: generateId(),
       element: {
-        point: { x, y }, // Center point
-        radius: 0,
-        spikes: 5, // Default number of spikes
+        points: calculateStarVertices({ x, y }, 0.1, 0.5, 5), // Initial tiny star
         strokeWidth,
         strokeColor: color,
-        // fillColor: 'rgba(0,0,0,0)',
-      } as CanvasElements.Star,
+        fillColor: undefined,
+        closed: true,
+        // _center: { x, y }, // Store center for drawing updates
+        // _spikes: 5, // Store spikes for drawing updates
+      } as CanvasElements.Path,
       tool: Tools.STAR,
+      rotation: 0,
     }),
     updateElement: (element, x, y) => {
       const newElement = cloneDeep(element);
-      const star = newElement.element as CanvasElements.Star;
-      // Radius based on distance from center
-      star.radius = Math.sqrt(
-        Math.pow(x - star.point.x, 2) + Math.pow(y - star.point.y, 2)
+      const path = newElement.element as CanvasElements.Path;
+      // const center = (newElement.element as any)._center || path.points[0]; // Hacky center
+      // const spikes = (newElement.element as any)._spikes || 5;
+      // For star, the first point of the initial path is the center.
+      const center = (newElement.element as any)._center || path.points[0];
+      const spikes = (newElement.element as any)._spikes || 5;
+
+      const radius = Math.sqrt(
+        Math.pow(x - center.x, 2) + Math.pow(y - center.y, 2)
+      );
+      path.points = calculateStarVertices(
+        center,
+        Math.max(0.1, radius),
+        0.5,
+        spikes
       );
       return newElement;
     },
-    moveElement: (element, deltaX, deltaY) => {
-      const newElement = cloneDeep(element);
-      const star = newElement.element as CanvasElements.Star;
-      star.point = { x: star.point.x + deltaX, y: star.point.y + deltaY };
-      return newElement;
-    },
-    scaleElement: (element, scaleX, scaleY, origin) => {
-      const newElement = cloneDeep(element);
-      const star = newElement.element as CanvasElements.Star;
-      star.point = scalePoint(star.point, origin, scaleX, scaleY);
-      star.radius *= Math.sqrt(Math.abs(scaleX * scaleY));
-      // star.strokeWidth *= Math.sqrt(Math.abs(scaleX * scaleY)); // Scale stroke?
-      return newElement;
-    },
+    moveElement: penMoveElement, // Use pre-defined function
+    scaleElement: penScaleElement, // Use pre-defined function
+    rotateElement: penRotateElement, // Use pre-defined function
     finalizeElement: element => {
-      const star = element.element as CanvasElements.Star;
-      // Discard tiny stars
-      if (star.radius < 1) {
-        return null;
-      }
+      const path = element.element as CanvasElements.Path;
+      if (path.points.length < 3) return null; // Star needs at least 3 points (e.g. 3-spike star)
+      // Similar area check as circle/rect
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      path.points.forEach(p => {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      });
+      if (maxX - minX < 2 && maxY - minY < 2) return null;
       return element;
     },
   },
@@ -574,13 +751,82 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       text.point = { x: text.point.x + deltaX, y: text.point.y + deltaY };
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin) => {
-      // Scaling text involves scaling the position and font size
+    scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
       const newElement = cloneDeep(element);
       const text = newElement.element as CanvasElements.Text;
-      text.point = scalePoint(text.point, origin, scaleX, scaleY);
-      // Scale font size based on geometric mean of scale factors
-      text.fontSize *= Math.sqrt(Math.abs(scaleX * scaleY));
+      const elementRotation = newElement.rotation || 0;
+
+      // Approximate width for orientation
+      const approx_char_width = text.fontSize * 0.6;
+      const original_approx_width =
+        text.text.length > 0
+          ? text.text.length * approx_char_width
+          : text.fontSize;
+
+      // 1. Define key points in local unrotated space (anchor and a point for orientation)
+      const local_anchor = { x: text.point.x, y: text.point.y };
+      const local_orient_pt = {
+        x: text.point.x + original_approx_width,
+        y: text.point.y,
+      };
+
+      // 2. Transform to world space (rotation is around text.point)
+      const world_anchor = rotatePoint(
+        local_anchor,
+        local_anchor,
+        elementRotation
+      ); // Stays same
+      const world_orient_pt = rotatePoint(
+        local_orient_pt,
+        local_anchor,
+        elementRotation
+      );
+
+      // 3. Scale these world points
+      const s_world_anchor = scalePoint(
+        world_anchor,
+        origin,
+        scaleX,
+        scaleY,
+        rotation
+      );
+      const s_world_orient_pt = scalePoint(
+        world_orient_pt,
+        origin,
+        scaleX,
+        scaleY,
+        rotation
+      );
+
+      // 4. Update element properties
+      text.point = s_world_anchor;
+
+      const new_approx_width = distance(s_world_anchor, s_world_orient_pt);
+      if (original_approx_width > 0.1) {
+        // Avoid division by zero or tiny numbers
+        text.fontSize *= new_approx_width / original_approx_width;
+      } else if (new_approx_width > 0.1) {
+        // If original was tiny but new is not, base on average scale
+        text.fontSize *= Math.sqrt(Math.abs(scaleX * scaleY));
+      }
+      // Ensure font size is reasonable
+      text.fontSize = Math.max(1, text.fontSize);
+
+      const dx = s_world_orient_pt.x - s_world_anchor.x;
+      const dy = s_world_orient_pt.y - s_world_anchor.y;
+      newElement.rotation = Math.atan2(dy, dx);
+
+      return newElement;
+    },
+    rotateElement: (element, centerX, centerY, angleDiff) => {
+      const newElement = cloneDeep(element);
+      const text = newElement.element as CanvasElements.Text;
+      text.point = rotatePoint(
+        text.point,
+        { x: centerX, y: centerY },
+        angleDiff
+      );
+      newElement.rotation = (newElement.rotation || 0) + angleDiff; // Text uses its own rotation
       return newElement;
     },
     finalizeElement: element => element, // No finalization typically needed
@@ -594,26 +840,76 @@ const toolHandlers: Record<Tools, ToolHandler> = {
       img.point = { x: img.point.x + deltaX, y: img.point.y + deltaY };
       return newElement;
     },
-    scaleElement: (element, scaleX, scaleY, origin) => {
-      // Scaling an image scales its position and dimensions
+    scaleElement: (element, scaleX, scaleY, origin, rotation = 0) => {
       const newElement = cloneDeep(element);
       const img = newElement.element as CanvasElements.Image;
-      const initialTopLeft = { x: img.point.x, y: img.point.y };
-      const initialBottomRight = {
-        x: img.point.x + img.width,
-        y: img.point.y + img.height,
+      const elementRotation = newElement.rotation || 0;
+
+      // 1. Get current corners in local unrotated space
+      const local_tl = { x: img.point.x, y: img.point.y };
+      const local_tr = { x: img.point.x + img.width, y: img.point.y };
+      const local_bl = { x: img.point.x, y: img.point.y + img.height };
+      const local_center = {
+        x: img.point.x + img.width / 2,
+        y: img.point.y + img.height / 2,
       };
-      const newTopLeft = scalePoint(initialTopLeft, origin, scaleX, scaleY);
-      const newBottomRight = scalePoint(
-        initialBottomRight,
-        origin,
-        scaleX,
-        scaleY
+
+      // 2. Transform to world space
+      const world_tl = rotatePoint(local_tl, local_center, elementRotation);
+      const world_tr = rotatePoint(local_tr, local_center, elementRotation);
+      const world_bl = rotatePoint(local_bl, local_center, elementRotation);
+
+      // 3. Scale these world corners
+      const s_world_tl = scalePoint(world_tl, origin, scaleX, scaleY, rotation);
+      const s_world_tr = scalePoint(world_tr, origin, scaleX, scaleY, rotation);
+      const s_world_bl = scalePoint(world_bl, origin, scaleX, scaleY, rotation);
+
+      // 4. Determine new properties
+      const newElementRotationAngle = Math.atan2(
+        s_world_tr.y - s_world_tl.y,
+        s_world_tr.x - s_world_tl.x
       );
-      img.point.x = Math.min(newTopLeft.x, newBottomRight.x);
-      img.point.y = Math.min(newTopLeft.y, newBottomRight.y);
-      img.width = Math.abs(newTopLeft.x - newBottomRight.x);
-      img.height = Math.abs(newTopLeft.y - newBottomRight.y);
+      const newWidth = distance(s_world_tl, s_world_tr);
+      const newHeight = distance(s_world_tl, s_world_bl);
+
+      const finalNewWidth = Math.abs(newWidth);
+      const finalNewHeight = Math.abs(newHeight);
+
+      newElement.rotation = newElementRotationAngle;
+      img.width = finalNewWidth;
+      img.height = finalNewHeight;
+      img.point = getUnrotatedTopLeft(
+        s_world_tl,
+        finalNewWidth,
+        finalNewHeight,
+        newElementRotationAngle
+      );
+
+      return newElement;
+    },
+    rotateElement: (element, centerX, centerY, angleDiff) => {
+      const newElement = cloneDeep(element);
+      const img = newElement.element as CanvasElements.Image;
+      // Image point is top-left, rotation is around its center.
+      // For consistency with other elements that bake rotation into points,
+      // this would need to change. But image is not path-based.
+      // Let's keep its existing rotation logic.
+      const imgData = newElement.element as CanvasElements.Image;
+      const imgRotation = newElement.rotation || 0;
+      const local_center = {
+        x: imgData.point.x + imgData.width / 2,
+        y: imgData.point.y + imgData.height / 2,
+      };
+      const new_center = rotatePoint(
+        local_center,
+        { x: centerX, y: centerY },
+        angleDiff
+      );
+      imgData.point = {
+        x: new_center.x - imgData.width / 2,
+        y: new_center.y - imgData.height / 2,
+      };
+      newElement.rotation = imgRotation + angleDiff;
       return newElement;
     },
     finalizeElement: element => element, // No finalization typically needed
@@ -640,6 +936,49 @@ const toolHandlers: Record<Tools, ToolHandler> = {
   [Tools.PAN]: {},
   [Tools.EYEDROPPER]: {},
 };
+
+// Modify initElement for Circle and Star to store temporary center/spikes
+// This is a common pattern if the update function needs initial parameters not directly in Path
+toolHandlers[Tools.CIRCLE].initElement = (
+  x,
+  y,
+  strokeWidth,
+  color,
+  generateId
+) => ({
+  id: generateId(),
+  element: {
+    points: getCirclePoints({ x, y }, 0.1, 0.1),
+    strokeWidth,
+    strokeColor: color,
+    fillColor: undefined,
+    closed: true,
+    _center: { x, y }, // Store center for drawing updates
+  } as CanvasElements.Path & { _center: Point }, // Augment type for internal use
+  tool: Tools.CIRCLE,
+  rotation: 0,
+});
+
+toolHandlers[Tools.STAR].initElement = (
+  x,
+  y,
+  strokeWidth,
+  color,
+  generateId
+) => ({
+  id: generateId(),
+  element: {
+    points: calculateStarVertices({ x, y }, 0.1, 0.5, 5),
+    strokeWidth,
+    strokeColor: color,
+    fillColor: undefined,
+    closed: true,
+    _center: { x, y }, // Store center for drawing updates
+    _spikes: 5, // Store spikes for drawing updates
+  } as CanvasElements.Path & { _center: Point; _spikes: number }, // Augment type
+  tool: Tools.STAR,
+  rotation: 0,
+});
 
 // Helper for processing and scaling images before adding to canvas
 export const processImageForCanvas = (
