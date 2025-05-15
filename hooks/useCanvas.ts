@@ -65,15 +65,15 @@ export const useCanvas = ({
           elements: [] as CanvasElement[],
           // Updated mock signature for addElement
           addElement: async (
-            data: Array<{
+            data: {
               id: string;
               room_id: string;
               tool_type: string;
               element_data: any;
-            }>
+            }[]
           ) => Promise.resolve(null as any),
           updateElement: async (
-            _updatesArray: Array<{
+            _updatesArray: {
               id: string;
               updates: Partial<
                 Omit<
@@ -81,7 +81,7 @@ export const useCanvas = ({
                   'id' | 'room_id' | 'creator_id' | 'created_at' | 'updated_at'
                 >
               >;
-            }>
+            }[]
           ) => Promise.resolve(),
           removeElement: async (_ids: string[]) => Promise.resolve(),
           isLoading: false,
@@ -266,7 +266,7 @@ export const useCanvas = ({
           case Tools.RECTANGLE:
           case Tools.TRIANGLE:
           case Tools.STAR: {
-            let vertices: Array<{ x: number; y: number }> = [];
+            let vertices: { x: number; y: number }[] = [];
 
             if (elementTool === Tools.RECTANGLE) {
               const rectData = elementData as CanvasElements.Rectangle;
@@ -542,10 +542,10 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // We need to update each moved element via the Electric sync
-              const updatesForElectric: Array<{
+              const updatesForElectric: {
                 id: string;
                 updates: { tool_type: string; element_data: string };
-              }> = [];
+              }[] = [];
               for (let i = 0; i < movedElements.length; i++) {
                 const originalElement = initialCanvasElementsRef.current.find(
                   el => el.id === movedElements[i].id
@@ -640,10 +640,10 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // We need to update each scaled element via the Electric sync
-              const updatesForElectric: Array<{
+              const updatesForElectric: {
                 id: string;
                 updates: { tool_type: string; element_data: string };
-              }> = [];
+              }[] = [];
               for (let i = 0; i < scaledElements.length; i++) {
                 const originalElement = initialCanvasElementsRef.current.find(
                   el => el.id === scaledElements[i].id
@@ -746,10 +746,10 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // We need to update each moved element via the Electric sync
-              const updatesForElectric: Array<{
+              const updatesForElectric: {
                 id: string;
                 updates: { tool_type: string; element_data: string };
-              }> = [];
+              }[] = [];
               for (let i = 0; i < finalElements.length; i++) {
                 const originalElement = initialCanvasElementsRef.current.find(
                   el => el.id === finalElements[i].id
@@ -826,10 +826,10 @@ export const useCanvas = ({
           if (isCollaborative && roomId) {
             try {
               // We need to update each scaled element via the Electric sync
-              const updatesForElectric: Array<{
+              const updatesForElectric: {
                 id: string;
                 updates: { tool_type: string; element_data: string };
-              }> = [];
+              }[] = [];
               for (let i = 0; i < finalElements.length; i++) {
                 const originalElement = initialCanvasElementsRef.current.find(
                   el => el.id === finalElements[i].id

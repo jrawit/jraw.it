@@ -204,19 +204,17 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
 
   const addElement = useCallback(
     async (
-      elementsData: Array<
-        Pick<
-          CanvasElementRecord,
-          'id' | 'room_id' | 'tool_type' | 'element_data'
-        >
-      >
+      elementsData: Pick<
+        CanvasElementRecord,
+        'id' | 'room_id' | 'tool_type' | 'element_data'
+      >[]
     ): Promise<CanvasElementRecord[] | null> => {
       if (!elementsData || elementsData.length === 0) {
         return [];
       }
       console.log('Adding elements (useElectric):', elementsData);
 
-      const removeOptimisticInserts: Array<() => void> = [];
+      const removeOptimisticInserts: (() => void)[] = [];
       const optimisticElements: CanvasElementRecord[] = [];
 
       elementsData.forEach(elementData => {
@@ -273,7 +271,7 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
 
   const updateElement = useCallback(
     async (
-      updatesArray: Array<{
+      updatesArray: {
         id: string;
         updates: Partial<
           Omit<
@@ -281,13 +279,13 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
             'id' | 'room_id' | 'creator_id' | 'created_at' | 'updated_at'
           >
         >;
-      }>
+      }[]
     ) => {
       if (!updatesArray || updatesArray.length === 0) {
         return;
       }
 
-      const removeOptimisticUpdates: Array<() => void> = [];
+      const removeOptimisticUpdates: (() => void)[] = [];
       const elementsToUpdateForApi: any[] = [];
 
       for (const { id, updates } of updatesArray) {
@@ -343,7 +341,7 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
         return;
       }
 
-      const removeOptimisticDeletes: Array<() => void> = [];
+      const removeOptimisticDeletes: (() => void)[] = [];
       const recordsToDelete: CanvasElementRecord[] = [];
 
       for (const id of ids) {
