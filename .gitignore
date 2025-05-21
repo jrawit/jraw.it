@@ -42,3 +42,6 @@ jraw.it.code-workspace
 # prebuild
 android/
 ios/
+
+# Ignores .env
+.env
