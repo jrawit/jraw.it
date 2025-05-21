@@ -138,7 +138,7 @@ export function getPointsOnSmoothedPathQuadratic(
 
 export function isPointNearPolygonOutline(
   point: { x: number; y: number },
-  vertices: Array<{ x: number; y: number }>,
+  vertices: { x: number; y: number }[],
   checkRadius: number
 ): boolean {
   if (!vertices || vertices.length === 0 || checkRadius < 0) return false;
@@ -190,7 +190,7 @@ export function isPointNearPolygonOutline(
 
 export function isPointNearPolyline(
   point: { x: number; y: number },
-  pathPoints: Array<{ x: number; y: number }>,
+  pathPoints: { x: number; y: number }[],
   checkRadius: number // Single combined radius
 ): boolean {
   if (!pathPoints || pathPoints.length === 0 || checkRadius < 0) return false;
