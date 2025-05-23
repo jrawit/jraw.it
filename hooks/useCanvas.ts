@@ -1368,7 +1368,7 @@ export const useCanvas = ({
   ]);
 
   const deleteSelection = useCallback(async () => {
-    if (selection && selection.ids.length > 0) {
+    if (selection && selection.ids && selection.ids.length > 0) {
       const elementsToDelete = elements.filter(element =>
         selection.ids.includes(element.id)
       );
@@ -1400,6 +1400,7 @@ export const useCanvas = ({
             type: 'DELETE_ELEMENT',
             elements: cloneDeep(elementsToDelete),
           };
+          addToHistory(action);
         }
       }
       clearSelection();

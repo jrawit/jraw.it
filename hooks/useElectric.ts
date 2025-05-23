@@ -3,7 +3,7 @@ import { canvasElementMapper } from '@/utils/canvasElementMapper';
 import { ELECTRIC_URL, envParams } from '@/utils/electric';
 import { CanvasElementRecord, CanvasElementWrite } from '@/utils/types'; // CanvasElementWrite will be used directly
 import { useShape } from '@electric-sql/react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasElement } from './useCanvas';
 
 // Custom hook to implement optimistic updates
@@ -17,21 +17,65 @@ function useCustomOptimistic<T>(
   // Keep track of pending updates
   const pendingUpdates = useRef<CanvasElementWrite[]>([]);
 
-  // This ref will help us compare if serverState actually changed
-  const prevServerStateRef = useRef<T[]>(serverState);
+  // Use useEffect to properly react to serverState changes
+  useEffect(() => {
+    console.log('useCustomOptimistic: serverState changed', {
+      serverStateLength: serverState.length,
+      pendingUpdatesLength: pendingUpdates.current.length,
+    });
 
-  // Instead of using useEffect, we'll directly update the state when serverState changes
-  // This prevents unneeded re-renders for unchanged server state
-  if (
-    JSON.stringify(prevServerStateRef.current) !== JSON.stringify(serverState)
-  ) {
+    // Clean up pending updates for elements that no longer exist in server state
+    const serverElementIds = new Set(
+      serverState.map((element: any) => element.id)
+    );
+    const originalPendingLength = pendingUpdates.current.length;
+
+    console.log(
+      'useCustomOptimistic: current pending updates before cleanup',
+      pendingUpdates.current.map(u => ({
+        id: u.value.id,
+        operation: u.operation,
+      }))
+    );
+    console.log(
+      'useCustomOptimistic: server element IDs',
+      Array.from(serverElementIds)
+    );
+
+    pendingUpdates.current = pendingUpdates.current.filter(update => {
+      // Keep updates for elements that still exist in server state
+      // For delete operations, only keep them if the element still exists (delete is still pending)
+      if (update.operation === 'delete') {
+        return serverElementIds.has(update.value.id);
+      }
+      // For insert/update operations, only keep them if the element still exists
+      return serverElementIds.has(update.value.id);
+    });
+
+    console.log(
+      'useCustomOptimistic: current pending updates after cleanup',
+      pendingUpdates.current.map(u => ({
+        id: u.value.id,
+        operation: u.operation,
+      }))
+    );
+
+    if (pendingUpdates.current.length !== originalPendingLength) {
+      console.log('useCustomOptimistic: cleaned up stale pending updates', {
+        originalLength: originalPendingLength,
+        newLength: pendingUpdates.current.length,
+      });
+    }
+
     let newState = [...serverState];
     pendingUpdates.current.forEach(update => {
       newState = updateFn(newState, update);
     });
+    console.log('useCustomOptimistic: setting optimistic state', {
+      newStateLength: newState.length,
+    });
     setOptimisticState(newState);
-    prevServerStateRef.current = serverState;
-  }
+  }, [serverState, updateFn]); // Include updateFn in dependencies
 
   // Function to apply an optimistic update
   const addOptimisticUpdate = useCallback(
@@ -44,13 +88,16 @@ function useCustomOptimistic<T>(
       // Return a function to remove this update from pending once confirmed by server
       return () => {
         pendingUpdates.current = pendingUpdates.current.filter(
-          u => u.value.id !== update.value.id // Compare by ID for removal
+          u =>
+            !(
+              u.value.id === update.value.id && u.operation === update.operation
+            ) // Compare by ID AND operation for removal
         );
         // If serverState doesn't change after this, optimisticState might not auto-revert.
         // ElectricSQL sync should eventually correct the state.
       };
     },
-    [updateFn]
+    [updateFn] // Include updateFn dependency
   );
 
   return [optimisticState, addOptimisticUpdate] as const;
@@ -119,42 +166,46 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
   });
 
   // Convert ElectricSQL records to app's CanvasElement format
-  const syncedElements: CanvasElement[] = (data || [])
-    .map(record => {
-      try {
-        // Cast the record to any type first to bypass TypeScript errors
-        const recordData = record as any;
+  const syncedElements: CanvasElement[] = useMemo(
+    () =>
+      (data || [])
+        .map(record => {
+          try {
+            // Cast the record to any type first to bypass TypeScript errors
+            const recordData = record as any;
 
-        // Make sure record has all required fields before conversion
-        if (
-          recordData &&
-          typeof recordData === 'object' &&
-          'id' in recordData &&
-          'tool_type' in recordData &&
-          'element_data' in recordData
-        ) {
-          // Create a properly formatted CanvasElementRecord
-          const canvasRecord: CanvasElementRecord = {
-            id: recordData.id,
-            room_id: recordData.room_id,
-            creator_id: recordData.creator_id,
-            tool_type: recordData.tool_type,
-            element_data: recordData.element_data,
-            created_at: new Date(recordData.created_at || Date.now()),
-            updated_at: new Date(recordData.updated_at || Date.now()),
-          };
+            // Make sure record has all required fields before conversion
+            if (
+              recordData &&
+              typeof recordData === 'object' &&
+              'id' in recordData &&
+              'tool_type' in recordData &&
+              'element_data' in recordData
+            ) {
+              // Create a properly formatted CanvasElementRecord
+              const canvasRecord: CanvasElementRecord = {
+                id: recordData.id,
+                room_id: recordData.room_id,
+                creator_id: recordData.creator_id,
+                tool_type: recordData.tool_type,
+                element_data: recordData.element_data,
+                created_at: new Date(recordData.created_at || Date.now()),
+                updated_at: new Date(recordData.updated_at || Date.now()),
+              };
 
-          return canvasElementMapper.fromRecord(canvasRecord);
-        }
+              return canvasElementMapper.fromRecord(canvasRecord);
+            }
 
-        console.error('Invalid record format:', record);
-        return null;
-      } catch (err) {
-        console.error('Error converting record:', err);
-        return null;
-      }
-    })
-    .filter(Boolean) as CanvasElement[];
+            console.error('Invalid record format:', record);
+            return null;
+          } catch (err) {
+            console.error('Error converting record:', err);
+            return null;
+          }
+        })
+        .filter(Boolean) as CanvasElement[],
+    [data]
+  );
 
   // Memoize the update function to avoid recreating it on every render
   const updateElementsState = useCallback(
@@ -351,15 +402,10 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
           continue; // Skip if element not found
         }
 
-        const recordToDelete: CanvasElementRecord = {
-          id: elementToRemove.id,
-          room_id: (elementToRemove as any).roomId,
-          creator_id: (elementToRemove as any).creatorId,
-          tool_type: (elementToRemove as any).toolType,
-          element_data: (elementToRemove as any).elementData,
-          created_at: (elementToRemove as any).createdAt,
-          updated_at: (elementToRemove as any).updatedAt,
-        };
+        // Use the canvasElementMapper to create a proper record format
+        // We need to provide roomId and userId for the mapping
+        const recordToDelete: CanvasElementRecord =
+          canvasElementMapper.toRecord(elementToRemove, roomId, userId);
         recordsToDelete.push(recordToDelete);
 
         removeOptimisticDeletes.push(
@@ -377,12 +423,14 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
       try {
         await api.request(`/canvas/elements`, 'DELETE', { ids });
         // ElectricSQL sync should handle the update from the server.
+        // Clean up optimistic deletes on success since server will provide the updated state
+        removeOptimisticDeletes.forEach(remove => remove());
       } catch (error) {
         console.error('Failed to delete elements:', error);
         removeOptimisticDeletes.forEach(remove => remove());
       }
     },
-    [elements, addOptimisticUpdate]
+    [elements, addOptimisticUpdate, roomId, userId]
   );
 
   // Return the merged hooks
