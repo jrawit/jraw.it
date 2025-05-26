@@ -4,10 +4,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import {
   Modal,
+  ScrollView,
   StyleProp,
   StyleSheet,
   TouchableOpacity,
   useColorScheme,
+  useWindowDimensions,
   View,
   ViewStyle,
 } from 'react-native';
@@ -20,7 +22,6 @@ import ColorPicker, {
   Panel2,
 } from 'reanimated-color-picker';
 
-// Add the COLORS constant here
 const COLORS = [
   '#F44336',
   '#E91E63',
@@ -159,6 +160,9 @@ export default function ColorPickerModal({
   );
   const isDark = useColorScheme() === 'dark';
   const selectedColor = useSharedValue(initialBackground.color);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isSmallScreen = screenWidth < 400;
+  const isVerySmallScreen = screenWidth < 350;
 
   // Reset state when modal becomes visible using initialBackground
   useEffect(() => {
@@ -207,213 +211,364 @@ export default function ColorPickerModal({
       animationType="fade"
       onRequestClose={handleCancel}
     >
-      <ThemedView style={styles.modalOverlay}>
-        <ThemedView style={styles.modalContent}>
-          <ThemedText style={styles.modalTitle}>
-            Choose Background Color
-          </ThemedText>
-          {/* Color Preview with Texture */}
-          <View style={styles.colorPreview}>
-            <ThemedText style={styles.previewText}>Selected:</ThemedText>
-            <TexturedColorView
-              color={color}
-              style={colorButtonStyle}
-              gridSize={gridSize}
-              textureOpacity={textureOpacity}
-              texture={applyTexture ? 'grid' : 'none'}
-            />
-            <ThemedText style={styles.previewText}>
-              {color.toUpperCase()}
-            </ThemedText>
-          </View>
-          <ThemedView style={styles.textureOptions}>
-            <ThemedText style={styles.sectionTitle}>
-              Texture Settings
-            </ThemedText>
-
-            <View style={styles.optionRow}>
-              <ThemedText>Apply Grid Texture</ThemedText>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  applyTexture && styles.toggleActive,
-                ]}
-                onPress={() => setApplyTexture(!applyTexture)}
-              >
-                <ThemedText
-                  style={
-                    applyTexture ? styles.toggleTextActive : styles.toggleText
-                  }
-                >
-                  {applyTexture ? 'ON' : 'OFF'}
-                </ThemedText>
-              </TouchableOpacity>
-            </View>
-
-            {applyTexture && (
-              <>
-                <View style={styles.optionRow}>
-                  <ThemedText>Grid Size: {gridSize}px</ThemedText>
-                  <View style={styles.sliderContainer}>
-                    <TouchableOpacity
-                      onPress={() => setGridSize(Math.max(5, gridSize - 5))}
-                    >
-                      <MaterialIcons
-                        name="remove"
-                        size={20}
-                        color={isDark ? 'white' : 'black'}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setGridSize(Math.min(50, gridSize + 5))}
-                    >
-                      <MaterialIcons
-                        name="add"
-                        size={20}
-                        color={isDark ? 'white' : 'black'}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.optionRow}>
-                  <ThemedText>
-                    Opacity: {Math.round(textureOpacity * 100)}%
-                  </ThemedText>
-                  <View style={styles.sliderContainer}>
-                    <TouchableOpacity
-                      onPress={() =>
-                        setTextureOpacity(Math.max(0.05, textureOpacity - 0.05))
-                      }
-                    >
-                      <MaterialIcons
-                        name="remove"
-                        size={20}
-                        color={isDark ? 'white' : 'black'}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() =>
-                        setTextureOpacity(Math.min(0.5, textureOpacity + 0.05))
-                      }
-                    >
-                      <MaterialIcons
-                        name="add"
-                        size={20}
-                        color={isDark ? 'white' : 'black'}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </>
-            )}
-          </ThemedView>
-          {/* Toggle between simple and advanced pickers */}
-          <TouchableOpacity
+      <View style={styles.modalOverlay}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <ThemedView
             style={[
-              styles.toggleButton,
+              styles.modalContent,
               {
-                backgroundColor: isDark ? '#444' : '#eee',
+                width: isVerySmallScreen
+                  ? '90%'
+                  : isSmallScreen
+                    ? '80%'
+                    : '70%',
+                maxWidth: isSmallScreen ? screenWidth - 40 : 400,
+                maxHeight: screenHeight * 0.8,
               },
             ]}
-            onPress={() => setShowAdvancedPicker(!showAdvancedPicker)}
           >
-            <ThemedText style={styles.buttonText}>
-              {showAdvancedPicker
-                ? 'Simple Color Grid'
-                : 'Advanced Color Picker'}
-            </ThemedText>
-          </TouchableOpacity>
-          {/* Quick Color Selection with Textures */}
-          {!showAdvancedPicker && (
-            <View style={styles.colorGrid}>
-              {COLORS.map(colorOption => (
-                <TouchableOpacity
-                  key={colorOption}
-                  style={[color === colorOption && styles.selectedColorOption]}
-                  onPress={() => handleColorSelect(colorOption)}
-                >
-                  <TexturedColorView
-                    color={colorOption}
-                    style={[
-                      styles.colorOption,
-                      color === colorOption && { borderWidth: 0 },
-                    ]}
-                    gridSize={3}
-                    textureOpacity={0.12}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          ){/* Advanced Color Picker */}
-          {showAdvancedPicker && (
-            <ColorPicker
-              style={{
-                ...styles.pickerContainer,
-                backgroundColor: isDark ? '#333' : 'white',
-              }}
-              value={color}
-              sliderThickness={25}
-              thumbSize={24}
-              thumbShape="circle"
-              onComplete={(colorValue: ColorFormatsObject) => {
-                'worklet';
-                selectedColor.value = colorValue.hex;
-              }}
-              onCompleteJS={(colorValue: ColorFormatsObject) => {
-                setColor(colorValue.hex);
-              }}
-              adaptSpectrum
-              boundedThumb
+            <ThemedText
+              style={[styles.modalTitle, { fontSize: isSmallScreen ? 16 : 18 }]}
             >
-              <Panel2
-                style={styles.panelStyle}
-                thumbShape="ring"
-                reverseVerticalChannel
-              />
+              Choose Background Color
+            </ThemedText>
 
-              <BrightnessSlider style={styles.sliderStyle} />
-
-              <OpacitySlider style={styles.sliderStyle} />
-
-              <View style={styles.previewTxtContainer}>
-                <InputWidget
-                  inputStyle={{
-                    color: isDark ? '#fff' : '#000',
-                    paddingVertical: 2,
-                    borderColor: '#707070',
-                    fontSize: 12,
-                    marginLeft: 5,
-                  }}
-                  iconColor="#707070"
-                />
-              </View>
-            </ColorPicker>
-          )}
-          {/* Action Buttons */}
-          <ThemedView style={styles.modalButtons}>
-            <TouchableOpacity
-              onPress={handleCancel}
+            {/* Color Preview with Texture */}
+            <View
               style={[
-                styles.modalButton,
-                styles.cancelButton,
-                {
-                  backgroundColor: isDark ? '#444' : '#ccc',
-                },
+                styles.colorPreview,
+                { marginBottom: isSmallScreen ? 15 : 20 },
               ]}
             >
-              <ThemedText style={styles.actionButtonText}>Cancel</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleSubmit} // handleSubmit now sends the object
-              style={[styles.modalButton, styles.applyButton]}
+              <ThemedText
+                style={[
+                  styles.previewText,
+                  { fontSize: isSmallScreen ? 14 : 16 },
+                ]}
+              >
+                Selected:
+              </ThemedText>
+              <TexturedColorView
+                color={color}
+                style={[
+                  colorButtonStyle,
+                  {
+                    width: isSmallScreen ? 35 : 40,
+                    height: isSmallScreen ? 35 : 40,
+                    borderRadius: isSmallScreen ? 17.5 : 20,
+                  },
+                ]}
+                gridSize={gridSize}
+                textureOpacity={textureOpacity}
+                texture={applyTexture ? 'grid' : 'none'}
+              />
+              <ThemedText
+                style={[
+                  styles.previewText,
+                  { fontSize: isSmallScreen ? 12 : 16 },
+                ]}
+              >
+                {color.toUpperCase()}
+              </ThemedText>
+            </View>
+
+            <ThemedView
+              style={[
+                styles.textureOptions,
+                { padding: isSmallScreen ? 8 : 10 },
+              ]}
             >
-              <ThemedText style={styles.actionButtonText}>Apply</ThemedText>
+              <ThemedText
+                style={[
+                  styles.sectionTitle,
+                  { fontSize: isSmallScreen ? 14 : 16 },
+                ]}
+              >
+                Texture Settings
+              </ThemedText>
+
+              <View style={styles.optionRow}>
+                <ThemedText style={{ fontSize: isSmallScreen ? 14 : 16 }}>
+                  Apply Grid Texture
+                </ThemedText>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    applyTexture && styles.toggleActive,
+                    {
+                      paddingHorizontal: isSmallScreen ? 8 : 12,
+                      paddingVertical: isSmallScreen ? 4 : 6,
+                    },
+                  ]}
+                  onPress={() => setApplyTexture(!applyTexture)}
+                >
+                  <ThemedText
+                    style={[
+                      applyTexture
+                        ? styles.toggleTextActive
+                        : styles.toggleText,
+                      { fontSize: isSmallScreen ? 10 : 12 },
+                    ]}
+                  >
+                    {applyTexture ? 'ON' : 'OFF'}
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+
+              {applyTexture && (
+                <>
+                  <View style={styles.optionRow}>
+                    <ThemedText style={{ fontSize: isSmallScreen ? 14 : 16 }}>
+                      Grid Size: {gridSize}px
+                    </ThemedText>
+                    <View style={styles.sliderContainer}>
+                      <TouchableOpacity
+                        onPress={() => setGridSize(Math.max(5, gridSize - 5))}
+                        style={{ padding: isSmallScreen ? 4 : 8 }}
+                      >
+                        <MaterialIcons
+                          name="remove"
+                          size={isSmallScreen ? 18 : 20}
+                          color={isDark ? 'white' : 'black'}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setGridSize(Math.min(50, gridSize + 5))}
+                        style={{ padding: isSmallScreen ? 4 : 8 }}
+                      >
+                        <MaterialIcons
+                          name="add"
+                          size={isSmallScreen ? 18 : 20}
+                          color={isDark ? 'white' : 'black'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.optionRow}>
+                    <ThemedText style={{ fontSize: isSmallScreen ? 14 : 16 }}>
+                      Opacity: {Math.round(textureOpacity * 100)}%
+                    </ThemedText>
+                    <View style={styles.sliderContainer}>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setTextureOpacity(
+                            Math.max(0.05, textureOpacity - 0.05)
+                          )
+                        }
+                        style={{ padding: isSmallScreen ? 4 : 8 }}
+                      >
+                        <MaterialIcons
+                          name="remove"
+                          size={isSmallScreen ? 18 : 20}
+                          color={isDark ? 'white' : 'black'}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setTextureOpacity(
+                            Math.min(0.5, textureOpacity + 0.05)
+                          )
+                        }
+                        style={{ padding: isSmallScreen ? 4 : 8 }}
+                      >
+                        <MaterialIcons
+                          name="add"
+                          size={isSmallScreen ? 18 : 20}
+                          color={isDark ? 'white' : 'black'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </>
+              )}
+            </ThemedView>
+
+            {/* Toggle between simple and advanced pickers */}
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                {
+                  backgroundColor: isDark ? '#444' : '#eee',
+                  paddingHorizontal: isSmallScreen ? 8 : 12,
+                  paddingVertical: isSmallScreen ? 6 : 8,
+                  marginBottom: isSmallScreen ? 10 : 15,
+                },
+              ]}
+              onPress={() => setShowAdvancedPicker(!showAdvancedPicker)}
+            >
+              <ThemedText
+                style={[
+                  styles.buttonText,
+                  { fontSize: isSmallScreen ? 12 : 14 },
+                ]}
+              >
+                {showAdvancedPicker
+                  ? 'Simple Color Grid'
+                  : 'Advanced Color Picker'}
+              </ThemedText>
             </TouchableOpacity>
+
+            {/* Quick Color Selection with Textures */}
+            {!showAdvancedPicker && (
+              <View
+                style={[
+                  styles.colorGrid,
+                  {
+                    maxHeight: isSmallScreen ? 200 : 250,
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                  },
+                ]}
+              >
+                {COLORS.map(colorOption => (
+                  <TouchableOpacity
+                    key={colorOption}
+                    style={[
+                      color === colorOption && styles.selectedColorOption,
+                      { margin: isSmallScreen ? 3 : 5 },
+                    ]}
+                    onPress={() => handleColorSelect(colorOption)}
+                  >
+                    <TexturedColorView
+                      color={colorOption}
+                      style={[
+                        styles.colorOption,
+                        {
+                          width: isSmallScreen ? 25 : 30,
+                          height: isSmallScreen ? 25 : 30,
+                          borderRadius: isSmallScreen ? 12.5 : 15,
+                        },
+                        color === colorOption && { borderWidth: 0 },
+                      ]}
+                      gridSize={3}
+                      textureOpacity={0.12}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Advanced Color Picker */}
+            {showAdvancedPicker && (
+              <View style={{ maxHeight: isSmallScreen ? 250 : 300 }}>
+                <ColorPicker
+                  style={[
+                    styles.pickerContainer,
+                    {
+                      backgroundColor: isDark ? '#333' : 'white',
+                      padding: isSmallScreen ? 10 : 15,
+                    },
+                  ]}
+                  value={color}
+                  sliderThickness={isSmallScreen ? 20 : 25}
+                  thumbSize={isSmallScreen ? 20 : 24}
+                  thumbShape="circle"
+                  onComplete={(colorValue: ColorFormatsObject) => {
+                    'worklet';
+                    selectedColor.value = colorValue.hex;
+                  }}
+                  onCompleteJS={(colorValue: ColorFormatsObject) => {
+                    setColor(colorValue.hex);
+                  }}
+                  adaptSpectrum
+                  boundedThumb
+                >
+                  <Panel2
+                    style={[
+                      styles.panelStyle,
+                      { height: isSmallScreen ? 120 : 150 },
+                    ]}
+                    thumbShape="ring"
+                    reverseVerticalChannel
+                  />
+
+                  <BrightnessSlider
+                    style={[
+                      styles.sliderStyle,
+                      { height: isSmallScreen ? 8 : 10 },
+                    ]}
+                  />
+
+                  <OpacitySlider
+                    style={[
+                      styles.sliderStyle,
+                      { height: isSmallScreen ? 8 : 10 },
+                    ]}
+                  />
+
+                  <View style={styles.previewTxtContainer}>
+                    <InputWidget
+                      inputStyle={{
+                        color: isDark ? '#fff' : '#000',
+                        paddingVertical: 2,
+                        borderColor: '#707070',
+                        fontSize: isSmallScreen ? 10 : 12,
+                        marginLeft: 5,
+                      }}
+                      iconColor="#707070"
+                    />
+                  </View>
+                </ColorPicker>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            <ThemedView
+              style={[
+                styles.modalButtons,
+                { marginTop: isSmallScreen ? 15 : 20 },
+              ]}
+            >
+              <TouchableOpacity
+                onPress={handleCancel}
+                style={[
+                  styles.modalButton,
+                  styles.cancelButton,
+                  {
+                    backgroundColor: isDark ? '#444' : '#ccc',
+                    paddingVertical: isSmallScreen ? 8 : 10,
+                    paddingHorizontal: isSmallScreen ? 15 : 20,
+                  },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    styles.actionButtonText,
+                    { fontSize: isSmallScreen ? 14 : 16 },
+                  ]}
+                >
+                  Cancel
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSubmit}
+                style={[
+                  styles.modalButton,
+                  styles.applyButton,
+                  {
+                    paddingVertical: isSmallScreen ? 8 : 10,
+                    paddingHorizontal: isSmallScreen ? 15 : 20,
+                  },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    styles.actionButtonText,
+                    { fontSize: isSmallScreen ? 14 : 16 },
+                  ]}
+                >
+                  Apply
+                </ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
           </ThemedView>
-        </ThemedView>
-      </ThemedView>
+        </ScrollView>
+      </View>
     </Modal>
   );
 }
@@ -424,12 +579,37 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '100%',
+  },
+  modalContent: {
+    borderRadius: 10,
+    padding: 15,
+    margin: 0,
+    alignSelf: 'center',
+  },
+  modalTitle: {
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  colorPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  previewText: {
+    fontWeight: '500',
   },
   textureOptions: {
-    marginVertical: 15,
-    padding: 10,
     borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginBottom: 15,
   },
   sectionTitle: {
     fontWeight: 'bold',
@@ -444,85 +624,42 @@ const styles = StyleSheet.create({
   sliderContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 80,
-    justifyContent: 'space-between',
   },
   toggleButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#ccc',
+    borderRadius: 15,
+    alignItems: 'center',
   },
   toggleActive: {
     backgroundColor: '#007AFF',
   },
   toggleText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#333',
+    color: '#666',
   },
   toggleTextActive: {
-    fontSize: 12,
-    fontWeight: '500',
     color: 'white',
-  },
-  modalContent: {
-    borderRadius: 10,
-    padding: 20,
-    width: '80%',
-    maxWidth: 500,
-  },
-  textureOverlay: {
-    overflow: 'hidden',
-  },
-  modalTitle: {
-    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
   },
-  colorPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  previewText: {
-    fontSize: 16,
-    marginHorizontal: 8,
+  buttonText: {
+    fontWeight: '500',
   },
   colorGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginTop: 10,
+    marginBottom: 20,
   },
   colorOption: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    margin: 5,
     borderWidth: 1,
     borderColor: '#ccc',
   },
   selectedColorOption: {
     borderWidth: 3,
     borderColor: '#007AFF',
-  },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '500',
+    borderRadius: 20,
   },
   pickerContainer: {
-    alignSelf: 'center',
-    width: '100%',
-    padding: 15,
-    borderRadius: 10,
-    elevation: 5,
-    marginVertical: 10,
+    borderRadius: 12,
   },
   panelStyle: {
-    borderRadius: 8,
+    borderRadius: 12,
     elevation: 2,
   },
   sliderStyle: {
@@ -534,19 +671,16 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     marginTop: 10,
     borderTopWidth: 1,
-    borderColor: '#bebdbe',
+    borderColor: 'rgba(128, 128, 128, 0.2)',
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
+    gap: 10,
   },
   modalButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
     flex: 1,
-    marginHorizontal: 5,
+    borderRadius: 5,
     alignItems: 'center',
   },
   cancelButton: {
@@ -558,5 +692,8 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontWeight: 'bold',
     color: 'white',
+  },
+  textureOverlay: {
+    backgroundColor: 'transparent',
   },
 });
