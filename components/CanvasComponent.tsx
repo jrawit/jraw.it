@@ -656,22 +656,26 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
 
     // Memoize the transform for the Group components to prevent unnecessary re-renders
     const mainGroupTransform = useMemo(() => {
+      const centerX = canvasSize.width / 2;
+      const centerY = canvasSize.height / 2;
+      const offsetX =
+        elementsOffset.x +
+        (tool === Tools.PAN ? currentMovingElementOffset.x : 0);
+      const offsetY =
+        elementsOffset.y +
+        (tool === Tools.PAN ? currentMovingElementOffset.y : 0);
+
       return [
-        { translate: [canvasSize.width / 2, canvasSize.height / 2] },
+        { translate: [centerX, centerY] },
         { scale: zoomScale },
-        { translate: [-canvasSize.width / 2, -canvasSize.height / 2] },
+        { translate: [-centerX, -centerY] },
         {
-          translate: [
-            (elementsOffset.x +
-              (tool === Tools.PAN ? currentMovingElementOffset.x : 0)) /
-              zoomScale,
-            (elementsOffset.y +
-              (tool === Tools.PAN ? currentMovingElementOffset.y : 0)) /
-              zoomScale,
-          ],
+          translate: [offsetX / zoomScale, offsetY / zoomScale],
         },
       ];
     }, [
+      canvasSize.width,
+      canvasSize.height,
       zoomScale,
       elementsOffset.x,
       elementsOffset.y,
@@ -681,15 +685,17 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
     ]);
 
     const textureGroupTransform = useMemo(() => {
+      const offsetX =
+        elementsOffset.x +
+        (tool === Tools.PAN ? currentMovingElementOffset.x : 0);
+      const offsetY =
+        elementsOffset.y +
+        (tool === Tools.PAN ? currentMovingElementOffset.y : 0);
+
       return [
         { scale: zoomScale },
         {
-          translate: [
-            elementsOffset.x +
-              (tool === Tools.PAN ? currentMovingElementOffset.x : 0),
-            elementsOffset.y +
-              (tool === Tools.PAN ? currentMovingElementOffset.y : 0),
-          ],
+          translate: [offsetX, offsetY],
         },
       ];
     }, [
@@ -799,6 +805,8 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       }
 
       if (tool === Tools.HIGHLIGHTER) {
+        const transformedSize =
+          ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth);
         return (
           <Group
             transform={[
@@ -812,15 +820,11 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
             <Rect
               rectData={{
                 point: {
-                  x:
-                    hoverPoint.x -
-                    ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth) / 2,
-                  y:
-                    hoverPoint.y -
-                    ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth) / 2,
+                  x: hoverPoint.x - transformedSize / 2,
+                  y: hoverPoint.y - transformedSize / 2,
                 },
-                width: ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth),
-                height: ToolData[Tools.HIGHLIGHTER].sizeTransform(strokeWidth),
+                width: transformedSize,
+                height: transformedSize,
                 strokeWidth: 1,
                 strokeColor: 'black',
                 fillColor: 'transparent',
@@ -932,7 +936,7 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
                 </Group>
               )}
 
-            <Group transform={mainGroupTransform as any}>
+            <Group transform={mainGroupTransform}>
               {renderedElements}
               {currentElement && getElement(currentElement)}
               {hoverCursor}
