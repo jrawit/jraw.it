@@ -106,8 +106,6 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
       [selectedColor]
     );
 
-    // No need for an effect that checks non-existent color prop
-
     // Toggle handler
     const toggleCollapse = useCallback(() => {
       const nextIsCollapsed = !isCollapsed; // Calculate the next state
@@ -501,8 +499,7 @@ const styles = StyleSheet.create({
     bottom: '2%',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-    left: '50%',
-    transform: [{ translateX: '-50%' }],
+    alignSelf: 'center',
   },
   toggleButtonTouchable: {
     width: 42, // Match the new smaller button size

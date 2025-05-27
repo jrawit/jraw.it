@@ -407,6 +407,7 @@ export default function CanvasScreen() {
     }
   }, [elementsOffset, requestPermission]);
   const [zoomLevel, setZoomLevel] = useState(1); //initializes zoom level to 1
+  const [isDropdownVisible, setIsDropdownVisible] = useState(false); // Add dropdown state
   const handleZoomIn = () => {
     setZoomLevel(Math.min(zoomLevel + 0.1, 2.5)); //max zoom level is 250%
   };
@@ -599,7 +600,7 @@ export default function CanvasScreen() {
   }, []);
 
   return (
-    <View style={{ flex: 1, flexDirection: 'row' }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
           headerTitle: () => (
@@ -696,38 +697,126 @@ export default function CanvasScreen() {
           >
             <MaterialIcons name="redo" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={pickImage} style={styles.controlButton}>
-            <MaterialIcons name="image" size={24} color="black" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={saveCanvasAsImage}
-            style={styles.controlButton}
-          >
-            <MaterialIcons name="save" size={24} color="black" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            // Open the color picker modal
-            onPress={() => setBackgroundColorPickerVisible(true)}
-            style={styles.controlButton}
-          >
-            <MaterialCommunityIcons
-              name="format-color-fill"
-              size={24}
-              color="black"
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() =>
-              canvasComponentRef.current
-                ?.clear()
-                .catch(e => console.error('Error during clear:', e))
-            }
-            style={[styles.controlButton, styles.clearButton]}
-          >
-            <FontAwesome name="trash" size={24} color="black" />
-          </TouchableOpacity>
+
+          {/* Mobile: Show dropdown menu button */}
+          {Platform.OS !== 'web' ? (
+            <View style={styles.dropdownContainer}>
+              <TouchableOpacity
+                onPress={() => setIsDropdownVisible(!isDropdownVisible)}
+                style={[styles.controlButton, styles.dropdownButton]}
+              >
+                <MaterialIcons name="more-vert" size={24} color="black" />
+              </TouchableOpacity>
+
+              {/* Dropdown Menu */}
+              {isDropdownVisible && (
+                <View style={styles.dropdownMenu}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      pickImage();
+                      setIsDropdownVisible(false);
+                    }}
+                    style={styles.dropdownItem}
+                  >
+                    <MaterialIcons name="image" size={20} color="black" />
+                    <Text style={styles.dropdownText}>Add Image</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      saveCanvasAsImage();
+                      setIsDropdownVisible(false);
+                    }}
+                    style={styles.dropdownItem}
+                  >
+                    <MaterialIcons name="save" size={20} color="black" />
+                    <Text style={styles.dropdownText}>Save Canvas</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setBackgroundColorPickerVisible(true);
+                      setIsDropdownVisible(false);
+                    }}
+                    style={styles.dropdownItem}
+                  >
+                    <MaterialCommunityIcons
+                      name="format-color-fill"
+                      size={20}
+                      color="black"
+                    />
+                    <Text style={styles.dropdownText}>Background</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      canvasComponentRef.current
+                        ?.clear()
+                        .catch(e => console.error('Error during clear:', e));
+                      setIsDropdownVisible(false);
+                    }}
+                    style={[styles.dropdownItem, styles.clearDropdownItem]}
+                  >
+                    <FontAwesome name="trash" size={20} color="#FF3B30" />
+                    <Text
+                      style={[styles.dropdownText, styles.clearDropdownText]}
+                    >
+                      Clear Canvas
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ) : (
+            /* Web: Show all buttons as before */
+            <>
+              <TouchableOpacity
+                onPress={pickImage}
+                style={styles.controlButton}
+              >
+                <MaterialIcons name="image" size={24} color="black" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={saveCanvasAsImage}
+                style={styles.controlButton}
+              >
+                <MaterialIcons name="save" size={24} color="black" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                // Open the color picker modal
+                onPress={() => setBackgroundColorPickerVisible(true)}
+                style={styles.controlButton}
+              >
+                <MaterialCommunityIcons
+                  name="format-color-fill"
+                  size={24}
+                  color="black"
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() =>
+                  canvasComponentRef.current
+                    ?.clear()
+                    .catch(e => console.error('Error during clear:', e))
+                }
+                style={[styles.controlButton, styles.clearButton]}
+              >
+                <FontAwesome name="trash" size={24} color="black" />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
+
+      {/* Close dropdown when tapping outside */}
+      {isDropdownVisible && Platform.OS !== 'web' && (
+        <TouchableOpacity
+          style={styles.dropdownOverlay}
+          onPress={() => setIsDropdownVisible(false)}
+          activeOpacity={1}
+        />
+      )}
+
       <Toolbar
         tool={tool}
         onToolChange={(newTool: Tools) => {
@@ -814,6 +903,56 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   clearButton: { backgroundColor: '#FF3B30' },
+  dropdownContainer: {
+    position: 'relative',
+  },
+  dropdownButton: {
+    backgroundColor: 'white',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 55,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    minWidth: 150,
+    zIndex: 1000,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  dropdownText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: 'black',
+  },
+  clearDropdownItem: {
+    borderBottomWidth: 0,
+  },
+  clearDropdownText: {
+    color: '#FF3B30',
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
