@@ -500,7 +500,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'transparent',
     alignSelf: 'center',
-    width: '100%',
   },
   toggleButtonTouchable: {
     width: 42, // Match the new smaller button size
