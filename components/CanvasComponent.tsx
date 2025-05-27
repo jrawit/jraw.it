@@ -695,7 +695,8 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
       return [
         { scale: zoomScale },
         {
-          translate: [offsetX, offsetY],
+          translateX: offsetX,
+          translateY: offsetY,
         },
       ];
     }, [
