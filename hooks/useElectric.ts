@@ -156,55 +156,61 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
   const userId = user?.id || 'anonymous';
 
   // Use ElectricSQL's useShape hook to sync data from Postgres
+  // Only sync when roomId is provided and not empty
   const { isLoading, data } = useShape({
     url: `${ELECTRIC_URL}/v1/shape`,
-    params: {
-      table: 'canvas_elements',
-      where: `room_id = '${roomId}'`,
-      ...envParams,
-    },
+    params: roomId
+      ? {
+          table: 'canvas_elements',
+          where: `room_id = '${roomId}'`,
+          ...envParams,
+        }
+      : {},
   });
 
   // Convert ElectricSQL records to app's CanvasElement format
   const syncedElements: CanvasElement[] = useMemo(
     () =>
-      (data || [])
-        .map(record => {
-          try {
-            // Cast the record to any type first to bypass TypeScript errors
-            const recordData = record as any;
+      // Return empty array if no roomId or data
+      !roomId || !data
+        ? []
+        : ((data || [])
+            .map(record => {
+              try {
+                // Cast the record to any type first to bypass TypeScript errors
+                const recordData = record as any;
 
-            // Make sure record has all required fields before conversion
-            if (
-              recordData &&
-              typeof recordData === 'object' &&
-              'id' in recordData &&
-              'tool_type' in recordData &&
-              'element_data' in recordData
-            ) {
-              // Create a properly formatted CanvasElementRecord
-              const canvasRecord: CanvasElementRecord = {
-                id: recordData.id,
-                room_id: recordData.room_id,
-                creator_id: recordData.creator_id,
-                tool_type: recordData.tool_type,
-                element_data: recordData.element_data,
-                created_at: new Date(recordData.created_at || Date.now()),
-                updated_at: new Date(recordData.updated_at || Date.now()),
-              };
+                // Make sure record has all required fields before conversion
+                if (
+                  recordData &&
+                  typeof recordData === 'object' &&
+                  'id' in recordData &&
+                  'tool_type' in recordData &&
+                  'element_data' in recordData
+                ) {
+                  // Create a properly formatted CanvasElementRecord
+                  const canvasRecord: CanvasElementRecord = {
+                    id: recordData.id,
+                    room_id: recordData.room_id,
+                    creator_id: recordData.creator_id,
+                    tool_type: recordData.tool_type,
+                    element_data: recordData.element_data,
+                    created_at: new Date(recordData.created_at || Date.now()),
+                    updated_at: new Date(recordData.updated_at || Date.now()),
+                  };
 
-              return canvasElementMapper.fromRecord(canvasRecord);
-            }
+                  return canvasElementMapper.fromRecord(canvasRecord);
+                }
 
-            console.error('Invalid record format:', record);
-            return null;
-          } catch (err) {
-            console.error('Error converting record:', err);
-            return null;
-          }
-        })
-        .filter(Boolean) as CanvasElement[],
-    [data]
+                console.error('Invalid record format:', record);
+                return null;
+              } catch (err) {
+                console.error('Error converting record:', err);
+                return null;
+              }
+            })
+            .filter(Boolean) as CanvasElement[]),
+    [data, roomId]
   );
 
   // Memoize the update function to avoid recreating it on every render

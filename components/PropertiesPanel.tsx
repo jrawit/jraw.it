@@ -39,21 +39,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   style,
 }) => {
   const selectedElement = selectedElements[0];
-  const element = selectedElement.element;
-  const tool = selectedElement.tool;
+  const element = selectedElement?.element;
 
-  const [strokeWidth, setStrokeWidth] = useState<number>(
-    (element && 'strokeWidth' in element ? element.strokeWidth : 3) ?? 3
-  );
-  const [fontSize, setFontSize] = useState<number>(
-    (element && 'fontSize' in element ? element.fontSize : 20) ?? 20
-  );
-  const [textContent, setTextContent] = useState<string>(
-    (element && 'text' in element ? element.text : '') ?? ''
-  );
-  const [spikes, setSpikes] = useState<number>(
-    (element && 'spikes' in element ? element.spikes : 5) ?? 5
-  );
+  // Initialize all hooks at the top, regardless of early returns
+  const [strokeWidth, setStrokeWidth] = useState<number>(3);
+  const [fontSize, setFontSize] = useState<number>(20);
+  const [textContent, setTextContent] = useState<string>('');
+  const [spikes, setSpikes] = useState<number>(5);
 
   // --- Color Logic ---
   const editingColorProperty = useRef<
@@ -65,6 +57,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   // Determine base colors based on element type and properties
   const getBaseColor = useCallback(
     (prop: 'strokeColor' | 'fillColor' | 'color'): string => {
+      if (!element) return prop === 'fillColor' ? '#FFFFFF00' : '#000000';
       if (prop === 'color' && 'color' in element)
         return element.color ?? '#000000';
       if (prop === 'strokeColor' && 'strokeColor' in element)
@@ -88,6 +81,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
   // --- Effects for updating state and animations ---
   useEffect(() => {
+    if (!element) return;
     // Update local state when selected element changes
     setStrokeWidth(
       (element && 'strokeWidth' in element ? element.strokeWidth : 3) ?? 3
@@ -183,6 +177,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   // --- Handlers ---
   const handlePropertyChange = useCallback(
     (property: any, value: any) => {
+      if (!selectedElement || !element) return;
       modifyElement(selectedElement.id, {
         ...element,
         [property]: value,
@@ -235,6 +230,18 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     backgroundColor: animatedTextColor.value,
   }));
 
+  // Early returns after all hooks have been called
+  if (!selectedElement) return null;
+  if (!element) return null;
+  if (selectedElements.length !== 1) return null;
+  if (
+    selectedElements[0].tool === Tools.IMAGE ||
+    selectedElements[0].tool === Tools.EMOJI
+  )
+    return null;
+
+  const tool = selectedElement.tool;
+
   // --- Conditional Property Checks ---
   const hasStrokeWidth =
     tool === Tools.PEN ||
@@ -253,12 +260,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   const hasTextContent = tool === Tools.TEXT;
   const hasSpikes = tool === Tools.STAR;
   const hasTextColor = tool === Tools.TEXT;
-  if (selectedElements.length !== 1) return null;
-  if (
-    selectedElements[0].tool === Tools.IMAGE ||
-    selectedElements[0].tool === Tools.EMOJI
-  )
-    return null;
   return (
     <>
       <ThemedView

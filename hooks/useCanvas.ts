@@ -57,12 +57,14 @@ export const useCanvas = ({
     null
   );
 
-  // Initialize Electric sync for collaborative mode
+  // Initialize Electric sync for collaborative mode - always call the hook
+  const electricResult = useElectricCanvas({ roomId: roomId || '' });
+
+  // Use electric result in collaborative mode, otherwise use mock
   const electric = useMemo(
     () =>
       isCollaborative && roomId
-        ? // eslint-disable-next-line react-hooks/rules-of-hooks
-          useElectricCanvas({ roomId })
+        ? electricResult
         : {
             elements: [] as CanvasElement[],
             // Updated mock signature for addElement
@@ -92,11 +94,13 @@ export const useCanvas = ({
             removeElement: async (_ids: string[]) => Promise.resolve(),
             isLoading: false,
           },
-    [isCollaborative, roomId]
+    [isCollaborative, roomId, electricResult]
   );
 
   // Use elements from electric in collaborative mode, otherwise use local
   const elements = isCollaborative ? electric.elements : localElements;
+
+  console.log(elements, 'Elements in useCanvas');
 
   useEffect(() => {
     console.log('Elements in useCanvas:', elements);
