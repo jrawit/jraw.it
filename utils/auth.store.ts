@@ -34,8 +34,7 @@ interface AuthState {
   register: (
     username: string,
     email: string,
-    password: string,
-    name?: string
+    password: string
   ) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;

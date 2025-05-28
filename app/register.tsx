@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 
 export default function RegisterScreen() {
-  const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -130,7 +129,7 @@ export default function RegisterScreen() {
     }
 
     // Register the user - let the server's Zod validation handle most validations
-    await register(username, email, password, name || undefined);
+    await register(username, email, password);
   };
 
   return (
@@ -156,27 +155,6 @@ export default function RegisterScreen() {
           <ThemedText style={styles.subtitle}>
             Join JrawIt and start collaborating
           </ThemedText>
-
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>
-              Full Name (Optional)
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: isDark ? '#333' : 'white',
-                  borderColor: isDark ? '#555' : '#ddd',
-                  color: isDark ? 'white' : 'black',
-                },
-              ]}
-              value={name}
-              onChangeText={setName}
-              placeholder="Enter your full name"
-              placeholderTextColor={isDark ? '#999' : '#999'}
-              autoCapitalize="words"
-            />
-          </View>
 
           <View style={styles.inputGroup}>
             <ThemedText style={styles.inputLabel}>Username</ThemedText>

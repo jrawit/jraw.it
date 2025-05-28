@@ -85,6 +85,7 @@
   },
   "private": true,
   "lint-staged": {
+    "*.{js,jsx,ts,tsx}": "eslint --fix",
     "*.{js,jsx,ts,tsx,css,md,json}": "prettier --write"
   },
   "expo": {
