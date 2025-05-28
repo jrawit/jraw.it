@@ -34,8 +34,6 @@ jraw.it is a collaborative drawing application that allows users to draw togethe
   - **`hooks/`**: Custom React hooks.
   - **`src-tauri/`**: Tauri-specific code for the desktop application.
   - **`utils/`**: Utility functions.
-- **`server/`**: Contains the backend server code.
-  - **`server/`**: (Specifics of the server structure can be detailed here).
 
 ## First time setup
 
