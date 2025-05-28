@@ -13,7 +13,6 @@ import { router, Stack } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react'; // Added useMemo
 import {
   Alert,
-  Button,
   FlatList,
   Platform, // Added Platform
   ScrollView,
@@ -300,10 +299,6 @@ export default function HomeScreen() {
             Welcome to JrawIt
             {isLoggedIn && user ? `, ${user.username}` : ''}
           </ThemedText>
-          <Button
-            title="Go to test canvas"
-            onPress={() => router.push('/canvas/test')}
-          />
           {!isLoggedIn && (
             <ThemedView style={styles.authBanner}>
               <ThemedText style={styles.authText}>
