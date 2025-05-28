@@ -86,24 +86,13 @@ export default function RegisterScreen() {
         clearError();
       }
     }
-  }, [error, validationErrors, clearError, clearValidationErrors]);
+  }, [error, validationErrors, clearError, clearValidationErrors, errors]);
 
   // Helper function to clear a specific error
   const clearFieldError = (field: keyof typeof errors) => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
-  };
-
-  // Validate email format
-  const isValidEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  // Check if username exceeds max length
-  const isUsernameValid = (username: string): boolean => {
-    return username.length <= 30;
   };
 
   const handleRegister = async () => {

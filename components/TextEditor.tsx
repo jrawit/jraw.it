@@ -81,10 +81,13 @@ const useTextFormatting = (textElement: CanvasElements.Text, scale: number) => {
   const toggleBold = useCallback(() => setIsBold(prev => !prev), []);
   const toggleItalic = useCallback(() => setIsItalic(prev => !prev), []);
 
-  const onColorChangeWorklet = useCallback((color: { hex: string }) => {
-    'worklet';
-    animatedCurrentColor.value = color.hex;
-  }, []);
+  const onColorChangeWorklet = useCallback(
+    (color: { hex: string }) => {
+      'worklet';
+      animatedCurrentColor.value = color.hex;
+    },
+    [animatedCurrentColor]
+  );
 
   const onColorChangeCompleteJS = useCallback((color: { hex: string }) => {
     setCurrentColor(color.hex);

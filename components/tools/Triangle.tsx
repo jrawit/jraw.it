@@ -25,7 +25,7 @@ export const Triangle: React.FC<TriangleProps> = React.memo(
       path.lineTo(point3.x, point3.y);
       path.close();
       return path;
-    }, [point1, point2, point3, strokeWidth]);
+    }, [point1, point2, point3]);
 
     return (
       <SkPath path={path} style="stroke">

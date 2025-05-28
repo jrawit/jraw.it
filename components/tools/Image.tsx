@@ -24,17 +24,15 @@ export const Image: React.FC<ImageProps> = React.memo(({ imageData }) => {
       : typeof uri === 'string'
         ? uri
         : null;
-
-  if (!uriString) {
-    console.error('Invalid URI:', uri);
-    return null;
-  }
-
   const image = useImage(uriString, error => {
     if (error) {
       console.error('Error loading image:', error);
     }
   });
+  if (!uriString) {
+    console.error('Invalid URI:', uri);
+    return null;
+  }
 
   if (!image) {
     return null;

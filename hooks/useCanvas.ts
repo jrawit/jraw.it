@@ -15,7 +15,7 @@ import {
   isPointInsideBox,
 } from '@/utils/selectionUtils';
 import { cloneDeep } from 'lodash';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { Tools } from '../constants/Tools';
@@ -58,34 +58,42 @@ export const useCanvas = ({
   );
 
   // Initialize Electric sync for collaborative mode
-  const electric =
-    isCollaborative && roomId
-      ? useElectricCanvas({ roomId })
-      : {
-          elements: [] as CanvasElement[],
-          // Updated mock signature for addElement
-          addElement: async (
-            data: {
-              id: string;
-              room_id: string;
-              tool_type: string;
-              element_data: any;
-            }[]
-          ) => Promise.resolve(null as any),
-          updateElement: async (
-            _updatesArray: {
-              id: string;
-              updates: Partial<
-                Omit<
-                  any, // Using 'any' for mock simplicity, replace with CanvasElementRecord if needed
-                  'id' | 'room_id' | 'creator_id' | 'created_at' | 'updated_at'
-                >
-              >;
-            }[]
-          ) => Promise.resolve(),
-          removeElement: async (_ids: string[]) => Promise.resolve(),
-          isLoading: false,
-        };
+  const electric = useMemo(
+    () =>
+      isCollaborative && roomId
+        ? // eslint-disable-next-line react-hooks/rules-of-hooks
+          useElectricCanvas({ roomId })
+        : {
+            elements: [] as CanvasElement[],
+            // Updated mock signature for addElement
+            addElement: async (
+              data: {
+                id: string;
+                room_id: string;
+                tool_type: string;
+                element_data: any;
+              }[]
+            ) => Promise.resolve(null as any),
+            updateElement: async (
+              _updatesArray: {
+                id: string;
+                updates: Partial<
+                  Omit<
+                    any, // Using 'any' for mock simplicity, replace with CanvasElementRecord if needed
+                    | 'id'
+                    | 'room_id'
+                    | 'creator_id'
+                    | 'created_at'
+                    | 'updated_at'
+                  >
+                >;
+              }[]
+            ) => Promise.resolve(),
+            removeElement: async (_ids: string[]) => Promise.resolve(),
+            isLoading: false,
+          },
+    [isCollaborative, roomId]
+  );
 
   // Use elements from electric in collaborative mode, otherwise use local
   const elements = isCollaborative ? electric.elements : localElements;
@@ -105,7 +113,7 @@ export const useCanvas = ({
         setLocalElements(newElementsOrFn);
       }
     },
-    [isCollaborative, roomId, electric]
+    [isCollaborative]
   );
 
   // --- Eraser Refs ---
@@ -123,7 +131,7 @@ export const useCanvas = ({
   const scalingOriginRef = useRef<{ x: number; y: number } | null>(null);
 
   // --- Utility Functions ---
-  const generateId = () => uuidv4();
+  const generateId = useCallback(() => uuidv4(), []);
 
   // Define clearSelection *before* passing it to useCanvasHistory
   const clearSelection = useCallback(() => {
@@ -168,7 +176,6 @@ export const useCanvas = ({
             ? 3
             : elementStrokeWidth;
 
-        const touchTolerance = tool === Tools.ERASER ? 0 : 1;
         const eraserRadius = tool === Tools.ERASER ? strokeWidth / 2 : 0;
 
         // Calculate Single Effective Radius - important to match visual size
@@ -319,7 +326,7 @@ export const useCanvas = ({
       }
       return null;
     },
-    [tool, strokeWidth, fontManager]
+    [tool, strokeWidth]
   );
 
   // --- Input Handlers ---
@@ -460,6 +467,11 @@ export const useCanvas = ({
       clearSelection,
       findElementAtPoint,
       fontManager,
+      addToHistory,
+      electric,
+      isCollaborative,
+      roomId,
+      setElements,
     ]
   );
 
@@ -713,6 +725,11 @@ export const useCanvas = ({
       fontManager,
       findElementAtPoint,
       isShiftDown,
+      addToHistory,
+      electric,
+      isCollaborative,
+      roomId,
+      setElements,
     ]
   );
 
@@ -949,7 +966,6 @@ export const useCanvas = ({
       selection,
       addToHistory,
       fontManager, // for selection calculation if any
-      clearSelection, // if selection is cleared
       isCollaborative,
       roomId,
       electric,

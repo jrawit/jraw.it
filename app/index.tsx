@@ -6,6 +6,7 @@ import { UserAuthHeader } from '@/components/UserAuthHeader';
 import { useAuthStore } from '@/utils/auth.store';
 import { ELECTRIC_URL, envParams } from '@/utils/electric';
 import { createRoom, deleteRoom, renameRoom } from '@/utils/room.service';
+// eslint-disable-next-line import/no-unresolved
 import { Row } from '@electric-sql/client/model'; // Correct import for Row
 import { useShape } from '@electric-sql/react';
 import { router, Stack } from 'expo-router';

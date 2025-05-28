@@ -180,7 +180,7 @@ export default function ColorPickerModal({
       setTextureOpacity(initialBackground.textureOpacity);
     }
     // Depend on the initialBackground object
-  }, [visible, initialBackground]);
+  }, [visible, initialBackground, selectedColor]);
 
   const colorButtonStyle = useAnimatedStyle(() => {
     return {

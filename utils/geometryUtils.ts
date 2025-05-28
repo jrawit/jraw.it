@@ -101,8 +101,6 @@ export function getPointsOnSmoothedPathQuadratic(
     const p0 = points[i];
     const p1 = points[i + 1];
     const midPoint = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-    let cp: Point;
-    cp = i === 0 ? p0 : points[i];
     const startPoint =
       i === 0
         ? p0
