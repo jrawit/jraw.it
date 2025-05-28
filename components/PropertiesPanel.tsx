@@ -38,13 +38,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   modifyElement,
   style,
 }) => {
-  if (selectedElements.length !== 1) return null;
-  if (
-    selectedElements[0].tool === Tools.IMAGE ||
-    selectedElements[0].tool === Tools.EMOJI
-  )
-    return null;
-
   const selectedElement = selectedElements[0];
   const element = selectedElement.element;
   const tool = selectedElement.tool;
@@ -70,19 +63,20 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   const [previewColor, setPreviewColor] = useState<string | null>(null);
 
   // Determine base colors based on element type and properties
-  const getBaseColor = (
-    prop: 'strokeColor' | 'fillColor' | 'color'
-  ): string => {
-    if (prop === 'color' && 'color' in element)
-      return element.color ?? '#000000';
-    if (prop === 'strokeColor' && 'strokeColor' in element)
-      return element.strokeColor ?? '#000000';
-    if (prop === 'fillColor' && 'fillColor' in element)
-      return element.fillColor ?? '#FFFFFF00'; // Default to transparent white
-    // Fallbacks
-    if (prop === 'strokeColor' || prop === 'color') return '#000000';
-    return '#FFFFFF00';
-  };
+  const getBaseColor = useCallback(
+    (prop: 'strokeColor' | 'fillColor' | 'color'): string => {
+      if (prop === 'color' && 'color' in element)
+        return element.color ?? '#000000';
+      if (prop === 'strokeColor' && 'strokeColor' in element)
+        return element.strokeColor ?? '#000000';
+      if (prop === 'fillColor' && 'fillColor' in element)
+        return element.fillColor ?? '#FFFFFF00'; // Default to transparent white
+      // Fallbacks
+      if (prop === 'strokeColor' || prop === 'color') return '#000000';
+      return '#FFFFFF00';
+    },
+    [element]
+  );
 
   const baseStrokeColor = getBaseColor('strokeColor');
   const baseFillColor = getBaseColor('fillColor');
@@ -113,7 +107,15 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       animatedFillColor.value = withTiming(newBaseFill);
       animatedTextColor.value = withTiming(newBaseText);
     }
-  }, [selectedElement, colorPickerVisible]);
+  }, [
+    selectedElement,
+    colorPickerVisible,
+    animatedFillColor,
+    animatedStrokeColor,
+    animatedTextColor,
+    element,
+    getBaseColor,
+  ]);
 
   // Update stroke color animation
   useEffect(() => {
@@ -128,7 +130,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       targetColor = getBaseColor('strokeColor');
     }
     animatedStrokeColor.value = targetColor;
-  }, [previewColor, element, colorPickerVisible, animatedStrokeColor]);
+  }, [
+    previewColor,
+    element,
+    colorPickerVisible,
+    animatedStrokeColor,
+    getBaseColor,
+  ]);
 
   // Update fill color animation
   useEffect(() => {
@@ -143,7 +151,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       targetColor = getBaseColor('fillColor');
     }
     animatedFillColor.value = targetColor;
-  }, [previewColor, element, colorPickerVisible, animatedFillColor]);
+  }, [
+    previewColor,
+    element,
+    colorPickerVisible,
+    animatedFillColor,
+    getBaseColor,
+  ]);
 
   // Update text color animation
   useEffect(() => {
@@ -158,7 +172,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       targetColor = getBaseColor('color');
     }
     animatedTextColor.value = targetColor;
-  }, [previewColor, element, colorPickerVisible, animatedTextColor]);
+  }, [
+    previewColor,
+    element,
+    colorPickerVisible,
+    animatedTextColor,
+    getBaseColor,
+  ]);
 
   // --- Handlers ---
   const handlePropertyChange = useCallback(
@@ -231,10 +251,14 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     tool === Tools.STAR;
   const hasFontSize = tool === Tools.TEXT;
   const hasTextContent = tool === Tools.TEXT;
-  const hasRadius = tool === Tools.CIRCLE || tool === Tools.STAR;
   const hasSpikes = tool === Tools.STAR;
   const hasTextColor = tool === Tools.TEXT;
-
+  if (selectedElements.length !== 1) return null;
+  if (
+    selectedElements[0].tool === Tools.IMAGE ||
+    selectedElements[0].tool === Tools.EMOJI
+  )
+    return null;
   return (
     <>
       <ThemedView

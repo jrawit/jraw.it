@@ -10,6 +10,7 @@ import { useMediaLibraryPermissions } from '@/hooks/useMediaLibraryPermissions';
 import { API_URL, useAuthStore } from '@/utils/auth.store';
 import { ELECTRIC_URL, envParams } from '@/utils/electric';
 import { renderElementsOffscreen } from '@/utils/offscreenRenderer';
+// eslint-disable-next-line import/no-unresolved
 import { Row } from '@electric-sql/client/model';
 import { useShape } from '@electric-sql/react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -63,7 +64,7 @@ export default function CanvasScreen() {
   const { token: authToken } = useAuthStore();
 
   // Subscribe to room data for real-time updates to the name
-  const { data: roomData, isLoading: isRoomLoading } = useShape<Room>({
+  const { data: roomData } = useShape<Room>({
     url: `${ELECTRIC_URL}/v1/shape`,
     params: {
       table: 'rooms',
@@ -352,7 +353,7 @@ export default function CanvasScreen() {
     }
 
     console.log('Image saved successfully');
-  }, [skiaCanvasRef, requestPermission]);
+  }, [skiaCanvasRef, requestPermission, background.color, fontManager]);
 
   const pickImage = useCallback(async () => {
     const size = canvasComponentRef.current?.getCanvasSize();

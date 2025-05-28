@@ -15,11 +15,6 @@ export function useMediaLibraryPermissions() {
   const [isPermissionModalVisible, setPermissionModalVisible] = useState(false);
   const [isPermanentlyDenied, setIsPermanentlyDenied] = useState(false);
 
-  // Check permission status on mount
-  useEffect(() => {
-    checkPermissionStatus();
-  }, []);
-
   const checkPermissionStatus = useCallback(async () => {
     const { status, canAskAgain } =
       await ImagePicker.getMediaLibraryPermissionsAsync();
@@ -30,6 +25,11 @@ export function useMediaLibraryPermissions() {
       setIsPermanentlyDenied(true);
     }
   }, []);
+
+  // Check permission status on mount
+  useEffect(() => {
+    checkPermissionStatus();
+  }, [checkPermissionStatus]);
 
   const requestPermission = useCallback(async () => {
     // If already granted, return immediately

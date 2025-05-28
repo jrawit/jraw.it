@@ -78,7 +78,7 @@ export default function LoginScreen() {
         clearError();
       }
     }
-  }, [error, validationErrors, clearError, clearValidationErrors]);
+  }, [error, validationErrors, clearError, clearValidationErrors, errors]);
 
   // Clear specific field error
   const clearFieldError = (field: keyof typeof errors) => {

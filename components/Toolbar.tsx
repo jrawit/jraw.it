@@ -89,7 +89,7 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
         setInitialColor(color);
         selectedColor.value = color;
       }
-    }, [color]);
+    }, [color, initialColor, selectedColor]);
 
     // Handle eye dropper tool selection
     const handleEyeDropperToggle = useCallback(() => {
@@ -97,14 +97,7 @@ const Toolbar: React.FC<ToolbarProps> = React.memo(
       onToolChange(tool === Tools.EYEDROPPER ? Tools.PEN : Tools.EYEDROPPER);
     }, [tool, onToolChange]);
 
-    // When the external color changes (from eye dropper selection)
-    const updateColorFromEyeDropper = useCallback(
-      (newColor: string) => {
-        setInitialColor(newColor);
-        selectedColor.value = newColor;
-      },
-      [selectedColor]
-    );
+    // No need for an effect that checks non-existent color prop
 
     // Toggle handler
     const toggleCollapse = useCallback(() => {

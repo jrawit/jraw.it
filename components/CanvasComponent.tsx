@@ -353,6 +353,8 @@ const CanvasComponent = forwardRef<CanvasComponentHandle, CanvasComponentProps>(
         color,
         onDrawingStateChange,
         onStartInput,
+        addExternalElement,
+        selectedEmoji,
       ]
     );
 

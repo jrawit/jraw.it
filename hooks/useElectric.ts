@@ -156,7 +156,7 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
   const userId = user?.id || 'anonymous';
 
   // Use ElectricSQL's useShape hook to sync data from Postgres
-  const { isLoading, data, stream } = useShape({
+  const { isLoading, data } = useShape({
     url: `${ELECTRIC_URL}/v1/shape`,
     params: {
       table: 'canvas_elements',
@@ -317,7 +317,7 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
         return null;
       }
     },
-    [addOptimisticUpdate, userId, roomId]
+    [addOptimisticUpdate, userId]
   );
 
   const updateElement = useCallback(
