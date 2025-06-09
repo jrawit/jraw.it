@@ -21,13 +21,13 @@ jobs:
         # If jraw.it is a subdirectory of your main Git repository, you might need:
         # with:
         #   path: jraw.it # Checkout into a 'jraw.it' subdirectory
-    # Then, subsequent steps would need `working-directory: ./jraw.it` if you use the above.
-    # However, your current file path suggests jraw.it is the repo root or a distinct unit.
+      # Then, subsequent steps would need `working-directory: ./jraw.it` if you use the above.
+      # However, your current file path suggests jraw.it is the repo root or a distinct unit.
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'yarn'
 
       - name: Install frontend dependencies
@@ -58,9 +58,9 @@ jobs:
           REMOTE_HOST: ${{ secrets.SSH_HOST }}
           REMOTE_USER: ${{ secrets.SSH_USER }}
           REMOTE_PORT: ${{ secrets.SSH_PORT || 22 }}
-          SOURCE: "dist/" # Changed from web-build/ to dist/
-          TARGET: "/root/jraw.it" # Make sure this is your intended target directory
-          ARGS: "-rlgoDzvc --delete" # rsync arguments: recursive, links, group, owner, devices, verbose, compress, checksum, delete extraneous files
+          SOURCE: 'dist/' # Changed from web-build/ to dist/
+          TARGET: '/root/jraw.it' # Make sure this is your intended target directory
+          ARGS: '-rlgoDzvc --delete' # rsync arguments: recursive, links, group, owner, devices, verbose, compress, checksum, delete extraneous files
           SCRIPT_BEFORE: |
             echo "Checking for rsync and installing if not present..."
             if ! command -v rsync &> /dev/null # Corrected /null to /dev/null
