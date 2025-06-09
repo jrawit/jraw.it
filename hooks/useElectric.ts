@@ -3,105 +3,8 @@ import { canvasElementMapper } from '@/utils/canvasElementMapper';
 import { ELECTRIC_URL, envParams } from '@/utils/electric';
 import { CanvasElementRecord, CanvasElementWrite } from '@/utils/types'; // CanvasElementWrite will be used directly
 import { useShape } from '@electric-sql/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useOptimistic } from 'react';
 import { CanvasElement } from './useCanvas';
-
-// Custom hook to implement optimistic updates
-// The type U will be simplified to CanvasElementWrite
-function useCustomOptimistic<T>(
-  serverState: T[],
-  updateFn: (state: T[], update: CanvasElementWrite) => T[]
-) {
-  // Local state that merges server state and optimistic updates
-  const [optimisticState, setOptimisticState] = useState<T[]>(serverState);
-  // Keep track of pending updates
-  const pendingUpdates = useRef<CanvasElementWrite[]>([]);
-
-  // Use useEffect to properly react to serverState changes
-  useEffect(() => {
-    console.log('useCustomOptimistic: serverState changed', {
-      serverStateLength: serverState.length,
-      pendingUpdatesLength: pendingUpdates.current.length,
-    });
-
-    // Clean up pending updates for elements that no longer exist in server state
-    const serverElementIds = new Set(
-      serverState.map((element: any) => element.id)
-    );
-    const originalPendingLength = pendingUpdates.current.length;
-
-    console.log(
-      'useCustomOptimistic: current pending updates before cleanup',
-      pendingUpdates.current.map(u => ({
-        id: u.value.id,
-        operation: u.operation,
-      }))
-    );
-    console.log(
-      'useCustomOptimistic: server element IDs',
-      Array.from(serverElementIds)
-    );
-
-    pendingUpdates.current = pendingUpdates.current.filter(update => {
-      // Keep updates for elements that still exist in server state
-      // For delete operations, only keep them if the element still exists (delete is still pending)
-      if (update.operation === 'delete') {
-        return serverElementIds.has(update.value.id);
-      }
-      // For insert/update operations, only keep them if the element still exists
-      return serverElementIds.has(update.value.id);
-    });
-
-    console.log(
-      'useCustomOptimistic: current pending updates after cleanup',
-      pendingUpdates.current.map(u => ({
-        id: u.value.id,
-        operation: u.operation,
-      }))
-    );
-
-    if (pendingUpdates.current.length !== originalPendingLength) {
-      console.log('useCustomOptimistic: cleaned up stale pending updates', {
-        originalLength: originalPendingLength,
-        newLength: pendingUpdates.current.length,
-      });
-    }
-
-    let newState = [...serverState];
-    pendingUpdates.current.forEach(update => {
-      newState = updateFn(newState, update);
-    });
-    console.log('useCustomOptimistic: setting optimistic state', {
-      newStateLength: newState.length,
-    });
-    setOptimisticState(newState);
-  }, [serverState, updateFn]); // Include updateFn in dependencies
-
-  // Function to apply an optimistic update
-  const addOptimisticUpdate = useCallback(
-    (update: CanvasElementWrite) => {
-      // Add to pending updates
-      pendingUpdates.current = [...pendingUpdates.current, update];
-      // Update optimistic state immediately
-      setOptimisticState(currentState => updateFn(currentState, update));
-
-      // Return a function to remove this update from pending once confirmed by server
-      return () => {
-        pendingUpdates.current = pendingUpdates.current.filter(
-          u =>
-            !(
-              u.value.id === update.value.id && u.operation === update.operation
-            ) // Compare by ID AND operation for removal
-        );
-        // If serverState doesn't change after this, optimisticState might not auto-revert.
-        // ElectricSQL sync should eventually correct the state.
-      };
-    },
-    [updateFn] // Include updateFn dependency
-  );
-
-  return [optimisticState, addOptimisticUpdate] as const;
-}
 
 // API client for canvas operations
 const api = {
@@ -252,9 +155,8 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
     []
   );
 
-  // Use our custom hook with memoized update function
-  const [elements, addOptimisticUpdate] = useCustomOptimistic<CanvasElement>(
-    // Simplified: Removed REPLACE_TEMP_WITH_REAL type
+  // Use React 19's useOptimistic hook directly
+  const [elements, addOptimisticUpdate] = useOptimistic(
     syncedElements,
     updateElementsState
   );
@@ -271,7 +173,6 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
       }
       console.log('Adding elements (useElectric):', elementsData);
 
-      const removeOptimisticInserts: (() => void)[] = [];
       const optimisticElements: CanvasElementRecord[] = [];
 
       elementsData.forEach(elementData => {
@@ -285,12 +186,10 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
           updated_at: new Date(),
         };
         optimisticElements.push(optimisticElement);
-        removeOptimisticInserts.push(
-          addOptimisticUpdate({
-            operation: 'insert',
-            value: optimisticElement,
-          })
-        );
+        addOptimisticUpdate({
+          operation: 'insert',
+          value: optimisticElement,
+        });
       });
 
       try {
@@ -319,7 +218,8 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
         }
       } catch (error) {
         console.error('Failed to add elements:', error);
-        removeOptimisticInserts.forEach(remove => remove()); // Rollback all optimistic updates on API error
+        // With React 19's useOptimistic, we don't need manual rollback
+        // The optimistic state will be reset automatically on the next server state update
         return null;
       }
     },
@@ -342,11 +242,12 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
         return;
       }
 
-      const removeOptimisticUpdates: (() => void)[] = [];
       const elementsToUpdateForApi: any[] = [];
 
       for (const { id, updates } of updatesArray) {
-        const currentElement = elements.find(el => el.id === id);
+        const currentElement = elements.find(
+          (el: CanvasElement) => el.id === id
+        );
         if (!currentElement) {
           console.warn('Element not found for update:', id);
           continue; // Skip this update if element not found
@@ -363,12 +264,10 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
           updated_at: new Date(),
         };
 
-        removeOptimisticUpdates.push(
-          addOptimisticUpdate({
-            operation: 'update',
-            value: optimisticUpdateData,
-          })
-        );
+        addOptimisticUpdate({
+          operation: 'update',
+          value: optimisticUpdateData,
+        });
 
         elementsToUpdateForApi.push({
           id: id,
@@ -386,7 +285,8 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
         // ElectricSQL sync should handle the update from the server.
       } catch (error) {
         console.error('Failed to update elements:', error);
-        removeOptimisticUpdates.forEach(remove => remove());
+        // With React 19's useOptimistic, we don't need manual rollback
+        // The optimistic state will be reset automatically on the next server state update
       }
     },
     [elements, addOptimisticUpdate]
@@ -398,11 +298,12 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
         return;
       }
 
-      const removeOptimisticDeletes: (() => void)[] = [];
       const recordsToDelete: CanvasElementRecord[] = [];
 
       for (const id of ids) {
-        const elementToRemove = elements.find(el => el.id === id);
+        const elementToRemove = elements.find(
+          (el: CanvasElement) => el.id === id
+        );
         if (!elementToRemove) {
           console.warn('Element not found for removal:', id);
           continue; // Skip if element not found
@@ -414,12 +315,10 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
           canvasElementMapper.toRecord(elementToRemove, roomId, userId);
         recordsToDelete.push(recordToDelete);
 
-        removeOptimisticDeletes.push(
-          addOptimisticUpdate({
-            operation: 'delete',
-            value: recordToDelete,
-          })
-        );
+        addOptimisticUpdate({
+          operation: 'delete',
+          value: recordToDelete,
+        });
       }
 
       if (recordsToDelete.length === 0) {
@@ -429,11 +328,10 @@ export function useElectricCanvas(props: UseElectricCanvasProps) {
       try {
         await api.request(`/canvas/elements`, 'DELETE', { ids });
         // ElectricSQL sync should handle the update from the server.
-        // Clean up optimistic deletes on success since server will provide the updated state
-        removeOptimisticDeletes.forEach(remove => remove());
       } catch (error) {
         console.error('Failed to delete elements:', error);
-        removeOptimisticDeletes.forEach(remove => remove());
+        // With React 19's useOptimistic, we don't need manual rollback
+        // The optimistic state will be reset automatically on the next server state update
       }
     },
     [elements, addOptimisticUpdate, roomId, userId]
